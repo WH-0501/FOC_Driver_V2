@@ -54,7 +54,7 @@
 
 /* private function prototypes --------------------------------------------*/
 /* add user code begin function prototypes */
-void adc_irq_callback(void);
+
 /* add user code end function prototypes */
 
 /* private user code ---------------------------------------------------------*/
@@ -249,15 +249,6 @@ void ADC1_2_IRQHandler(void)
   /* add user code begin ADC1_2_IRQ 0 */
 
   /* add user code end ADC1_2_IRQ 0 */
-
-  if(adc_interrupt_flag_get(ADC2, ADC_PCCE_FLAG) != RESET)
-  {
-    /* add user code begin ADC2_ADC_PCCE_FLAG */
-    adc_irq_callback();
-    /* clear flag */
-    adc_flag_clear(ADC2, ADC_PCCE_FLAG);
-    /* add user code end ADC2_ADC_PCCE_FLAG */ 
-  }
 
   /* add user code begin ADC1_2_IRQ 1 */
 

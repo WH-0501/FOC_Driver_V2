@@ -39,6 +39,9 @@
             <ParametersSub name="SamplingTime_PreemptedSequence_4" value="ADC_SAMPLETIME_13_5"/>
             <ParametersSub name="SamplingRate_PreemptedSequence_4" value="1.154"/>
         </Parameters>
+        <Interrupts>
+            <InterruptsSub name="Interrupt_PCCE" value="TRUE"/>
+        </Interrupts>
     </ADC2>
     <CAN1>
         <Mode>
