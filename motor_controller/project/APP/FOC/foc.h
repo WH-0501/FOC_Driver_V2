@@ -2,8 +2,10 @@
 #define __FOC_H__
 
 #include "board.h"
+#include "motor_fault.h"
 
-extern motor_state_t g_motor_state;
+/** 单轴 FOC 根实例：配置/给定/状态/输出/FSM/PID 均经此访问 */
+extern motor_handle_t g_motor;
 
 void foc_init(void);
 void foc_update(void);

@@ -29,7 +29,7 @@
 #include "wk_system.h"
 /* private includes ----------------------------------------------------------*/
 /* add user code begin private includes */
-
+#include "board.h"
 /* add user code end private includes */
 
 /* private typedef -----------------------------------------------------------*/
@@ -54,7 +54,7 @@
 
 /* private function prototypes --------------------------------------------*/
 /* add user code begin function prototypes */
-void adc_irq_callback(void);
+
 /* add user code end function prototypes */
 
 /* private user code ---------------------------------------------------------*/
@@ -253,7 +253,7 @@ void ADC1_2_IRQHandler(void)
   if(adc_interrupt_flag_get(ADC2, ADC_PCCE_FLAG) != RESET)
   {
     /* add user code begin ADC2_ADC_PCCE_FLAG */
-    adc_irq_callback();
+    CURRENT_LOOP_IRQ_HANDLER(ADC2);
     /* clear flag */
     adc_flag_clear(ADC2, ADC_PCCE_FLAG);
     /* add user code end ADC2_ADC_PCCE_FLAG */ 

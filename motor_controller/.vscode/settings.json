@@ -2,6 +2,8 @@
     "files.associations": {
         "*.cpp": "cpp",
         "dwt_profile_delay.h": "c",
-        "at32m412_416.h": "c"
+        "at32m412_416.h": "c",
+        "board.h": "c",
+        "at32m412_416_int.h": "c"
     }
 }

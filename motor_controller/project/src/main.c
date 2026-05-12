@@ -39,6 +39,8 @@
 /* private includes ----------------------------------------------------------*/
 /* add user code begin private includes */
 #include "board.h"
+#include "dwt_profile_delay.h"
+#include "foc.h"
 /* add user code end private includes */
 
 /* private typedef -----------------------------------------------------------*/
@@ -131,13 +133,15 @@ int main(void)
   wk_tmr1_init();
 
   /* add user code begin 2 */
+  board_init();
+  foc_init();
   dwt_init();
   /* add user code end 2 */
 
   while(1)
   {
     /* add user code begin 3 */
-
+    foc_update();
     /* add user code end 3 */
   }
 }
