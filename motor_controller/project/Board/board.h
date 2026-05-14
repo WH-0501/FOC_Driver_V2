@@ -5,6 +5,7 @@
 #error "board.h: define PLATFORM_STM32 or PLATFORM_AT32 in project preprocessor symbols."
 #endif
 
+#include <stdbool.h>
 #include "datatypes.h"
 
 
@@ -44,9 +45,13 @@
 
 
 void board_init(void);
+void board_deinit(void);
+
 void get_phase_current(void);
 
 void board_apply_phase_current(motor_state_t *state);
+
+void board_current_offset_cal_fsm_step(motor_handle_t *m);
 
 void board_current_loop_irq_handler(void *adc_handle);
 #define CURRENT_LOOP_IRQ_HANDLER board_current_loop_irq_handler

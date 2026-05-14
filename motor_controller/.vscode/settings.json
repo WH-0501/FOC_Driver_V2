@@ -4,6 +4,8 @@
         "dwt_profile_delay.h": "c",
         "at32m412_416.h": "c",
         "board.h": "c",
-        "at32m412_416_int.h": "c"
+        "at32m412_416_int.h": "c",
+        "foc.h": "c",
+        "stdbool.h": "c"
     }
 }

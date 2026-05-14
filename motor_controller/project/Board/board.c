@@ -1,25 +1,14 @@
 #include "board.h"
 #include "foc.h"
 
-typedef struct
-{
-  uint16_t cnt;
-  uint32_t sum[3];
-} offset_accum_t;
-
-static offset_accum_t s_offset_accum;
-
-static void offset_accum_reset(void)
-{
-  s_offset_accum.cnt = 0;
-  s_offset_accum.sum[0] = 0;
-  s_offset_accum.sum[1] = 0;
-  s_offset_accum.sum[2] = 0;
-}
-
 void board_init(void)
 {
-  offset_accum_reset();
+  current_hw_init();
+}
+
+void board_deinit(void)
+{
+  current_hw_deinit();
 }
 
 void board_apply_phase_current(motor_state_t *state)
@@ -31,17 +20,16 @@ void board_apply_phase_current(motor_state_t *state)
   for (i = 0; i < 3; i++)
   {
     float v_pin;
-    if (state->current_calibrating)
+    if (state->current_calibrating != 0U)
     {
-      v_pin = (float)state->m_phase_current.adc_raw[i] * kv;
-      state->m_phase_current.ampere[i] = (v_pin - BOARD_SO_BIAS_V) * gain;
+      v_pin = (float)state->phase_current.adc_raw[i] * kv;
+      state->phase_current.ampere[i] = (v_pin - BOARD_SO_BIAS_V) * gain;
     }
     else
     {
-      v_pin = (float)((int32_t)state->m_phase_current.adc_raw[i] -
-                      (int32_t)state->m_phase_current.adc_offset[i]) *
-              kv;
-      state->m_phase_current.ampere[i] = v_pin * gain;
+      v_pin = (float)((int32_t)state->phase_current.adc_raw[i] -
+                      (int32_t)state->phase_current.adc_offset[i]) * kv;
+      state->phase_current.ampere[i] = v_pin * gain;
     }
   }
 
@@ -49,29 +37,49 @@ void board_apply_phase_current(motor_state_t *state)
       (float)state->board_temp.adc_raw * BOARD_ADC_VREF_V / BOARD_ADC_FULL_SCALE;
 }
 
-void board_current_offset_calculate(void)
+void board_current_offset_cal_fsm_step(motor_handle_t *m)
 {
   uint32_t i;
+  static uint32_t s_cnt;
+  static uint32_t s_sum[3];
+  static uint8_t s_armed;
 
-  if (!g_motor.state.current_calibrating)
+  if (m == NULL)
   {
     return;
   }
 
-  for (i = 0; i < 3; i++)
+  if (m->fsm != STATE_CURRENT_CALIBRATION)
   {
-    s_offset_accum.sum[i] += (uint32_t)g_motor.state.m_phase_current.adc_raw[i];
+    s_armed = 0U;
+    return;
   }
 
-  s_offset_accum.cnt++;
-
-  if (s_offset_accum.cnt >= CURRENT_OFFSET_CALIBRATION_TIMES_SHIFT)
+  if (s_armed == 0U)
   {
-    for (i = 0; i < 3; i++)
+    s_armed = 1U;
+    s_cnt = 0U;
+    s_sum[0] = 0U;
+    s_sum[1] = 0U;
+    s_sum[2] = 0U;
+    m->state.current_calibrating = 1U;
+  }
+
+  for (i = 0U; i < 3U; i++)
+  {
+    s_sum[i] += (uint32_t)m->state.phase_current.adc_raw[i];
+  }
+  s_cnt++;
+
+  if (s_cnt >= CURRENT_OFFSET_CALIBRATION_TIMES_SHIFT)
+  {
+    for (i = 0U; i < 3U; i++)
     {
-      g_motor.state.m_phase_current.adc_offset[i] =
-          (uint16_t)(s_offset_accum.sum[i] >> CURRENT_OFFSET_CALIBRATION_TIME);
+      m->state.phase_current.adc_offset[i] =
+          (uint16_t)(s_sum[i] >> CURRENT_OFFSET_CALIBRATION_TIME);
     }
-    offset_accum_reset();
+    m->state.current_calibrating = 0U;
+    m->fsm = STATE_IDLE;
+    s_armed = 0U;
   }
 }

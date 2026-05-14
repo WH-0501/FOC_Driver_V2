@@ -4,12 +4,13 @@
  * FOC 数据分层（配置 / 测量 / 观测 / 给定 / 执行 / 调节器）：
  * - motor_param_t：铭牌或离线识别得到的电机本体参数，电流环内通常当只读使用
  * - motor_limits_t：母线/电流/电压限幅与保护
- * - motor_motion_cfg_t：机械侧轨线约束（|ω|、|α|、jerk、snap），供规划/外环使用
+ * - motor_motion_cfg_t：机械侧轨线约束（最大角速度/角加速度/jerk/snap），供规划/外环使用
  * - motor_config_t：param + limits + motion 聚合，便于整体加载/落盘
  * - motor_state_t：运行时测量 + 电气观测
  * - motor_reference_t / motor_actuation_t：给定 / PWM 等
+ * - control_mode_t / motor_handle_t.ctrl_mode：外环工作模式（给定 ref 哪条有效）
  * - motor_handle_t：单轴控制器实例
- * - motor_fault_code_t / motor_fault_report_t：故障码（位掩码）与锁存，便于上位机解析
+ * - fault_t / motor_fault_report_t：故障码（位掩码）与锁存，便于上位机解析
  */
 
 #ifndef __DATATYPES_H__
@@ -17,78 +18,53 @@
 
 #include <stdint.h>
 
+
 #define CURRENT_OFFSET_CALIBRATION_TIME         11     ///< 电流零漂平均：以 2 的幂次采样次数的指数部分
 #define CURRENT_OFFSET_CALIBRATION_TIMES_SHIFT  (1u << CURRENT_OFFSET_CALIBRATION_TIME) ///< 零漂累计次数 2^n
-
-typedef enum
-{
-  MOTOR_FAULT_NONE               = 0,        ///< 无故障
-  MOTOR_FAULT_BUS_UV             ,  ///< 母线欠压
-  MOTOR_FAULT_BUS_OV             ,  ///< 母线过压
-  MOTOR_FAULT_SW_OVERCURRENT     ,  ///< 软件过流（相电流超阈）
-  MOTOR_FAULT_HW_OVERCURRENT     ,  ///< 硬件过流或驱动故障引脚
-  MOTOR_FAULT_OVERTEMP_MOTOR     ,  ///< 电机过温
-  MOTOR_FAULT_OVERTEMP_DRIVER    ,  ///< 驱动/逆变器过温
-  MOTOR_FAULT_ENCODER            ,  ///< 编码器通信/计数异常
-  MOTOR_FAULT_POSITION_TRACK     ,  ///< 位置跟随/偏差过大
-  MOTOR_FAULT_OVER_SPEED         ,  ///< 超速
-  MOTOR_FAULT_ALIGN_FAILED       ,  ///< 初始对齐/辨识失败
-  MOTOR_FAULT_CALIBRATION        ,  ///< 校准过程错误
-  MOTOR_FAULT_CONTROL_SATURATION ,  ///< 电压/电流长期饱和（可选）
-  MOTOR_FAULT_WATCHDOG           ,  ///< 控制看门狗/任务超时
-  MOTOR_FAULT_PARAM              ,  ///< 参数非法或未初始化
-  MOTOR_FAULT_PHASE_LOSS         ,  ///< 缺相/断线（三相电流严重不平衡或某相近零）
-  MOTOR_FAULT_SHORT_CIRCUIT      ,  ///< 输出短路/直通等（多由硬件故障脚或专用检测上报）
-  MOTOR_FAULT_STALL              ,  ///< 堵转（速度/电流组合判据，多由应用或观测器置位）
-  MOTOR_FAULT_CURRENT_IMBALANCE  ,  ///< 三相电流不平衡（未达到缺相阈值时的预警）
-  MOTOR_FAULT_CURRENT_SENSOR     ,  ///< 电流采样、ADC 自检或零漂异常
-  MOTOR_FAULT_COMM_TIMEOUT       ,  ///< 通讯超时（如 CAN、EtherCAT）
-  MOTOR_FAULT_STORAGE            ,  ///< EEPROM/Flash 读写或 CRC 校验失败
-  MOTOR_FAULT_BRAKE              ,  ///< 制动电阻/泄放回路异常或过温
-  MOTOR_FAULT_DESATURATION       ,  ///< 驱动 Desat/退饱和保护
-  MOTOR_FAULT_GATE_DRIVER        ,  ///< 预驱故障（如 nFAULT）、驱动电源异常
-  MOTOR_FAULT_UNDER_VOLTAGE_LOGIC ,  ///< 控制电源/逻辑欠压（非母线）
-  MOTOR_FAULT_PHASE_U_OPEN       ,  ///< U 相开路（细分上报，可选）
-  MOTOR_FAULT_PHASE_V_OPEN       ,  ///< V 相开路
-  MOTOR_FAULT_PHASE_W_OPEN       ,  ///< W 相开路
-  /* bit28、29 预留 */
-  MOTOR_FAULT_USER_CMD           ,  ///< 上位机指令急停/故障注入
-  MOTOR_FAULT_RESERVED           ,  ///< 保留
-} motor_fault_code_t;
-
-/** 与 API 返回值配合：非故障类错误 */
-typedef enum
-{
-  MOTOR_OK                = 0,   ///< 成功
-  MOTOR_ERR_NULL          = 1, ///< 空指针
-  MOTOR_ERR_PARAM         = 2, ///< 参数非法
-  MOTOR_ERR_STATE         = 3, ///< 状态不允许（如已故障锁定）
-  MOTOR_ERR_TIMEOUT       = 4, ///< 超时
-  MOTOR_ERR_NOT_IMPL      = 5, ///< 未实现
-  MOTOR_ERR_COMM          = 6, ///< 通讯错误
-  MOTOR_ERR_STORAGE       = 7, ///< 存储错误
-  MOTOR_ERR_SENSOR        = 8, ///< 传感器错误
-} motor_result_t;
 
 /** 运行时故障寄存器：status 可表达当前条件，latched 需显式清除才可 Recovery */
 typedef struct
 {
-  motor_fault_code_t status; ///< 当前瞬时故障位
-  motor_fault_code_t latched;///< 锁存故障位（典型：触发保护直至复位）
-} motor_fault_report_t;
+  fault_t status; ///< 当前瞬时故障位
+  fault_t latched;///< 锁存故障位（典型：触发保护直至复位）
+} fault_report_t;
 
 typedef enum
 {
   STATE_IDLE = 0,                     ///< 空闲
   STATE_STARTUP = 1,                  ///< 启动
-  STATE_CURRENT_CALIBRATION = 2,      ///< 电流校准
+  STATE_CURRENT_CALIBRATION = 2,      ///< 电流零漂：PWM 关断下 ADC 累加，完成后转 STATE_IDLE（由 board_current_offset_cal_fsm_step 推进）
   STATE_ENCODER_CALIBRATION = 3,      ///< 编码器校准
   STATE_RSLS_CALIBRATION = 4,         ///< RS/LS 等参数辨识
   STATE_FLUX_CALIBRATION = 5,         ///< 磁链相关校准
   STATE_ELECTRICAL_ALIGNMENT = 6,     ///< 电角度对齐
   STATE_ANTICOGGING = 7,             ///< 齿槽转矩补偿标定
   STATE_RUNNING = 8,                  ///< 闭环运行
-} motor_fsm_state_t;
+  STATE_FAULT = 9,                    ///< 故障
+  STATE_MAX = 10,
+} fsm_state_t;
+
+/**
+ * 控制模式：决定外环如何产生电流目标（ref.id / ref.iq 或由速度环、位置环算出）。
+ * 速度/位置模式下的 ref.speed_rad_s、ref.position_rad 与被跟踪的 state 量一致（机械角 [rad]、[rad/s]）。
+ */
+typedef enum
+{
+  CTRL_MODE_IDLE = 0,       ///< 空闲
+  CTRL_MODE_TORQUE,      ///< 扭矩模式：给定 ref.torque_nm
+  CTRL_MODE_SPEED,       ///< 速度环：给定 ref.speed_rad_s
+  CTRL_MODE_POSITION,     ///< 位置环：给定 ref.position_rad
+  CTRL_MODE_CSP,
+  CTRL_MODE_CSV,
+  CTRL_MODE_CST,
+  CTRL_MODE_MIT,
+  CTRL_MODE_HOMING,
+  CTRL_MODE_TORQUE_OPEN_LOOP, ///< 电流环开环：给定 ref.id / ref.iq
+  CTRL_MODE_SPEED_OPEN_LOOP, ///< 速度环开环：给定 ref.speed_rad_s
+  CTRL_MODE_POSITION_OPEN_LOOP, ///< 位置环开环：给定 ref.position_rad
+  CTRL_MODE_VOLTAGE,  ///< 电压直接控制模式：给定 ref.v_d / ref.v_q
+  CTRL_MODE_RESERVED, ///< 保留
+} control_mode_t;
 
 typedef struct
 {
@@ -152,16 +128,15 @@ typedef struct
 } motor_limits_t;
 
 /**
- * 机械侧运动学约束：用于速度/位置环前级规划（梯形/S 曲线、软限速等）。
- * 单位一律为机械角：角速度 [rad/s]、角加速度 [rad/s²]、jerk（加加速度）[rad/s³]、snap [rad/s⁴]。
- * 暂不用高阶约束时可置 0，规划器内应判断 >0 再启用。
+ * 机械侧运动学上限（相对转子机械角，均指绝对值上限；用于梯形/S 曲线等规划与超速保护）。
+ * 单位见字段名后缀；不需要的项填 0，实现里按 >0 再启用。
  */
 typedef struct
 {
-  float omega_max_abs_mech_rad_s;  ///< 机械角速度绝对值上限 |ω| [rad/s]
-  float alpha_max_abs_mech_rad_s2; ///< 机械角加速度绝对值上限 |α| [rad/s²]
-  float jerk_max_abs_mech_rad_s3;  ///< 机械角 jerk（加加速度）绝对值上限 [rad/s³]
-  float snap_max_abs_mech_rad_s4; ///< 机械角 snap 绝对值上限 [rad/s⁴]，不用可置 0
+  float max_speed_rad_s;   ///< 最大角速度 [rad/s]（|ω|）
+  float max_accel_rad_s2;  ///< 最大角加速度 [rad/s²]（|dω/dt|）
+  float max_jerk_rad_s3;   ///< 最大加加速度（jerk）[rad/s³]
+  float max_snap_rad_s4;   ///< 最大 snap（角加速度对时间的导数）[rad/s⁴]，不用则 0
 } motor_motion_cfg_t;
 
 /** 上电加载的静态配置：本体参数 + 电气限幅 + 运动轨线约束 */
@@ -176,14 +151,14 @@ typedef struct
 {
   float id;               ///< d 轴电流给定 [A]
   float iq;               ///< q 轴电流给定 [A]
-  float omega_mech_rad_s; ///< 机械角速度给定 [rad/s]
-  float theta_mech_rad;   ///< 机械角位置给定 [rad]
   float torque_nm;        ///< 转矩给定 [N·m]（若外环用转矩模式）
+  float speed_rad_s; ///< 机械角速度给定 [rad/s]
+  float position_rad;   ///< 机械角位置给定 [rad]
 } motor_reference_t;
 
 typedef struct
 {
-  float duty_a;     ///< A 相（或桥臂 A）PWM 占空比，归一化 0~1（或依驱动约定）
+  float duty_a;     ///< A 相（或桥臂 A）PWM 占空比
   float duty_b;     ///< B 相占空比
   float duty_c;     ///< C 相占空比
   uint8_t pwm_enable; ///< 非 0 时允许输出 PWM
@@ -210,30 +185,31 @@ typedef struct
   float sin_elec;       ///< sin(θ_e)，可与 θ 同步更新减少三角运算
   float cos_elec;       ///< cos(θ_e)
 
-  float theta_mech_rad;     ///< 机械角位置 [rad]
-  float omega_mech_rad_s;   ///< 机械角速度 [rad/s]
+  float position_rad;       ///< 机械角位置 [rad]
+  float speed_rad_s;        ///< 机械角速度 [rad/s]
 
   float temperature;        ///< 电机或关键温区温度（物理量与标定一致，如 ℃）
 
-  motor_phase_current_t m_phase_current;  ///< 三相电流采样与标定结果
+  motor_phase_current_t phase_current;  ///< 三相电流采样与标定结果
   temperature_t board_temp;             ///< 板载/驱动端温度采样
-  uint8_t current_calibrating;          ///< 非 0：电流零漂校准中，ampere 按标称偏置换算
+  bool current_calibrating;          ///< 非 0：电流零漂校准中，ampere 按标称偏置换算
 } motor_state_t;
 
 typedef struct
 {
   motor_config_t config; ///< 静态配置（参数、限幅、运动约束）
+  control_mode_t ctrl_mode; ///< 当前控制模式（与 ref 字段含义对应）
   motor_reference_t ref; ///< 各环给定值，即：目标值
   motor_state_t state;   ///< 运行状态与观测量
   motor_actuation_t out; ///< 调制/功率级输出
-  motor_fsm_state_t fsm; ///< 运行状态机当前状态
+  fsm_state_t fsm; ///< 运行状态机当前状态
 
-  pid_t m_id_pid;         ///< d 轴电流环 PID 状态
-  pid_t m_iq_pid;         ///< q 轴电流环 PID 状态
-  pid_t m_velocity_pid;   ///< 速度环 PID 状态
-  pid_t m_position_pid;   ///< 位置环 PID 状态
+  pid_t id_pid;         ///< d 轴电流环 PID 状态
+  pid_t iq_pid;         ///< q 轴电流环 PID 状态
+  pid_t velocity_pid;   ///< 速度环 PID 状态
+  pid_t position_pid;   ///< 位置环 PID 状态
 
-  motor_fault_report_t fault; ///< 故障码与锁存
+  fault_report_t fault; ///< 故障码与锁存
 } motor_handle_t;
 
 #endif /* __DATATYPES_H__ */

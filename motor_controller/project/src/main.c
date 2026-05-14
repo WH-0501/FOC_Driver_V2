@@ -133,15 +133,23 @@ int main(void)
   wk_tmr1_init();
 
   /* add user code begin 2 */
-  board_init();
-  foc_init();
   dwt_init();
+  // 1. 读取配置参数
+
+  // 2. 通信初始化
+
+  // 3. board 初始化
+  board_init(); /* 设电流零漂请求位，须在 foc_init 之后避免 memset 清掉 */
+
+  // 4. FOC 初始化
+  foc_init();
   /* add user code end 2 */
 
   while(1)
   {
     /* add user code begin 3 */
     foc_update();
+    foc_state_machine_loop();
     /* add user code end 3 */
   }
 }
