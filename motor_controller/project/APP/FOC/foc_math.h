@@ -93,7 +93,7 @@ static inline void inv_park_transform(float d, float q, float theta, float *i_al
 }
 
 /**
- * @brief 空间矢量脉宽调制
+ * @brief SVM 调制
  * 将三相电压转换为三相 PWM 占空比
  * @param Ua A 相电压
  * @param Ub B 相电压
@@ -102,9 +102,11 @@ static inline void inv_park_transform(float d, float q, float theta, float *i_al
  * @param svm_b B 相 PWM 占空比
  * @param svm_c C 相 PWM 占空比
  */
-static inline void svpwm(float Ua, float Ub, float Uc, float *svm_a, float *svm_b, float *svm_c)
+static inline void svm(float Ua, float Ub, float Uc, float *svm_a, float *svm_b, float *svm_c)
 {
 	float Umax, Umin, Ucom;
+  // Umin = fminf(Ua, fminf(Ub, Uc));
+  // Umax = fmaxf(Ua, fmaxf(Ub, Uc));
 	if (Ua > Ub)
 	{
 		Umax = Ua;
@@ -123,7 +125,7 @@ static inline void svpwm(float Ua, float Ub, float Uc, float *svm_a, float *svm_
 	{
 		Umin = Uc;
 	}
-	Ucom = 0.5f * (Umax + Umin);
+	Ucom = 0.5f * (Umax + Umin); // offset
 	*svm_a = Ua - Ucom;
 	*svm_b = Ub - Ucom;
 	*svm_c = Uc - Ucom;

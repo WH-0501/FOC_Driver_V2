@@ -65,17 +65,25 @@ void foc_voltage(float Ud, float Uq, float angle_el)
   float Ualpha, Ubeta;
   float Ua, Ub, Uc;
 
-  /* 限幅 */
-  Ud = CLAMP(Ud, -BUS_VOLTAGE * 0.5f, BUS_VOLTAGE * 0.5f);
-  Uq = CLAMP(Uq, -BUS_VOLTAGE * 0.5f, BUS_VOLTAGE * 0.5f);
+  /*========================================================*/
+  float ialpha, ibeta;
+  clarke_transform(g_motor.state.phase_current.ampere[0], g_motor.state.phase_current.ampere[1], g_motor.state.phase_current.ampere[2], &ialpha, &ibeta);
+  park_transform(ialpha, ibeta, g_motor.state.theta_elec_rad, &g_motor.state.i_d, &g_motor.state.i_q);
+  
+  /*========================================================*/
+
+  // Ud = CLAMP(Ud, -BUS_VOLTAGE * 0.5f, BUS_VOLTAGE * 0.5f);
+  // Uq = CLAMP(Uq, -BUS_VOLTAGE * 0.5f, BUS_VOLTAGE * 0.5f);
   float Uq_max = sqrtf(BUS_VOLTAGE * BUS_VOLTAGE - Ud * Ud);
   Uq = CLAMP(Uq, -Uq_max, Uq_max);
   
   inv_park_transform(Ud, Uq, angle_el, &Ualpha, &Ubeta);
   inv_clarke_transform(Ualpha, Ubeta, &Ua, &Ub, &Uc);
 
-  svpwm(Ua, Ub, Uc, &g_motor.out.duty_a, &g_motor.out.duty_b, &g_motor.out.duty_c);
-
+  svm(Ua, Ub, Uc, &g_motor.out.duty_a, &g_motor.out.duty_b, &g_motor.out.duty_c);
+  g_motor.out.duty_a = CLAMP(g_motor.out.duty_a, 0.0f, 1.0f);
+  g_motor.out.duty_b = CLAMP(g_motor.out.duty_b, 0.0f, 1.0f);
+  g_motor.out.duty_c = CLAMP(g_motor.out.duty_c, 0.0f, 1.0f);
   set_pwm(&g_motor.out);
 }
 
