@@ -43,15 +43,32 @@
 #define BOARD_SO_AMPS_PER_VOLT (BOARD_SO_ISCALE / BOARD_SO_RTERM_OHM)
 #endif
 
+/**
+ * @brief 观测/给定链路上一阶 LPF 的采样率 fs [Hz]，须与本函数中 lpf1_update() 调用周期一致。
+ *        电流环 20 kHz、PWM 40 kHz 时：只要滤波在电流环里每周期更新一次，则 fs = 20 k，
+ *        不是 PWM 频率（除非某量在 40 kHz 另开任务递推再另设一套 LPF）。
+ */
+#ifndef FOC_CURRENT_LOOP_FS_HZ
+#define FOC_CURRENT_LOOP_FS_HZ (20000.0f)
+#endif
+/** 测量低通截止频率 [Hz]，须 < fs/2；母线可另设更慢以抑纹波 */
+#ifndef FOC_MEAS_LPF_FC_HZ
+#define FOC_MEAS_LPF_FC_HZ (2000.0f) // FOC_CURRENT_LOOP_FS_HZ / 10.0f
+#endif
+
+#ifndef FOC_CURRENT_MEAS_PERIOD
+#define FOC_CURRENT_MEAS_PERIOD (float)(1.0f / (float)FOC_CURRENT_LOOP_FS_HZ)
+#endif
+
 
 void board_init(void);
 void board_deinit(void);
 
-void get_phase_current(void);
+void get_phase_current(motor_handle_t *m);
 
-void board_apply_phase_current(motor_state_t *state);
+void board_apply_phase_current(motor_handle_t *m);
 
-void board_current_offset_cal_fsm_step(motor_handle_t *m);
+void board_current_offset_cal_step(motor_handle_t *m);
 
 void board_current_loop_irq_handler(void *adc_handle);
 #define CURRENT_LOOP_IRQ_HANDLER board_current_loop_irq_handler

@@ -9,7 +9,9 @@ void foc_init(void)
 
   g_motor.ctrl_mode = CTRL_MODE_IDLE;
   g_motor.fsm = STATE_IDLE;
-  g_motor.state.current_calibrating = true;
+  g_motor.current_offset_cal_pending = true;
+  g_motor.current_offset_calibrating = false;
+  g_motor.current_offset_cal_done = false;
 
   // 根据参数进行初始化
   g_motor.config.param.pole_pairs = 1;
@@ -20,37 +22,26 @@ void foc_init(void)
   g_motor.config.limits.iq_limit = 30.0f;
   g_motor.config.limits.vd_limit = 12.0f;
   g_motor.config.limits.vq_limit = 12.0f;
-  /* sw_overcurrent_trip / hold_ms、vbus_ov_threshold：默认 0，由上位机或工艺写入 */
+  /* sw_ocp / hold_ms、vbus_ov_threshold：默认 0，由上位机或工艺写入 */
 
   g_motor.config.motion.max_speed_rad_s = 300.0f;
   g_motor.config.motion.max_accel_rad_s2 = 1000.0f;
   g_motor.config.motion.max_jerk_rad_s3 = 20000.0f;
   /* snap 未接入规划器时保持 0 */
-}
 
-void foc_pwm_start(void)
-{
-  // 启动 PWM
-}
+  /* LPF：fc 为截止频率 [Hz]，fs = 电流环对 lpf1_update 的调用频率（例 20 kHz） */
+  lpf1_init(&g_motor.vbus_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
+  lpf1_init(&g_motor.v_a_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
+  lpf1_init(&g_motor.v_b_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
+  lpf1_init(&g_motor.v_c_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
+  lpf1_init(&g_motor.i_d_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
+  lpf1_init(&g_motor.i_q_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
+  lpf1_init(&g_motor.i_mod_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
+  lpf1_init(&g_motor.i_bus_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
+  lpf1_init(&g_motor.v_d_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
+  lpf1_init(&g_motor.v_q_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
 
-void foc_pwm_stop(void)
-{
-  // 停止 PWM. 关闭定时器输出
-}
-
-void foc_set_pwm(float Ua, float Ub, float Uc)
-{
-  // 设置 PWM 输出
-}
-
-void foc_set_pwm_duty(float duty_a, float duty_b, float duty_c)
-{
-  // 设置 PWM 占空比
-}
-
-void foc_set_pwm_duty(motor_actuation_t *actuation)
-{
-  // 设置 PWM 占空比
+  lpf1_init(&g_motor.speed_rad_s_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
 }
 
 /**
@@ -64,13 +55,6 @@ void foc_voltage(float Ud, float Uq, float angle_el)
 {
   float Ualpha, Ubeta;
   float Ua, Ub, Uc;
-
-  /*========================================================*/
-  float ialpha, ibeta;
-  clarke_transform(g_motor.state.phase_current.ampere[0], g_motor.state.phase_current.ampere[1], g_motor.state.phase_current.ampere[2], &ialpha, &ibeta);
-  park_transform(ialpha, ibeta, g_motor.state.theta_elec_rad, &g_motor.state.i_d, &g_motor.state.i_q);
-  
-  /*========================================================*/
 
   // Ud = CLAMP(Ud, -BUS_VOLTAGE * 0.5f, BUS_VOLTAGE * 0.5f);
   // Uq = CLAMP(Uq, -BUS_VOLTAGE * 0.5f, BUS_VOLTAGE * 0.5f);
@@ -87,21 +71,158 @@ void foc_voltage(float Ud, float Uq, float angle_el)
   set_pwm(&g_motor.out);
 }
 
+/**
+ * @brief 电流环控制
+ * @param id d 轴电流给定
+ * @param iq q 轴电流给定
+ * @param angle_el 电角度
+ * @param phase_vel （预留）电角速度等前馈补偿
+ */
+void foc_current(float id, float iq, float angle_el, float phase_vel)
+{
+  // 电流环 PI 控制
+  float id_error = id - g_motor.state.i_d;
+  float iq_error = iq - g_motor.state.i_q;
+  float v_d = id_error * g_motor.id_pid.kp + id_error * g_motor.id_pid.ki + id_error * g_motor.id_pid.kd;
+  float v_q = iq_error * g_motor.iq_pid.kp + iq_error * g_motor.iq_pid.ki + iq_error * g_motor.iq_pid.kd;
+
+  // 电压归一化 = 1/(2/3 * vbus)
+  float v_d_norm = 1.5f * g_motor.state.vbus_filtered;
+  float v_q_norm = 1.5f * g_motor.state.vbus_filtered;
+
+  g_motor.state.v_d = v_d * v_d_norm;
+  g_motor.state.v_q = v_q * v_q_norm;
+
+  // Vector modulation saturation, lock integrator if saturated
+  float factor = 0.9f * SQRT_3_DIV_2 / sqrtf(SQ(g_motor.state.v_d) + SQ(g_motor.state.v_q));
+  if (factor < 1.0f) {
+    g_motor.state.v_d *= factor;
+    g_motor.state.v_q *= factor;
+    g_motor.id_pid.ki *= 0.99f;
+    g_motor.iq_pid.ki *= 0.99f;
+  } else {
+    g_motor.id_pid.ki += id_error * (g_motor.id_pid.ki * FOC_CURRENT_MEAS_PERIOD);
+    g_motor.iq_pid.ki += iq_error * (g_motor.iq_pid.ki * FOC_CURRENT_MEAS_PERIOD);
+  }
+
+  float alpha, beta;
+  float pwm_phase = angle_el + phase_vel * FOC_CURRENT_MEAS_PERIOD;
+  inv_park_transform(g_motor.state.v_d, g_motor.state.v_q, g_motor.state.theta_elec_rad, &alpha, &beta);
+  
+  int result_valid = svpwm(alpha, beta, &g_motor.out.duty_a, &g_motor.out.duty_b, &g_motor.out.duty_c);
+  if (result_valid == 0) {
+    set_pwm(&g_motor.out);
+  }
+
+  g_motor.state.i_bus = sqrtf(SQ(g_motor.state.i_d) + SQ(g_motor.state.i_q));
+}
+
 void foc_update(void)
 {
   motor_fault_poll_measurements(&g_motor);
 }
 
+/**
+ * @brief 电流环控制
+ * 
+ */
 #if defined(__ARMCC_VERSION)
-__weak void foc_current_loop_control(void)
+__weak void foc_control_loop(void)
 #elif defined(__GNUC__)
-void foc_current_loop_control(void) __attribute__((weak))
+void foc_control_loop(void) __attribute__((weak))
 #else
-void foc_current_loop_control(void)
+void foc_control_loop(void)
 #endif
 {
-  get_phase_current();
-  board_current_offset_cal_fsm_step(&g_motor);
+  /// TODO: 关 TIM Channel4 OC 中断
+
+  /* 须在 get_phase_current() 之前写好 state.theta_elec_rad（与本次 ADC 窗口对齐） */
+  /* TODO: 编码器读数 / PLL → g_motor.state.theta_elec_rad、sin_elec/cos_elec */
+
+  // 1. 更新电角度
+  foc_get_motor_angle();
+
+  // 2. 获取三相电流并刷新 i_alpha、i_d、i_q
+  foc_get_motor_current();
+
+  // 4. 状态机与控制（电压/电流调制等）
+  foc_state_machine_loop();
+
+  /// TODO: 开 TIM Channel4 OC 中断
+}
+
+void foc_torque_open_control(float target_torque)
+{
+  // 扭矩开环控制
+  float Ud = 0.0f;
+  float Uq = 0.5f;
+
+  float ts = 0.001f;
+  g_motor.ref.torque_nm = target_torque;
+  g_motor.ref.speed_rad_s = g_motor.ref.position_rad + 0.5f * ts;
+
+  foc_voltage(Ud, Uq, g_motor.state.theta_elec_rad);
+}
+
+void foc_speed_open_control(float target_speed)
+{
+  float Ud = 0.0f;
+  float Uq = 0.5f;
+
+  float ts = 0.001f;
+  g_motor.ref.speed_rad_s = target_speed;
+  g_motor.ref.position_rad = g_motor.state.position_rad + g_motor.ref.speed_rad_s * ts;
+
+  foc_voltage(Ud, Uq, g_motor.ref.position_rad * g_motor.config.param.pole_pairs);
+}
+
+void foc_position_open_control(float target_position)
+{
+  // 位置开环控制
+  float Ud = 0.0f;
+  float Uq = 0.5f;
+  foc_voltage(Ud, Uq, target_position * g_motor.config.param.pole_pairs);
+}
+
+void foc_motor_run(void)
+{
+  // 不同控制模式处理
+  switch (g_motor.ctrl_mode) 
+  {
+    case CTRL_MODE_IDLE:
+      break;
+    case CTRL_MODE_TORQUE:
+      break;
+    case CTRL_MODE_SPEED:
+      break;
+    case CTRL_MODE_POSITION:
+      break;
+    case CTRL_MODE_CSP:
+      break;
+    case CTRL_MODE_CSV:
+      break;
+    case CTRL_MODE_CST:
+      break;
+    case CTRL_MODE_MIT:
+      break;
+    case CTRL_MODE_HOMING:
+      break;
+    case CTRL_MODE_TORQUE_OPEN_LOOP:
+      // foc_torque_open_control(g_motor.ref.torque_nm);
+      break;
+    case CTRL_MODE_SPEED_OPEN_LOOP:
+      foc_speed_open_control(g_motor.ref.speed_rad_s);
+      break;
+    case CTRL_MODE_POSITION_OPEN_LOOP:
+      // foc_position_open_control(g_motor.ref.position_rad);
+      break;
+    case CTRL_MODE_VOLTAGE:
+      break;
+    case CTRL_MODE_RESERVED:
+      break;
+    default:
+      break;
+  }
 }
 
 void foc_next_state(fsm_state_t next_state)
@@ -154,7 +275,7 @@ void foc_state_machine_loop(void)
       foc_next_state(STATE_RUNNING);
       break;
     case STATE_RUNNING:
-
+      foc_motor_run();
       break;
     case STATE_FAULT:
       break;

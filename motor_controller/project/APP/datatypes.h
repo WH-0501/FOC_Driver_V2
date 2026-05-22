@@ -16,7 +16,11 @@
 #ifndef __DATATYPES_H__
 #define __DATATYPES_H__
 
+#include <stdbool.h>
 #include <stdint.h>
+#include "error.h"
+#include "foc_filter.h"
+#include "foc_pid.h"
 
 
 #define CURRENT_OFFSET_CALIBRATION_TIME         11     ///< 电流零漂平均：以 2 的幂次采样次数的指数部分
@@ -32,16 +36,15 @@ typedef struct
 typedef enum
 {
   STATE_IDLE = 0,                     ///< 空闲
-  STATE_STARTUP = 1,                  ///< 启动
-  STATE_CURRENT_CALIBRATION = 2,      ///< 电流零漂：PWM 关断下 ADC 累加，完成后转 STATE_IDLE（由 board_current_offset_cal_fsm_step 推进）
-  STATE_ENCODER_CALIBRATION = 3,      ///< 编码器校准
-  STATE_RSLS_CALIBRATION = 4,         ///< RS/LS 等参数辨识
-  STATE_FLUX_CALIBRATION = 5,         ///< 磁链相关校准
-  STATE_ELECTRICAL_ALIGNMENT = 6,     ///< 电角度对齐
-  STATE_ANTICOGGING = 7,             ///< 齿槽转矩补偿标定
-  STATE_RUNNING = 8,                  ///< 闭环运行
-  STATE_FAULT = 9,                    ///< 故障
-  STATE_MAX = 10,
+  STATE_STARTUP = 1,                  ///< 启动（电流零漂见 motor_handle：pending/calibrating/done）
+  STATE_ENCODER_CALIBRATION = 2,      ///< 编码器校准
+  STATE_RSLS_CALIBRATION = 3,         ///< RS/LS 等参数辨识
+  STATE_FLUX_CALIBRATION = 4,         ///< 磁链相关校准
+  STATE_ELECTRICAL_ALIGNMENT = 5,     ///< 电角度对齐
+  STATE_ANTICOGGING = 6,             ///< 齿槽转矩补偿标定
+  STATE_RUNNING = 7,                  ///< 闭环运行
+  STATE_FAULT = 8,                    ///< 故障
+  STATE_MAX = 9,
 } fsm_state_t;
 
 /**
@@ -68,19 +71,6 @@ typedef enum
 
 typedef struct
 {
-  float kp;             ///< 比例系数
-  float ki;             ///< 积分系数
-  float kd;             ///< 微分系数
-  float ramp;           ///< 设定值斜坡或输出斜坡系数（依实现而定）
-  float limit;          ///< 输出或积分限幅
-  float last_error;     ///< 上一次误差
-  float last_output;    ///< 上一次输出
-  float last_integral;  ///< 上一次积分项累加
-  uint32_t timestamp;   ///< 时间戳，用于积分/微分时间步
-} pid_t;
-
-typedef struct
-{
   uint16_t adc_raw; ///< 温度通道 ADC 原始计数值
   float value;      ///< 换算后的物理量（如电压 V，或已标定 ℃）
 } temperature_t;
@@ -104,7 +94,8 @@ typedef struct
   float flux_linkage;             ///< 永磁磁链 ψf [Wb]（或等价常数）
   uint8_t pole_pairs;             ///< 极对数 p
   uint32_t encoder_counts_per_rev; ///< 机械旋转一圈编码器计数（分辨率定义依传感器）
-  float theta_elec_offset_rad;    ///< 电角零偏置 [rad]，对齐/校准后写入
+  float theta_elec_offset_rad;    ///< 电角度零偏置 [rad]，对齐/校准后写入
+  float theta_offset_rad;         ///< 机械角度零偏置 [rad]，对齐/校准后写入
 } motor_param_t;
 
 /**
@@ -112,18 +103,18 @@ typedef struct
  */
 typedef struct
 {
-  float vbus_nominal;      ///< 标称母线电压 [V]
-  float vbus_uv_threshold; ///< 欠压阈值 [V]，母线低于此值可关断或报故障；≤0 关闭
-  float vbus_ov_threshold; ///< 过压阈值 [V]，母线高于此值报故障（再生/电源异常等）；≤0 关闭
-  float id_limit;          ///< d 轴电流指令/反馈限幅 [A]
-  float iq_limit;          ///< q 轴电流限幅 [A]
-  float vd_limit;          ///< d 轴电压输出限幅 [V]
-  float vq_limit;          ///< q 轴电压输出限幅 [V]
-  float temp_limit;        ///< 温度限幅 [℃]
-  float sw_overcurrent_trip; ///< 上位机配置：软件过流阈值 [A]，max(|Ia|,|Ib|,|Ic|) 超此值报故障；≤0 关闭
-  uint16_t sw_overcurrent_hold_ms; ///< 上位机配置：超阈值持续该时间 [ms] 后确认过流；0 为立即（实现侧定）
-  float phase_diag_i_avg_min_a; ///< 缺相/不平衡检测门限：三相平均电流 |( |Ia|+|Ib|+|Ic| )/3 | 需 > 此值 [A]；≤0 关闭
-  float phase_imbalance_ratio_max; ///< 缺相判据：(Imax-Imin)/avg 超此比值报 MOTOR_FAULT_PHASE_LOSS；≤0 关闭
+  float vbus_nominal;               ///< 标称母线电压 [V]
+  float vbus_uv_threshold;          ///< 欠压阈值 [V]，母线低于此值可关断或报故障；≤0 关闭
+  float vbus_ov_threshold;          ///< 过压阈值 [V]，母线高于此值报故障（再生/电源异常等）；≤0 关闭
+  float id_limit;                   ///< d 轴电流指令/反馈限幅 [A]
+  float iq_limit;                   ///< q 轴电流限幅 [A]
+  float vd_limit;                   ///< d 轴电压输出限幅 [V]
+  float vq_limit;                   ///< q 轴电压输出限幅 [V]
+  float temp_limit;                 ///< 温度限幅 [℃]
+  float sw_ocp;                     ///< 软件过流阈值 [A]，max(|Ia|,|Ib|,|Ic|) 超此值报故障；≤0 关闭
+  uint16_t sw_ocp_hold_ms;          ///< 上位机配置：超阈值持续该时间 [ms] 后确认过流；0 为立即（实现侧定）
+  float phase_diag_i_avg_min_a;     ///< 缺相/不平衡检测门限：三相平均电流 |( |Ia|+|Ib|+|Ic| )/3 | 需 > 此值 [A]；≤0 关闭
+  float phase_imbalance_ratio_max;  ///< 缺相判据：(Imax-Imin)/avg 超此比值报 MOTOR_FAULT_PHASE_LOSS；≤0 关闭
   float phase_imbalance_warn_ratio; ///< 不平衡预警：超此比值报 MOTOR_FAULT_CURRENT_IMBALANCE（应 < phase_imbalance_ratio_max）；≤0 关闭
 } motor_limits_t;
 
@@ -149,10 +140,10 @@ typedef struct
 
 typedef struct
 {
-  float id;               ///< d 轴电流给定 [A]
-  float iq;               ///< q 轴电流给定 [A]
-  float torque_nm;        ///< 转矩给定 [N·m]（若外环用转矩模式）
-  float speed_rad_s; ///< 机械角速度给定 [rad/s]
+  float id;             ///< d 轴电流给定 [A]
+  float iq;             ///< q 轴电流给定 [A]
+  float torque_nm;      ///< 转矩给定 [N·m]（若外环用转矩模式）
+  float speed_rad_s;    ///< 机械角速度给定 [rad/s]
   float position_rad;   ///< 机械角位置给定 [rad]
 } motor_reference_t;
 
@@ -166,7 +157,8 @@ typedef struct
 
 typedef struct
 {
-  float vbus; ///< 当前母线电压测量 [V]
+  float vbus;           ///< 当前母线电压测量 [V]
+  float vbus_filtered;  ///< 当前母线电压滤波值 [V]
 
   float v_a; ///< a 相电压（重构或测量）[V]
   float v_b; ///< b 相电压 [V]
@@ -180,8 +172,11 @@ typedef struct
   float v_beta;  ///< β 轴电压 [V]
   float i_alpha; ///< α 轴电流 [A]
   float i_beta;  ///< β 轴电流 [A]
+  float i_mod;   ///< 模电流 [A] iα 和 iβ 的合成电流
+  float i_bus;   ///< 母线电流 [A]
 
   float theta_elec_rad; ///< 电角 [rad]，Park/逆 Park 用
+  float theta_joint_rad; ///< 关节角度 [rad]
   float sin_elec;       ///< sin(θ_e)，可与 θ 同步更新减少三角运算
   float cos_elec;       ///< cos(θ_e)
 
@@ -192,7 +187,6 @@ typedef struct
 
   motor_phase_current_t phase_current;  ///< 三相电流采样与标定结果
   temperature_t board_temp;             ///< 板载/驱动端温度采样
-  bool current_calibrating;          ///< 非 0：电流零漂校准中，ampere 按标称偏置换算
 } motor_state_t;
 
 typedef struct
@@ -204,10 +198,28 @@ typedef struct
   motor_actuation_t out; ///< 调制/功率级输出
   fsm_state_t fsm; ///< 运行状态机当前状态
 
+  /**< 三相电流 ADC 零漂：上电单次，PWM 须关断，在电流采样后由 board_current_offset_cal_step 推进 */
+  bool current_offset_cal_pending;   ///< 1：请求从零开始累加（首部电流环 ISR 清零 pending 并开始）
+  bool current_offset_calibrating; ///< 1：正在 ADC 累加平均（供观测或与 pending 区分阶段）
+  bool current_offset_cal_done;    ///< 1：本轮上电零漂已完成，ampere 走 adc_offset 扣除路径
+
   pid_t id_pid;         ///< d 轴电流环 PID 状态
   pid_t iq_pid;         ///< q 轴电流环 PID 状态
   pid_t velocity_pid;   ///< 速度环 PID 状态
   pid_t position_pid;   ///< 位置环 PID 状态
+
+  lpf1_t vbus_lpf; ///< 母线电压低通滤波器
+  lpf1_t v_a_lpf; ///< a 相电压低通滤波器
+  lpf1_t v_b_lpf; ///< b 相电压低通滤波器
+  lpf1_t v_c_lpf; ///< c 相电压低通滤波器
+  lpf1_t i_d_lpf; ///< d 轴电流低通滤波器
+  lpf1_t i_q_lpf; ///< q 轴电流低通滤波器
+  lpf1_t i_mod_lpf; ///< 模电流低通滤波器
+  lpf1_t i_bus_lpf; ///< 母线电流低通滤波器
+  lpf1_t v_d_lpf; ///< d 轴电压低通滤波器
+  lpf1_t v_q_lpf; ///< q 轴电压低通滤波器
+
+  lpf1_t speed_rad_s_lpf; ///< 速度低通滤波器
 
   fault_report_t fault; ///< 故障码与锁存
 } motor_handle_t;

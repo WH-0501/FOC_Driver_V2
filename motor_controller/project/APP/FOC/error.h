@@ -57,7 +57,7 @@ typedef enum
   ERR_COMM          = 6, ///< 通讯错误
   ERR_STORAGE       = 7, ///< 存储错误
   ERR_SENSOR        = 8, ///< 传感器错误
-  ERR_FAIL          = 9, ///< 失败. 未定义
+  ERR_FAIL          = 9, ///< 失败. 未定义错误 
 } error_t;
 
 /** 由测量与 limits 周期性自动刷新的瞬时故障位（不含仅由应用/驱动引脚置位的位） */

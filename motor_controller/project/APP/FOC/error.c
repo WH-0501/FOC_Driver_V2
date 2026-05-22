@@ -80,11 +80,11 @@ void motor_fault_poll_measurements(motor_handle_t *m)
     motor_fault_raise(m, MOTOR_FAULT_BUS_OV);
   }
 
-  if (L->sw_overcurrent_trip > 0.f)
+  if (L->sw_ocp > 0.f)
   {
     i_abs_max = fmaxf(fabsf(S->phase_current.ampere[0]),
                       fmaxf(fabsf(S->phase_current.ampere[1]), fabsf(S->phase_current.ampere[2])));
-    if (i_abs_max > L->sw_overcurrent_trip)
+    if (i_abs_max > L->sw_ocp)
     {
       motor_fault_raise(m, MOTOR_FAULT_SW_OVERCURRENT);
     }

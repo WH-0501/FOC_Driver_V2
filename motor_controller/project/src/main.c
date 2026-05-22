@@ -139,7 +139,7 @@ int main(void)
   // 2. 通信初始化
 
   // 3. board 初始化
-  board_init(); /* 设电流零漂请求位，须在 foc_init 之后避免 memset 清掉 */
+  board_init(); /* 电流采样硬件初始化；须在 foc_init 之前或之后均可，详见 foc_init 中零漂标志 */
 
   // 4. FOC 初始化
   foc_init();
@@ -149,7 +149,6 @@ int main(void)
   {
     /* add user code begin 3 */
     foc_update();
-    foc_state_machine_loop();
     /* add user code end 3 */
   }
 }

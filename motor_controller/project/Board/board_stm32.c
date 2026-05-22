@@ -33,7 +33,7 @@ extern ADC_HandleTypeDef hadc2;
 
 uint16_t pwm_compare_top = 0;
 
-extern void foc_current_loop_control(void);
+extern void foc_control_loop(void);
 
 static uint16_t pwm_compare_top(void)
 {
@@ -173,18 +173,27 @@ error_t set_pwm(motor_actuation_t *actuation)
   return ERR_NONE;
 }
 
-error_t get_phase_current(void)
+void get_phase_current(motor_handle_t *m)
 {
-  motor_state_t *s = &g_motor.state;
+  motor_state_t *s;
 
-  s->board_temp.adc_raw = HAL_ADCEx_InjectedGetValue(HADC_PHASE_CURRENT, ADC_INJECTED_RANK_1);
-  s->phase_current.adc_raw[0] = HAL_ADCEx_InjectedGetValue(HADC_PHASE_CURRENT, ADC_INJECTED_RANK_2);
-  s->phase_current.adc_raw[1] = HAL_ADCEx_InjectedGetValue(HADC_PHASE_CURRENT, ADC_INJECTED_RANK_3);
-  s->phase_current.adc_raw[2] = HAL_ADCEx_InjectedGetValue(HADC_PHASE_CURRENT, ADC_INJECTED_RANK_4);
+  if (m == NULL)
+  {
+    return;
+  }
 
-  board_apply_phase_current(s);
+  s = &m->state;
 
-  return ERR_NONE;
+  s->board_temp.adc_raw =
+      (uint16_t)HAL_ADCEx_InjectedGetValue(HADC_PHASE_CURRENT, ADC_INJECTED_RANK_1);
+  s->phase_current.adc_raw[0] =
+      (uint16_t)HAL_ADCEx_InjectedGetValue(HADC_PHASE_CURRENT, ADC_INJECTED_RANK_2);
+  s->phase_current.adc_raw[1] =
+      (uint16_t)HAL_ADCEx_InjectedGetValue(HADC_PHASE_CURRENT, ADC_INJECTED_RANK_3);
+  s->phase_current.adc_raw[2] =
+      (uint16_t)HAL_ADCEx_InjectedGetValue(HADC_PHASE_CURRENT, ADC_INJECTED_RANK_4);
+
+  board_apply_phase_current(m);
 }
 
 void board_current_loop_irq_handler(void *adc_handle)
@@ -193,7 +202,7 @@ void board_current_loop_irq_handler(void *adc_handle)
 
   if (adc_inst->Instance == ADC2)
   {
-    foc_current_loop_control();
+    foc_control_loop();
   }
 }
 

@@ -12,7 +12,7 @@ extern motor_handle_t g_motor;
 void foc_init(void);
 void foc_update(void);
 
-void foc_current_loop_control(void);
+void foc_control_loop(void);
 
 void foc_pos_vel_loop_control(void);
 

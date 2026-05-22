@@ -10,7 +10,7 @@
 #include "at32m412_416_adc.h"
 #include "at32m412_416_tmr.h"
 
-extern void foc_current_loop_control(void);
+extern void foc_control_loop(void);
 
 #define PWM_TIM_HANDLE TMR1
 #define PWM_TIME_U_CHANNEL TMR_SELECT_CHANNEL_1
@@ -108,16 +108,26 @@ error_t set_pwm(motor_actuation_t *actuation)
   return ERR_NONE;
 }
 
-void get_phase_current(void)
+void get_phase_current(motor_handle_t *m)
 {
-  motor_state_t *s = &g_motor.state;
+  motor_state_t *s;
+
+  if (m == NULL)
+  {
+    return;
+  }
+
+  s = &m->state;
 
   s->board_temp.adc_raw = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_1);
   s->phase_current.adc_raw[0] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_2);
   s->phase_current.adc_raw[1] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_3);
   s->phase_current.adc_raw[2] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_4);
 
-  board_apply_phase_current(s);
+  board_apply_phase_current(m);
+
+  // 进行电流零漂校准(初始时进行)
+  board_current_offset_cal_step(m);
 }
 
 void board_current_loop_irq_handler(void *adc_handle)
@@ -127,6 +137,6 @@ void board_current_loop_irq_handler(void *adc_handle)
   /* ADC2 定义为 ((adc_type *)ADC2_BASE)，应与 ISR 传入指针同一实例 */
   if (adc_x == ADC2)
   {
-    foc_current_loop_control();
+    foc_control_loop();
   }
 }

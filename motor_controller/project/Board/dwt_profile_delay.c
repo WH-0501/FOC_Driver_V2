@@ -46,12 +46,12 @@ float dwt_profile_get_elapsed_us(uint32_t slot)
   return (float)dwt_cycle_tim.duration_records[slot] * dwt_cycle_tim.dwt_freq_MHz_inv;
 }
 
-static uint32_t dwt_get_ticks(void)
+uint32_t dwt_get_ticks(void)
 {
   return DWT->CYCCNT;
 }
 
-static uint32_t dwt_get_ticks_us(void)
+uint32_t dwt_get_ticks_us(void)
 {
   return (uint32_t)(dwt_get_ticks() * dwt_cycle_tim.dwt_freq_MHz_inv);
 }

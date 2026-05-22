@@ -44,13 +44,20 @@
 #define FOC_MAX_MEDIAN_WINDOW   16
 #endif
 
-#define UTILS_LPF_FAST(value, sample, filter_constant)	(value -= (filter_constant) * ((value) - (sample)))
-
+/**
+ * @brief 一阶低通滤波器结构体
+ * 
+ * 用于平滑噪声信号
+ * y[n] = alpha * x[n] + (1 - alpha) * y[n-1]
+ * 
+ * 用 当前采样值 和 上一次平滑值 加权平均，α 越小，越依赖上一次的平滑值，滤波效果越强
+ */
 typedef struct _lpf1_t {
-    float alpha;    ///< 滤波系数
+    float alpha;    ///< Ts/(τ+Ts)，离散式 y[n]=α·x[n]+(1-α)·y[n-1]（Ts=1/fs）
     float prev;     ///< 上一时刻输出
-    float fc;       ///< 截止频率
-    float fs;       ///< 采样频率
+    float fc;       ///< 截止频率. 允许通过的最高频率（高于此频率的信号被衰减）. 建议设置为 PWM 频率的 1/10
+    float fs;       ///< 采样频率. FOC 控制周期（电流环 与 PWM 周期同步）
+    float tau;      ///< 时间常数. 滤波器响应速度（τ = 1 / (2π * fc). τ 越大，滤波越强，滞后越明显
 } lpf1_t;
 
 typedef struct _lpf2_t {
@@ -187,14 +194,19 @@ typedef struct _lead_lag_compensator_t {
  * Low-Pass Filter
  *========================================================*/
 /**
- * @brief 初始化一阶低通滤波器
- * 
+ * @brief 初始化一阶低通滤波器（一阶 RC 离散化）
+ *
+ * τ=1/(2π·fc)，α=Ts/(τ+Ts)，Ts=1/fs。要求 fc \< fs/2。
+ *
  * @param lpf 滤波器指针
  * @param fc 截止频率 [Hz]
  * @param fs 采样频率 [Hz]
  */
 bool lpf1_init(lpf1_t *lpf, float fc, float fs);
 bool lpf1_reset(lpf1_t *lpf, float initial_value);
+/**
+ * @brief 的一步更新：y=α·x+(1−α)·y_prev，返回当前输出 y
+ */
 float lpf1_update(lpf1_t *lpf, float input);
 
 /*========================================================

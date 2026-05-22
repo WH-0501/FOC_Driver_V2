@@ -6,6 +6,7 @@
         "board.h": "c",
         "at32m412_416_int.h": "c",
         "foc.h": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "string.h": "c"
     }
 }

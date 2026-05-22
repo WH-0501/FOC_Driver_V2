@@ -1,5 +1,4 @@
 #include "board.h"
-#include "foc.h"
 
 void board_init(void)
 {
@@ -11,16 +10,29 @@ void board_deinit(void)
   current_hw_deinit();
 }
 
-void board_apply_phase_current(motor_state_t *state)
+void board_apply_phase_current(motor_handle_t *m)
 {
   uint32_t i;
   const float kv = BOARD_ADC_VOLTS_PER_LSB;
   const float gain = BOARD_SO_AMPS_PER_VOLT;
+  motor_state_t *state;
 
+  if (m == NULL)
+  {
+    return;
+  }
+
+  state = &m->state;
+
+  /*
+   * 未完成零漂或未信任 offset 期间：必须用标称 V_BIAS 路径；adc_offset[] 在未写完前常为 0，
+   * 不能当作零点。
+   */
   for (i = 0; i < 3; i++)
   {
     float v_pin;
-    if (state->current_calibrating != 0U)
+
+    if (!m->current_offset_cal_done)
     {
       v_pin = (float)state->phase_current.adc_raw[i] * kv;
       state->phase_current.ampere[i] = (v_pin - BOARD_SO_BIAS_V) * gain;
@@ -28,7 +40,8 @@ void board_apply_phase_current(motor_state_t *state)
     else
     {
       v_pin = (float)((int32_t)state->phase_current.adc_raw[i] -
-                      (int32_t)state->phase_current.adc_offset[i]) * kv;
+                      (int32_t)state->phase_current.adc_offset[i]) *
+              kv;
       state->phase_current.ampere[i] = v_pin * gain;
     }
   }
@@ -37,32 +50,39 @@ void board_apply_phase_current(motor_state_t *state)
       (float)state->board_temp.adc_raw * BOARD_ADC_VREF_V / BOARD_ADC_FULL_SCALE;
 }
 
-void board_current_offset_cal_fsm_step(motor_handle_t *m)
+/** 须在 get_phase_current() 更新 raw 并完成 board_apply_phase_current() 之后调用 */
+void board_current_offset_cal_step(motor_handle_t *m)
 {
   uint32_t i;
   static uint32_t s_cnt;
   static uint32_t s_sum[3];
-  static uint8_t s_armed;
+  static uint8_t s_active;
 
   if (m == NULL)
   {
     return;
   }
 
-  if (m->fsm != STATE_CURRENT_CALIBRATION)
+  if (m->current_offset_cal_done)
   {
-    s_armed = 0U;
+    s_active = 0U;
     return;
   }
 
-  if (s_armed == 0U)
+  if ((!m->current_offset_cal_pending) && (!s_active))
   {
-    s_armed = 1U;
+    return;
+  }
+
+  if (!s_active)
+  {
+    s_active = 1U;
     s_cnt = 0U;
     s_sum[0] = 0U;
     s_sum[1] = 0U;
     s_sum[2] = 0U;
-    m->state.current_calibrating = 1U;
+    m->current_offset_cal_pending = false;
+    m->current_offset_calibrating = true;
   }
 
   for (i = 0U; i < 3U; i++)
@@ -78,8 +98,8 @@ void board_current_offset_cal_fsm_step(motor_handle_t *m)
       m->state.phase_current.adc_offset[i] =
           (uint16_t)(s_sum[i] >> CURRENT_OFFSET_CALIBRATION_TIME);
     }
-    m->state.current_calibrating = 0U;
-    m->fsm = STATE_IDLE;
-    s_armed = 0U;
+    m->current_offset_calibrating = false;
+    m->current_offset_cal_done = true;
+    s_active = 0U;
   }
 }
