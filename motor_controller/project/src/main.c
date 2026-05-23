@@ -138,10 +138,10 @@ int main(void)
 
   // 2. 通信初始化
 
-  // 3. board 初始化
-  board_init(); /* 电流采样硬件初始化；须在 foc_init 之前或之后均可，详见 foc_init 中零漂标志 */
+  // 3. board 初始化（ADC 抢占等）；桥臂须保持关断，零漂在 foc_init() 末尾阻塞完成
+  board_init();
 
-  // 4. FOC 初始化
+  // 4. FOC 初始化（末尾含阻塞电流零漂校准）
   foc_init();
   /* add user code end 2 */
 

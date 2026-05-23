@@ -30,6 +30,9 @@
 /* 电机方向 */
 #define DIR                             (1) ///< TODO: 后续优化自动辨识
 
+#define ALIGN_ELECTRICAL_VOLTAGE_D_V   (0.0f)
+#define ALIGN_ELECTRICAL_VOLTAGE_Q_V   (2.0f)
+
 void foc_motor_init(void);
 
 /**

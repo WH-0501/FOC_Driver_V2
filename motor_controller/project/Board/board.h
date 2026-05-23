@@ -61,14 +61,20 @@
 #endif
 
 
-void board_init(void);
+void board_init(motor_handle_t *m);
 void board_deinit(void);
 
-void get_phase_current(motor_handle_t *m);
+void board_get_phase_current(motor_handle_t *m);
 
 void board_apply_phase_current(motor_handle_t *m);
 
 void board_current_offset_cal_step(motor_handle_t *m);
+
+/**
+ * PWM 关断前提下阻塞完成电流零漂：重复 board_get_phase_current + board_current_offset_cal_step
+ * 直至 current_offset_cal_done。应在 motor_handle 已初始化（如 foc_init）后调用。
+ */
+void board_current_offset_calibration(motor_handle_t *m);
 
 void board_current_loop_irq_handler(void *adc_handle);
 #define CURRENT_LOOP_IRQ_HANDLER board_current_loop_irq_handler

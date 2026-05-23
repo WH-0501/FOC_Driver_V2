@@ -1,4 +1,5 @@
 #include "foc.h"
+#include "foc_motor.h"
 #include <string.h>
 
 motor_handle_t g_motor;
@@ -42,16 +43,24 @@ void foc_init(void)
   lpf1_init(&g_motor.v_q_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
 
   lpf1_init(&g_motor.speed_rad_s_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
+
+  /*
+   * 依赖 board_init() 已打开的电流采样（抢占 ADC）；main 中须先 board_init() 再本函数。
+   * 零漂须在 PWM 关断、逆变器 Hi-Z / 三相无流下完成。
+   */
+  board_current_offset_calibration(&g_motor);
+
+  foc_align_electrical();
 }
 
 /**
  * @brief 电压控制。设置相电压
  * 将 d、q 轴电压转换为三相电压
- * @param Ud d 轴电压
  * @param Uq q 轴电压
+ * @param Ud d 轴电压
  * @param angle_el 电角度
  */
-void foc_voltage(float Ud, float Uq, float angle_el)
+void foc_voltage(float Uq, float Ud, float angle_el)
 {
   float Ualpha, Ubeta;
   float Ua, Ub, Uc;
@@ -122,6 +131,18 @@ void foc_update(void)
   motor_fault_poll_measurements(&g_motor);
 }
 
+void foc_align_electrical(void)
+{
+  // 1. 给定相电压,使电机转子吸附到定子绕组上
+  foc_voltage(ALIGN_ELECTRICAL_VOLTAGE_Q_V, ALIGN_ELECTRICAL_VOLTAGE_D_V, _3PI_2); // 待验证. 确定是给 d 轴电压还是 q 轴电压
+  delay_ms(700);
+  foc_voltage(0.0f, 0.0f, _3PI_2); // 先停止电机
+  // 2. 读取编码器角度,作为零电角度值
+  foc_get_motor_angle();
+  // 即编码器零位与电角度零位对齐
+  g_motor.config.param.theta_elec_offset_rad = g_motor.state.theta_elec_rad;
+}
+
 /**
  * @brief 电流环控制
  * 
@@ -135,9 +156,6 @@ void foc_control_loop(void)
 #endif
 {
   /// TODO: 关 TIM Channel4 OC 中断
-
-  /* 须在 get_phase_current() 之前写好 state.theta_elec_rad（与本次 ADC 窗口对齐） */
-  /* TODO: 编码器读数 / PLL → g_motor.state.theta_elec_rad、sin_elec/cos_elec */
 
   // 1. 更新电角度
   foc_get_motor_angle();
@@ -161,7 +179,7 @@ void foc_torque_open_control(float target_torque)
   g_motor.ref.torque_nm = target_torque;
   g_motor.ref.speed_rad_s = g_motor.ref.position_rad + 0.5f * ts;
 
-  foc_voltage(Ud, Uq, g_motor.state.theta_elec_rad);
+  foc_voltage(Uq, Ud, g_motor.state.theta_elec_rad);
 }
 
 void foc_speed_open_control(float target_speed)
@@ -173,7 +191,7 @@ void foc_speed_open_control(float target_speed)
   g_motor.ref.speed_rad_s = target_speed;
   g_motor.ref.position_rad = g_motor.state.position_rad + g_motor.ref.speed_rad_s * ts;
 
-  foc_voltage(Ud, Uq, g_motor.ref.position_rad * g_motor.config.param.pole_pairs);
+  foc_voltage(Uq, Ud, g_motor.ref.position_rad * g_motor.config.param.pole_pairs);
 }
 
 void foc_position_open_control(float target_position)
@@ -181,7 +199,7 @@ void foc_position_open_control(float target_position)
   // 位置开环控制
   float Ud = 0.0f;
   float Uq = 0.5f;
-  foc_voltage(Ud, Uq, target_position * g_motor.config.param.pole_pairs);
+  foc_voltage(Uq, Ud, target_position * g_motor.config.param.pole_pairs);
 }
 
 void foc_motor_run(void)

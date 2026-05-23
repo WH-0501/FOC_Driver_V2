@@ -1,5 +1,6 @@
 #include "foc_motor.h"
 #include "foc_filter.h"
+#include "board.h"
 #include "at32m412_416_tmr.h"
 
 extern motor_handle_t g_motor;
@@ -78,7 +79,7 @@ void foc_get_motor_speed(void)
 
 void foc_get_motor_current(void)
 {
-    get_phase_current(&g_motor);
+    board_get_phase_current(&g_motor);
 
     clarke_transform(g_motor.state.phase_current.ampere[0], /* ia */
         g_motor.state.phase_current.ampere[1], /* ib */

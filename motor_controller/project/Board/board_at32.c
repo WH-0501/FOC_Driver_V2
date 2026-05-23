@@ -108,7 +108,7 @@ error_t set_pwm(motor_actuation_t *actuation)
   return ERR_NONE;
 }
 
-void get_phase_current(motor_handle_t *m)
+void board_get_phase_current(motor_handle_t *m)
 {
   motor_state_t *s;
 
@@ -125,9 +125,6 @@ void get_phase_current(motor_handle_t *m)
   s->phase_current.adc_raw[2] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_4);
 
   board_apply_phase_current(m);
-
-  // 进行电流零漂校准(初始时进行)
-  board_current_offset_cal_step(m);
 }
 
 void board_current_loop_irq_handler(void *adc_handle)

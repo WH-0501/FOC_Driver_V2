@@ -173,7 +173,7 @@ error_t set_pwm(motor_actuation_t *actuation)
   return ERR_NONE;
 }
 
-void get_phase_current(motor_handle_t *m)
+void board_get_phase_current(motor_handle_t *m)
 {
   motor_state_t *s;
 

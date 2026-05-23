@@ -20,6 +20,7 @@
 
 #define _PI (3.14159265359f)
 #define _2PI (6.28318530718f)
+#define _3PI_2 (4.71238898038f)
 
 /// TODO: sin/cos 查表或 CORDIC 加速（与平台无关，按帧率取舍）
 #define SQRT_3 (1.732050807568877f)             /* √3 */

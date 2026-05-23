@@ -1,13 +1,38 @@
 #include "board.h"
 
-void board_init(void)
+void board_init(motor_handle_t *m)
 {
+  if (m == NULL)
+  {
+    return;
+  }
+
   current_hw_init();
+  /* 须在 foc_init() 之后调用：g_motor 已 memset + 标志位就绪，且 memset 不会覆盖本段写回的 offset */
+  board_current_offset_calibration(m);
 }
 
 void board_deinit(void)
 {
   current_hw_deinit();
+}
+
+void board_current_offset_calibration(motor_handle_t *m)
+{
+  if (m == NULL)
+  {
+    return;
+  }
+
+  m->current_offset_cal_pending = true;
+  m->current_offset_calibrating = false;
+  m->current_offset_cal_done = false;
+
+  while (!m->current_offset_cal_done)
+  {
+    board_get_phase_current(m);
+    board_current_offset_cal_step(m);
+  }
 }
 
 void board_apply_phase_current(motor_handle_t *m)
@@ -50,7 +75,7 @@ void board_apply_phase_current(motor_handle_t *m)
       (float)state->board_temp.adc_raw * BOARD_ADC_VREF_V / BOARD_ADC_FULL_SCALE;
 }
 
-/** 须在 get_phase_current() 更新 raw 并完成 board_apply_phase_current() 之后调用 */
+/** 须在 board_get_phase_current() 更新 raw 并完成 board_apply_phase_current() 之后调用 */
 void board_current_offset_cal_step(motor_handle_t *m)
 {
   uint32_t i;
