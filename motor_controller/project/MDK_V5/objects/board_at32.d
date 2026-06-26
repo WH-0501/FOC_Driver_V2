@@ -14,7 +14,7 @@
 .\objects\board_at32.o: ..\APP\FOC\foc.h
 .\objects\board_at32.o: ..\APP\FOC\foc_fault.h
 .\objects\board_at32.o: ..\APP\common.h
-.\objects\board_at32.o: ..\..\libraries\drivers\inc\at32m412_416_adc.h
+.\objects\board_at32.o: ..\Board\dwt_profile_delay.h
 .\objects\board_at32.o: ..\..\libraries\cmsis\cm4\device_support\at32m412_416.h
 .\objects\board_at32.o: ..\..\libraries\cmsis\cm4\core_support\core_cm4.h
 .\objects\board_at32.o: ..\..\libraries\cmsis\cm4\core_support\cmsis_version.h
@@ -25,8 +25,8 @@
 .\objects\board_at32.o: ..\..\libraries\drivers\inc\at32m412_416_def.h
 .\objects\board_at32.o: ..\inc\at32m412_416_conf.h
 .\objects\board_at32.o: ..\..\libraries\drivers\inc\at32m412_416_adc.h
-.\objects\board_at32.o: ..\..\libraries\drivers\inc\at32m412_416_can.h
 .\objects\board_at32.o: ..\..\libraries\cmsis\cm4\device_support\at32m412_416.h
+.\objects\board_at32.o: ..\..\libraries\drivers\inc\at32m412_416_can.h
 .\objects\board_at32.o: ..\..\libraries\drivers\inc\at32m412_416_crm.h
 .\objects\board_at32.o: ..\..\libraries\drivers\inc\at32m412_416_debug.h
 .\objects\board_at32.o: ..\..\libraries\drivers\inc\at32m412_416_dma.h

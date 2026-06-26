@@ -5,7 +5,7 @@
     </WorkBenchVersion>
     <MCUInfo>
         <MCUSerials>AT32M416</MCUSerials>
-        <MCUName>AT32M416K8U7-4</MCUName>
+        <MCUName>AT32M416KBU7-4</MCUName>
         <MCUPackage>QFN32</MCUPackage>
     </MCUInfo>
     <ADC-Common>
@@ -135,7 +135,7 @@
             <ParametersSub name="OCMode_2" value="TMR_OUTPUT_CONTROL_PWM_MODE_A"/>
             <ParametersSub name="OCMode_3" value="TMR_OUTPUT_CONTROL_PWM_MODE_A"/>
             <ParametersSub name="OCMode_4" value="TMR_OUTPUT_CONTROL_PWM_MODE_B"/>
-            <ParametersSub name="ChannelData_4" value="898"/>
+            <ParametersSub name="ChannelData_4" value="2248"/>
         </Parameters>
     </TMR1>
     <TMR6>
@@ -215,19 +215,15 @@
             <Parameters name="Label" value="SOC"/>
         </Signal>
         <Signal SignalName="GPIO_Output" PinName="PB10">
-            <Parameters name="GPIO_Outputlevel" value="GPIO_OUTPUTLEVEL_HIGH"/>
             <Parameters name="Label" value="ENC"/>
         </Signal>
         <Signal SignalName="GPIO_Output" PinName="PA11">
-            <Parameters name="GPIO_Outputlevel" value="GPIO_OUTPUTLEVEL_HIGH"/>
             <Parameters name="Label" value="ENB"/>
         </Signal>
         <Signal SignalName="GPIO_Output" PinName="PA12">
-            <Parameters name="GPIO_Outputlevel" value="GPIO_OUTPUTLEVEL_HIGH"/>
             <Parameters name="Label" value="ENA"/>
         </Signal>
         <Signal SignalName="GPIO_Output" PinName="PA15">
-            <Parameters name="GPIO_Outputlevel" value="GPIO_OUTPUTLEVEL_HIGH"/>
             <Parameters name="Label" value="nSLEEP"/>
         </Signal>
         <Signal SignalName="GPIO_Input" PinName="PB3">
@@ -265,7 +261,7 @@
         <PinSub pinname="PA2" signalname="CAN1_RX" signaltype="2"/>
         <PinSub pinname="PA3" signalname="CAN1_TX" signaltype="2"/>
         <PinSub pinname="PA5" signalname="ADC2_IN5" signaltype="2"/>
-        <PinSub pinname="PA7" signalname="ADC2_IN7" signaltype="3"/>
+        <PinSub pinname="PA7" signalname="ADC2_IN7" signaltype="2"/>
         <PinSub pinname="PB0" signalname="ADC2_IN8" signaltype="2"/>
         <PinSub pinname="PB1" signalname="ADC1_IN9" signaltype="2"/>
         <PinSub pinname="PB2" signalname="ADC2_IN10" signaltype="2"/>
@@ -284,8 +280,8 @@
         <PinSub pinname="PB8" signalname="SPI2_SCK" signaltype="2"/>
     </PINInfo>
     <ProjectInfomation>
-        <ProjectName>AT32M416K8U7-4_WorkBench</ProjectName>
-        <ProjectLocation>D:/workspaces/code-registories/FOC/FOC_Driver_V2/motor_controller</ProjectLocation>
+        <ProjectName>motor_controller</ProjectName>
+        <ProjectLocation>D:/workspaces/code-registories/FOC/FOC_Driver_V2</ProjectLocation>
         <ToolchainIDE>MDK_V5</ToolchainIDE>
         <ARMCompiler>0</ARMCompiler>
         <BackupCode>true</BackupCode>
@@ -293,7 +289,7 @@
         <NotUsedPinAnalog>false</NotUsedPinAnalog>
         <CodeSplitIP>true</CodeSplitIP>
         <AddNecessaryFileFlag>true</AddNecessaryFileFlag>
-        <DeletePriviousFiles>false</DeletePriviousFiles>
+        <DeletePriviousFiles>true</DeletePriviousFiles>
         <MinHeapSize>0x200</MinHeapSize>
         <MinStackSize>0x400</MinStackSize>
         <UseFirmware>true</UseFirmware>
@@ -306,15 +302,15 @@
         <RankSub RankNum="8" FixPosFlag="TRUE" FuncName="wk_timebase_init" InstanceName="SYSTEM" CodeSection="config timebase" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="9" FixPosFlag="TRUE" FuncName="wk_gpio_config" InstanceName="GPIO" CodeSection="gpio function" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="10" FixPosFlag="FALSE" FuncName="wk_adc_common_init" InstanceName="ADC-Common" CodeSection="adc_common function" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="11" FixPosFlag="FALSE" FuncName="wk_adc1_init" InstanceName="ADC1" CodeSection="adc1 function" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="12" FixPosFlag="FALSE" FuncName="wk_adc2_init" InstanceName="ADC2" CodeSection="adc2 function" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="13" FixPosFlag="FALSE" FuncName="wk_dma1_channel1_init" InstanceName="DMA1_Channel1" CodeSection="dma1_channel1_init" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="20" FixPosFlag="FALSE" FuncName="wk_usart1_init" InstanceName="USART1" CodeSection="usart1 function" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="22" FixPosFlag="FALSE" FuncName="wk_can1_init" InstanceName="CAN1" CodeSection="can1 function" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="25" FixPosFlag="FALSE" FuncName="wk_spi2_init" InstanceName="SPI2" CodeSection="spi2 function" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="41" FixPosFlag="FALSE" FuncName="wk_tmr1_init" InstanceName="TMR1" CodeSection="tmr1 function" MainDoNotCallFlag="FALSE"/>
-        <RankSub RankNum="11" FixPosFlag="FALSE" FuncName="wk_adc1_init" InstanceName="ADC1" CodeSection="adc1 function" MainDoNotCallFlag="FALSE"/>
-        <RankSub RankNum="15" FixPosFlag="FALSE" FuncName="wk_dma1_channel3_init" InstanceName="DMA1_Channel3" CodeSection="dma1_channel3_init" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="44" FixPosFlag="FALSE" FuncName="wk_tmr6_init" InstanceName="TMR6" CodeSection="tmr6 function" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="45" FixPosFlag="FALSE" FuncName="wk_tmr7_init" InstanceName="TMR7" CodeSection="tmr7 function" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="15" FixPosFlag="FALSE" FuncName="wk_dma1_channel3_init" InstanceName="DMA1_Channel3" CodeSection="dma1_channel3_init" MainDoNotCallFlag="FALSE"/>
     </FunctionRankInfo>
 </Root>

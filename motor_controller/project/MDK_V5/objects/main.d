@@ -44,6 +44,7 @@
 .\objects\main.o: ..\APP\compiler_port.h
 .\objects\main.o: ..\APP\math_compat.h
 .\objects\main.o: ..\APP\FOC\foc_pid.h
+.\objects\main.o: ..\APP\logger\logger.h
 .\objects\main.o: ..\Board\dwt_profile_delay.h
 .\objects\main.o: ..\APP\FOC\foc.h
 .\objects\main.o: ..\APP\FOC\foc_fault.h

@@ -70,6 +70,7 @@ void ADC1_2_IRQHandler(void);
 void CAN1_RX_IRQHandler(void);
 void CAN1_ERR_IRQHandler(void);
 void TMR7_GLOBAL_IRQHandler(void);
+void DMA1_Channel3_IRQHandler(void);
 /* add user code begin exported functions */
 
 /* add user code end exported functions */

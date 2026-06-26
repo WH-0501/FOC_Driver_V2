@@ -14,11 +14,7 @@
 .\objects\foc.o: ..\APP\FOC\foc_pid.h
 .\objects\foc.o: ..\APP\FOC\foc_fault.h
 .\objects\foc.o: ..\APP\common.h
-.\objects\foc.o: ..\APP\FOC\foc_motor.h
-.\objects\foc.o: ..\APP\FOC\current_sense.h
-.\objects\foc.o: ..\APP\FOC\../Driver/gate/gate_driver.h
-.\objects\foc.o: ..\APP\FOC\../Driver/gate/../../../Board/platform_gpio_types.h
-.\objects\foc.o: ..\..\libraries\drivers\inc\at32m412_416_gpio.h
+.\objects\foc.o: ..\Board\dwt_profile_delay.h
 .\objects\foc.o: ..\..\libraries\cmsis\cm4\device_support\at32m412_416.h
 .\objects\foc.o: ..\..\libraries\cmsis\cm4\core_support\core_cm4.h
 .\objects\foc.o: ..\..\libraries\cmsis\cm4\core_support\cmsis_version.h
@@ -42,5 +38,9 @@
 .\objects\foc.o: ..\..\libraries\drivers\inc\at32m412_416_spi.h
 .\objects\foc.o: ..\..\libraries\drivers\inc\at32m412_416_tmr.h
 .\objects\foc.o: ..\..\libraries\drivers\inc\at32m412_416_usart.h
+.\objects\foc.o: ..\APP\FOC\foc_motor.h
+.\objects\foc.o: ..\APP\FOC\current_sense.h
+.\objects\foc.o: ..\APP\FOC\../Driver/gate/gate_driver.h
+.\objects\foc.o: ..\APP\FOC\../Driver/gate/../../../Board/platform_gpio_types.h
 .\objects\foc.o: ..\APP\FOC\../config/motor_config.h
 .\objects\foc.o: C:\Keil_v5\ARM\ARM_Compiler_5.06u7\Bin\..\include\string.h

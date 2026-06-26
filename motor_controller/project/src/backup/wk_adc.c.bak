@@ -57,12 +57,79 @@ void wk_adc_common_init(void)
   adc_common_struct.common_dma_mode = ADC_COMMON_DMAMODE_DISABLE;
   adc_common_struct.common_dma_request_repeat_state = FALSE;
   adc_common_struct.sampling_interval = ADC_SAMPLING_INTERVAL_4CYCLES;
-  adc_common_struct.tempervintrv_state = FALSE;
+  adc_common_struct.tempervintrv_state = TRUE;
   adc_common_config(&adc_common_struct);
   
   /* add user code begin adc_common_init 2 */
 
   /* add user code end adc_common_init 2 */
+}
+
+/**
+  * @brief  init adc1 function.
+  * @param  none
+  * @retval none
+  */
+void wk_adc1_init(void)
+{
+  /* add user code begin adc1_init 0 */
+
+  /* add user code end adc1_init 0 */
+
+  gpio_init_type gpio_init_struct;
+  adc_base_config_type adc_base_struct;
+
+  gpio_default_para_init(&gpio_init_struct);
+
+  /* add user code begin adc1_init 1 */
+
+  /* add user code end adc1_init 1 */
+
+  /*gpio--------------------------------------------------------------------*/ 
+  /* configure the IN9 pin */
+  gpio_init_struct.gpio_mode = GPIO_MODE_ANALOG;
+  gpio_init_struct.gpio_pins = VBUS_PIN;
+  gpio_init(VBUS_GPIO_PORT, &gpio_init_struct);
+
+  /* adc_settings------------------------------------------------------------------- */
+  adc_base_default_para_init(&adc_base_struct);
+  adc_base_struct.sequence_mode = TRUE;
+  adc_base_struct.repeat_mode = FALSE;
+  adc_base_struct.data_align = ADC_RIGHT_ALIGNMENT;
+  adc_base_struct.ordinary_channel_length = 1;
+  adc_base_config(ADC1, &adc_base_struct);
+
+  adc_resolution_set(ADC1, ADC_RESOLUTION_12B);
+
+  /* adc_preempt_conversionmode----------------------------------------------------- */
+  adc_preempt_channel_length_set(ADC1, 2);
+
+  adc_preempt_channel_set(ADC1, ADC_CHANNEL_9, 1, ADC_SAMPLETIME_239_5);
+  adc_preempt_offset_value_set(ADC1, ADC_PREEMPT_CHANNEL_1, 0x0);
+
+  adc_preempt_channel_set(ADC1, ADC_CHANNEL_16, 2, ADC_SAMPLETIME_239_5);
+  adc_preempt_offset_value_set(ADC1, ADC_PREEMPT_CHANNEL_2, 0x0);
+
+  /* When "ADC_PREEMPT_TRIG_EDGE_NONE" is selected, the external trigger source is invalid, and user can only use software trigger. \
+  The software trigger function is adc_preempt_software_trigger_enable(ADCx, TRUE); */
+  adc_preempt_conversion_trigger_set(ADC1,  ADC_PREEMPT_TRIG_TMR1CH4, ADC_PREEMPT_TRIG_EDGE_NONE);
+
+  /* add user code begin adc1_init 2 */
+
+  /* add user code end adc1_init 2 */
+
+  adc_enable(ADC1, TRUE);
+  while(adc_flag_get(ADC1, ADC_RDY_FLAG) == RESET);
+
+  /* adc calibration---------------------------------------------------------------- */
+  adc_calibration_init(ADC1);
+  while(adc_calibration_init_status_get(ADC1));
+  adc_calibration_start(ADC1);
+  while(adc_calibration_status_get(ADC1));
+
+  /* add user code begin adc1_init 3 */
+
+  /* add user code end adc1_init 3 */
 }
 
 /**
@@ -88,23 +155,23 @@ void wk_adc2_init(void)
   /*gpio--------------------------------------------------------------------*/ 
   /* configure the IN5 pin */
   gpio_init_struct.gpio_mode = GPIO_MODE_ANALOG;
-  gpio_init_struct.gpio_pins = GPIO_PINS_5;
-  gpio_init(GPIOA, &gpio_init_struct);
+  gpio_init_struct.gpio_pins = TEMP_PIN;
+  gpio_init(TEMP_GPIO_PORT, &gpio_init_struct);
 
   /* configure the IN7 pin */
   gpio_init_struct.gpio_mode = GPIO_MODE_ANALOG;
-  gpio_init_struct.gpio_pins = GPIO_PINS_7;
-  gpio_init(GPIOA, &gpio_init_struct);
+  gpio_init_struct.gpio_pins = SOA_PIN;
+  gpio_init(SOA_GPIO_PORT, &gpio_init_struct);
 
   /* configure the IN8 pin */
   gpio_init_struct.gpio_mode = GPIO_MODE_ANALOG;
-  gpio_init_struct.gpio_pins = GPIO_PINS_0;
-  gpio_init(GPIOB, &gpio_init_struct);
+  gpio_init_struct.gpio_pins = SOB_PIN;
+  gpio_init(SOB_GPIO_PORT, &gpio_init_struct);
 
   /* configure the IN10 pin */
   gpio_init_struct.gpio_mode = GPIO_MODE_ANALOG;
-  gpio_init_struct.gpio_pins = GPIO_PINS_2;
-  gpio_init(GPIOB, &gpio_init_struct);
+  gpio_init_struct.gpio_pins = SOC_PIN;
+  gpio_init(SOC_GPIO_PORT, &gpio_init_struct);
 
   /* adc_settings------------------------------------------------------------------- */
   adc_base_default_para_init(&adc_base_struct);

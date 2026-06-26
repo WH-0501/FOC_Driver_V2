@@ -30,6 +30,7 @@
 /* private includes ----------------------------------------------------------*/
 /* add user code begin private includes */
 #include "board.h"
+#include "../APP/logger/logger.h"
 /* add user code end private includes */
 
 /* private typedef -----------------------------------------------------------*/
@@ -353,6 +354,16 @@ void TMR7_GLOBAL_IRQHandler(void)
   /* add user code begin TMR7_GLOBAL_IRQ 1 */
 
   /* add user code end TMR7_GLOBAL_IRQ 1 */
+}
+
+/**
+  * @brief  this function handles DMA1 channel3 global interrupt.
+  * @param  none
+  * @retval none
+  */
+void DMA1_Channel3_IRQHandler(void)
+{
+  logger_dma_irq_handler();
 }
 
 /* add user code begin 1 */

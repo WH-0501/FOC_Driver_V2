@@ -56,9 +56,8 @@ void wk_gpio_config(void)
   gpio_init(nFAULT_GPIO_PORT, &gpio_init_struct);
 
   /* gpio output config */
-  gpio_bits_set(ENC_GPIO_PORT, ENC_PIN);
-  gpio_bits_set(GPIOA, ENB_PIN | ENA_PIN | nSLEEP_PIN);
-  gpio_bits_reset(CS_GPIO_PORT, CS_PIN);
+  gpio_bits_reset(GPIOB, ENC_PIN | CS_PIN);
+  gpio_bits_reset(GPIOA, ENB_PIN | ENA_PIN | nSLEEP_PIN);
 
   gpio_init_struct.gpio_drive_strength = GPIO_DRIVE_STRENGTH_MODERATE;
   gpio_init_struct.gpio_out_type = GPIO_OUTPUT_PUSH_PULL;

@@ -222,6 +222,7 @@ void wk_nvic_config(void)
   nvic_irq_enable(CAN1_RX_IRQn, 1, 0);
   nvic_irq_enable(CAN1_ERR_IRQn, 1, 0);
   nvic_irq_enable(TMR7_GLOBAL_IRQn, 2, 0);
+  nvic_irq_enable(DMA1_Channel3_IRQn, 2, 0);
 }
 
 /* add user code begin 1 */

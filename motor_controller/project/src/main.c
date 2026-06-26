@@ -38,6 +38,7 @@
 /* private includes ----------------------------------------------------------*/
 /* add user code begin private includes */
 #include "board.h"
+#include "logger.h"
 #include "dwt_profile_delay.h"
 #include "foc.h"
 #include "gate/gate_driver.h"
@@ -54,7 +55,10 @@
 
 /* private define ------------------------------------------------------------*/
 /* add user code begin private define */
-#define APP_VECTOR_TABLE_OFFSET 0x1000
+/* Current image is linked at 0x08000000 (see .map), so VTOR offset must be 0.
+ * If using a bootloader offset (e.g. 0x1000), linker/scatter must also relocate
+ * the whole image and vector table to the same flash base. */
+#define APP_VECTOR_TABLE_OFFSET 0x0000 // 0x1000 for bootloader
 /* add user code end private define */
 
 /* private macro -------------------------------------------------------------*/
@@ -107,6 +111,9 @@ int main(void)
   /* init adc-common function. */
   wk_adc_common_init();
 
+  /* init adc1 function. */
+  wk_adc1_init();
+
   /* init adc2 function. */
   wk_adc2_init();
 
@@ -133,8 +140,11 @@ int main(void)
   /* init tmr1 function. */
   wk_tmr1_init();
 
-  /* init adc1 function. */
-  wk_adc1_init();
+  /* init tmr6 function. */
+  wk_tmr6_init();
+
+  /* init tmr7 function. */
+  wk_tmr7_init();
 
   /* init dma1 channel3 */
   wk_dma1_channel3_init();
@@ -147,13 +157,9 @@ int main(void)
                         DMA1_CHANNEL3_BUFFER_SIZE);
   dma_channel_enable(DMA1_CHANNEL3, TRUE);
 
-  /* init tmr6 function. */
-  wk_tmr6_init();
-
-  /* init tmr7 function. */
-  wk_tmr7_init();
-
   /* add user code begin 2 */
+  Logger_Init(LOG_OUTPUT_UART);
+  LOG_INFO("Logger initialized");
   dwt_init();
   motor_cfg_storage_adapter_t motor_cfg_adapter = {
     .eeprom_read = eeprom_read,
@@ -201,12 +207,15 @@ int main(void)
 
   // 5. FOC 初始化（末尾含阻塞电流零漂校准）
   foc_init(&motor_cfg);
+
+  LOG_INFO("Motor controller initialized");
   /* add user code end 2 */
 
   while(1)
   {
     /* add user code begin 3 */
     foc_update();
+    LOG_INFO("test!");
     /* add user code end 3 */
   }
 }

@@ -36,3 +36,5 @@
 .\objects\at32m412_416_int.o: ..\APP\compiler_port.h
 .\objects\at32m412_416_int.o: ..\APP\math_compat.h
 .\objects\at32m412_416_int.o: ..\APP\FOC\foc_pid.h
+.\objects\at32m412_416_int.o: ..\src\../APP/logger/logger.h
+.\objects\at32m412_416_int.o: C:\Keil_v5\ARM\ARM_Compiler_5.06u7\Bin\..\include\stdio.h

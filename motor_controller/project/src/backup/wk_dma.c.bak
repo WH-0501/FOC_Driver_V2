@@ -32,7 +32,7 @@
 /* add user code end 0 */
 
 /**
-  * @brief  init dma1 channel1 for "adc2"
+  * @brief  init dma1 channel1 for "adc1"
   * @param  none
   * @retval none
   */
@@ -57,11 +57,44 @@ void wk_dma1_channel1_init(void)
 
   /* dmamux function enable */
   dmamux_enable(DMA1, TRUE);
-  dmamux_init(DMA1MUX_CHANNEL1, DMAMUX_DMAREQ_ID_ADC2);
+  dmamux_init(DMA1MUX_CHANNEL1, DMAMUX_DMAREQ_ID_ADC1);
 
   /* add user code begin dma1_channel1 1 */
 
   /* add user code end dma1_channel1 1 */
+}
+
+/**
+  * @brief  init dma1 channel3 for "usart1_tx"
+  * @param  none
+  * @retval none
+  */
+void wk_dma1_channel3_init(void)
+{
+  /* add user code begin dma1_channel3 0 */
+
+  /* add user code end dma1_channel3 0 */
+
+  dma_init_type dma_init_struct;
+
+  dma_reset(DMA1_CHANNEL3);
+  dma_default_para_init(&dma_init_struct);
+  dma_init_struct.direction = DMA_DIR_MEMORY_TO_PERIPHERAL;
+  dma_init_struct.memory_data_width = DMA_MEMORY_DATA_WIDTH_BYTE;
+  dma_init_struct.memory_inc_enable = TRUE;
+  dma_init_struct.peripheral_data_width = DMA_PERIPHERAL_DATA_WIDTH_BYTE;
+  dma_init_struct.peripheral_inc_enable = FALSE;
+  dma_init_struct.priority = DMA_PRIORITY_LOW;
+  dma_init_struct.loop_mode_enable = FALSE;
+  dma_init(DMA1_CHANNEL3, &dma_init_struct);
+
+  /* dmamux function enable */
+  dmamux_enable(DMA1, TRUE);
+  dmamux_init(DMA1MUX_CHANNEL3, DMAMUX_DMAREQ_ID_USART1_TX);
+
+  /* add user code begin dma1_channel3 1 */
+
+  /* add user code end dma1_channel3 1 */
 }
 
 /**

@@ -30,6 +30,7 @@
 /* private includes ----------------------------------------------------------*/
 /* add user code begin private includes */
 #include "board.h"
+#include "../APP/logger/logger.h"
 /* add user code end private includes */
 
 /* private typedef -----------------------------------------------------------*/
@@ -224,22 +225,6 @@ void SysTick_Handler(void)
 }
 
 /**
-  * @brief  this function handles DMA1 Channel 1 handler.
-  * @param  none
-  * @retval none
-  */
-void DMA1_Channel1_IRQHandler(void)
-{
-  /* add user code begin DMA1_Channel1_IRQ 0 */
-
-  /* add user code end DMA1_Channel1_IRQ 0 */
-
-  /* add user code begin DMA1_Channel1_IRQ 1 */
-
-  /* add user code end DMA1_Channel1_IRQ 1 */
-}
-
-/**
   * @brief  this function handles ADC1 2 handler.
   * @param  none
   * @retval none
@@ -262,6 +247,113 @@ void ADC1_2_IRQHandler(void)
   /* add user code begin ADC1_2_IRQ 1 */
 
   /* add user code end ADC1_2_IRQ 1 */
+}
+
+/**
+  * @brief  this function handles CAN1 RX handler.
+  * @param  none
+  * @retval none
+  */
+void CAN1_RX_IRQHandler(void)
+{
+  can_rxbuf_type can_rxbuf_struct;
+
+  /* add user code begin CAN1_RX_IRQ 0 */
+
+  /* add user code end CAN1_RX_IRQ 0 */
+
+  if(can_interrupt_flag_get(CAN1, CAN_RIF_FLAG) != RESET)
+  {
+    /* add user code begin CAN1_CAN_RIF_FLAG */
+    /* clear flag and receive buffer release */
+    can_flag_clear(CAN1, CAN_RIF_FLAG);
+    can_rxbuf_read(CAN1, &can_rxbuf_struct);
+    /* add user code end CAN1_CAN_RIF_FLAG */
+  }
+
+  if(can_interrupt_flag_get(CAN1, CAN_RAFIF_FLAG) != RESET)
+  {
+    /* add user code begin CAN1_CAN_RAFIF_FLAG */
+    /* clear flag */
+    can_flag_clear(CAN1, CAN_RAFIF_FLAG);
+    /* add user code end CAN1_CAN_RAFIF_FLAG */
+  }
+
+  if(can_interrupt_flag_get(CAN1, CAN_RFIF_FLAG) != RESET)
+  {
+    /* add user code begin CAN1_CAN_RFIF_FLAG */
+    /* clear flag */
+    can_flag_clear(CAN1, CAN_RFIF_FLAG);
+    /* add user code end CAN1_CAN_RFIF_FLAG */
+  }
+
+  if(can_interrupt_flag_get(CAN1, CAN_ROIF_FLAG) != RESET)
+  {
+    /* add user code begin CAN1_CAN_ROIF_FLAG */
+    /* clear flag */
+    can_flag_clear(CAN1, CAN_ROIF_FLAG);
+    /* add user code end CAN1_CAN_ROIF_FLAG */
+  }
+
+  /* add user code begin CAN1_RX_IRQ 1 */
+
+  /* add user code end CAN1_RX_IRQ 1 */
+}
+
+/**
+  * @brief  this function handles CAN1 ERR handler.
+  * @param  none
+  * @retval none
+  */
+void CAN1_ERR_IRQHandler(void)
+{
+  /* add user code begin CAN1_ERR_IRQ 0 */
+
+  /* add user code end CAN1_ERR_IRQ 0 */
+
+  if(can_interrupt_flag_get(CAN1, CAN_BEIF_FLAG) != RESET)
+  {
+    /* add user code begin CAN1_CAN_BEIF_FLAG */
+    /* clear flag */
+    can_flag_clear(CAN1, CAN_BEIF_FLAG);
+    /* add user code end CAN1_CAN_BEIF_FLAG */
+  }
+
+  if(can_interrupt_flag_get(CAN1, CAN_EIF_FLAG) != RESET)
+  {
+    /* add user code begin CAN1_CAN_EIF_FLAG */
+    /* clear flag */
+    can_flag_clear(CAN1, CAN_EIF_FLAG);
+    /* add user code end CAN1_CAN_EIF_FLAG */
+  }
+
+  if(can_interrupt_flag_get(CAN1, CAN_EPIF_FLAG) != RESET)
+  {
+    /* add user code begin CAN1_CAN_EPIF_FLAG */
+    /* clear flag */
+    can_flag_clear(CAN1, CAN_EPIF_FLAG);
+    /* add user code end CAN1_CAN_EPIF_FLAG */
+  }
+
+  /* add user code begin CAN1_ERR_IRQ 1 */
+
+  /* add user code end CAN1_ERR_IRQ 1 */
+}
+
+/**
+  * @brief  this function handles TMR7 handler.
+  * @param  none
+  * @retval none
+  */
+void TMR7_GLOBAL_IRQHandler(void)
+{
+  /* add user code begin TMR7_GLOBAL_IRQ 0 */
+
+  /* add user code end TMR7_GLOBAL_IRQ 0 */
+
+  /* add user code begin TMR7_GLOBAL_IRQ 1 */
+
+  /* add user code end TMR7_GLOBAL_IRQ 1 */
 }
 
 /* add user code begin 1 */
