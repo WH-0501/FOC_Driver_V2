@@ -181,7 +181,7 @@
         <FLASH_IRQHandler>0;0;0;0;0;0</FLASH_IRQHandler>
         <CRM_IRQHandler>0;0;0;0;0;0</CRM_IRQHandler>
         <DMA1_Channel1_IRQHandler>0;0;0;0;0;0</DMA1_Channel1_IRQHandler>
-        <DMA1_Channel3_IRQHandler>0;0;0;0;0;0</DMA1_Channel3_IRQHandler>
+        <DMA1_Channel3_IRQHandler>1;2;0;0;0;1</DMA1_Channel3_IRQHandler>
         <ADC1_2_IRQHandler>1;0;0;0;0;1</ADC1_2_IRQHandler>
         <CAN1_TX_IRQHandler>0;0;0;0;0;0</CAN1_TX_IRQHandler>
         <CAN1_RX_IRQHandler>1;1;0;0;0;1</CAN1_RX_IRQHandler>

@@ -225,6 +225,22 @@ void SysTick_Handler(void)
 }
 
 /**
+  * @brief  this function handles DMA1 Channel 3 handler.
+  * @param  none
+  * @retval none
+  */
+void DMA1_Channel3_IRQHandler(void)
+{
+  /* add user code begin DMA1_Channel3_IRQ 0 */
+  logger_dma_irq_handler();
+  /* add user code end DMA1_Channel3_IRQ 0 */
+
+  /* add user code begin DMA1_Channel3_IRQ 1 */
+
+  /* add user code end DMA1_Channel3_IRQ 1 */
+}
+
+/**
   * @brief  this function handles ADC1 2 handler.
   * @param  none
   * @retval none
@@ -354,16 +370,6 @@ void TMR7_GLOBAL_IRQHandler(void)
   /* add user code begin TMR7_GLOBAL_IRQ 1 */
 
   /* add user code end TMR7_GLOBAL_IRQ 1 */
-}
-
-/**
-  * @brief  this function handles DMA1 channel3 global interrupt.
-  * @param  none
-  * @retval none
-  */
-void DMA1_Channel3_IRQHandler(void)
-{
-  logger_dma_irq_handler();
 }
 
 /* add user code begin 1 */

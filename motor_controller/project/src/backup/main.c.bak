@@ -55,7 +55,10 @@
 
 /* private define ------------------------------------------------------------*/
 /* add user code begin private define */
-#define APP_VECTOR_TABLE_OFFSET 0x1000
+/* Current image is linked at 0x08000000 (see .map), so VTOR offset must be 0.
+ * If using a bootloader offset (e.g. 0x1000), linker/scatter must also relocate
+ * the whole image and vector table to the same flash base. */
+#define APP_VECTOR_TABLE_OFFSET 0x0000 // 0x1000 for bootloader
 /* add user code end private define */
 
 /* private macro -------------------------------------------------------------*/
@@ -212,6 +215,7 @@ int main(void)
   {
     /* add user code begin 3 */
     foc_update();
+    LOG_INFO("test!");
     /* add user code end 3 */
   }
 }
