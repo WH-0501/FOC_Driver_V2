@@ -1,4 +1,5 @@
 #include "foc_filter.h"
+#include <stddef.h>
 
 #ifndef TWO_PI_F
 #define TWO_PI_F (6.28318530717958648f)
@@ -8,6 +9,7 @@ float lpf1_filer(float Tf, float dt, float x, float y_prev)
 {
     float alpha = dt / (dt + Tf);
     float y = x * alpha + y_prev * (1.0f - alpha);
+    return 0.0;
 }
 
 /*========================================================

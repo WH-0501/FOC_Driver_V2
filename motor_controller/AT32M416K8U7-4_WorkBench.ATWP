@@ -16,6 +16,23 @@
             <ParametersSub name="Clock" value="30000000"/>
         </Parameters>
     </ADC-Common>
+    <ADC1>
+        <Mode>
+            <ModeSub name="IN9" value="TRUE"/>
+            <ModeSub name="IN-TempSens" value="TRUE"/>
+        </Mode>
+        <Parameters>
+            <ParametersSub name="EnablePreemptedConversion" value="ENABLE"/>
+            <ParametersSub name="PreemptedTriggerSource" value="ADC_PREEMPT_TRIG_SOFTWARE"/>
+            <ParametersSub name="NbrOfPreemptedSequence" value="2"/>
+            <ParametersSub name="Channel_PreemptedSequence_1" value="ADC_CHANNEL_9"/>
+            <ParametersSub name="SamplingTime_PreemptedSequence_1" value="ADC_SAMPLETIME_239_5"/>
+            <ParametersSub name="SamplingRate_PreemptedSequence_1" value="0.119"/>
+            <ParametersSub name="Channel_PreemptedSequence_2" value="ADC_CHANNEL_16"/>
+            <ParametersSub name="SamplingTime_PreemptedSequence_2" value="ADC_SAMPLETIME_239_5"/>
+            <ParametersSub name="SamplingRate_PreemptedSequence_2" value="0.119"/>
+        </Parameters>
+    </ADC1>
     <ADC2>
         <Mode>
             <ModeSub name="IN5" value="TRUE"/>
@@ -57,19 +74,23 @@
             <ParametersSub name="Data_BTS2" value="9"/>
             <ParametersSub name="Data_RSAW" value="9"/>
             <ParametersSub name="Data_Sec_Offset" value="28"/>
-            <ParametersSub name="Filter_0_Enable" value="FALSE"/>
+            <ParametersSub name="Filter_0_Mask_identifier_type" value="FALSE"/>
+            <ParametersSub name="Filter_0_Mask_identifier" value="0x000"/>
+            <ParametersSub name="Filter_0_Code_identifier" value="0x000"/>
+            <ParametersSub name="Filter_1_Enable" value="TRUE"/>
+            <ParametersSub name="Filter_1_Mask_identifier_type" value="FALSE"/>
+            <ParametersSub name="Filter_1_Code_identifier" value="0x7FF"/>
         </Parameters>
+        <Interrupts>
+            <InterruptsSub name="Interrupt_RAFIF" value="TRUE"/>
+            <InterruptsSub name="Interrupt_RFIF" value="TRUE"/>
+            <InterruptsSub name="Interrupt_ROIF" value="TRUE"/>
+            <InterruptsSub name="Interrupt_RIF" value="TRUE"/>
+            <InterruptsSub name="Interrupt_BEIF" value="TRUE"/>
+            <InterruptsSub name="Interrupt_EIF" value="TRUE"/>
+            <InterruptsSub name="Interrupt_EPIF" value="TRUE"/>
+        </Interrupts>
     </CAN1>
-    <CRC>
-        <Mode>
-            <ModeSub name="CRC_State" value="TRUE"/>
-        </Mode>
-        <Parameters>
-            <ParametersSub name="InitValue" value="0x00000000"/>
-            <ParametersSub name="CRCPolynomialLength" value="CRC_POLY_SIZE_8B"/>
-            <ParametersSub name="CRCPolynomialValue_8" value="0x07"/>
-        </Parameters>
-    </CRC>
     <DEBUG>
         <Mode>
             <ModeSub name="SWD" value="TRUE"/>
@@ -78,10 +99,10 @@
     </DEBUG>
     <SPI2>
         <Mode>
-            <ModeSub name="Mode" value="Full_Duplex_Master"/>
+            <ModeSub name="Mode" value="Simplex_Bidirectional_Master"/>
         </Mode>
         <Parameters>
-            <ParametersSub name="TransmissionMode" value="SPI_TRANSMIT_FULL_DUPLEX"/>
+            <ParametersSub name="TransmissionMode" value="SPI_TRANSMIT_HALF_DUPLEX_TX"/>
             <ParametersSub name="Mode" value="SPI_MODE_MASTER"/>
             <ParametersSub name="FirstBit" value="SPI_FIRST_BIT_MSB"/>
             <ParametersSub name="ClkDivision" value="SPI_MCLK_DIV_32"/>
@@ -93,7 +114,6 @@
     <SYSTEM>
         <Mode>
             <ModeSub name="Time_Base" value="SysTick"/>
-            <ModeSub name="UART_Printf" value="USART1"/>
         </Mode>
         <Parameters>
             <ParametersSub name="Delay_Mode" value="Interrupt"/>
@@ -108,9 +128,9 @@
             <ModeSub name="Activated" value="TRUE"/>
         </Mode>
         <Parameters>
-            <ParametersSub name="DividerValue" value="4"/>
+            <ParametersSub name="DividerValue" value="1"/>
             <ParametersSub name="CounterDirection" value="TMR_COUNT_TWO_WAY_1"/>
-            <ParametersSub name="Period" value="899"/>
+            <ParametersSub name="Period" value="2249"/>
             <ParametersSub name="OCMode_1" value="TMR_OUTPUT_CONTROL_PWM_MODE_A"/>
             <ParametersSub name="OCMode_2" value="TMR_OUTPUT_CONTROL_PWM_MODE_A"/>
             <ParametersSub name="OCMode_3" value="TMR_OUTPUT_CONTROL_PWM_MODE_A"/>
@@ -118,41 +138,82 @@
             <ParametersSub name="ChannelData_4" value="898"/>
         </Parameters>
     </TMR1>
+    <TMR6>
+        <Mode>
+            <ModeSub name="Activated" value="TRUE"/>
+        </Mode>
+        <Parameters>
+            <ParametersSub name="DividerValue" value="179"/>
+        </Parameters>
+    </TMR6>
+    <TMR7>
+        <Mode>
+            <ModeSub name="Activated" value="TRUE"/>
+        </Mode>
+        <Parameters>
+            <ParametersSub name="DividerValue" value="179"/>
+            <ParametersSub name="Period" value="999"/>
+        </Parameters>
+    </TMR7>
     <USART1>
         <Mode>
             <ModeSub name="Mode" value="Asynchronous"/>
         </Mode>
         <Parameters>
-            <ParametersSub name="RealBaudRate" value="115163"/>
+            <ParametersSub name="BaudRate" value="921600"/>
+            <ParametersSub name="RealBaudRate" value="923077"/>
         </Parameters>
     </USART1>
     <DMA>
-        <ADC2>
+        <ADC1>
             <ParametersSub name="Instance" value="DMA1_Channel1"/>
             <ParametersSub name="SyncRequestCount" value="1"/>
             <ParametersSub name="RequestCount" value="1"/>
-        </ADC2>
+        </ADC1>
+        <USART1_TX>
+            <ParametersSub name="Instance" value="DMA1_Channel3"/>
+            <ParametersSub name="SyncRequestCount" value="1"/>
+            <ParametersSub name="RequestCount" value="1"/>
+        </USART1_TX>
     </DMA>
     <NVIC>
         <SysTick_Handler>1;15;0;0;0;1</SysTick_Handler>
         <FLASH_IRQHandler>0;0;0;0;0;0</FLASH_IRQHandler>
         <CRM_IRQHandler>0;0;0;0;0;0</CRM_IRQHandler>
-        <DMA1_Channel1_IRQHandler>1;0;0;0;0;1</DMA1_Channel1_IRQHandler>
+        <DMA1_Channel1_IRQHandler>0;0;0;0;0;0</DMA1_Channel1_IRQHandler>
+        <DMA1_Channel3_IRQHandler>0;0;0;0;0;0</DMA1_Channel3_IRQHandler>
         <ADC1_2_IRQHandler>1;0;0;0;0;1</ADC1_2_IRQHandler>
         <CAN1_TX_IRQHandler>0;0;0;0;0;0</CAN1_TX_IRQHandler>
-        <CAN1_RX_IRQHandler>0;0;0;0;0;0</CAN1_RX_IRQHandler>
+        <CAN1_RX_IRQHandler>1;1;0;0;0;1</CAN1_RX_IRQHandler>
         <CAN1_STAT_IRQHandler>0;0;0;0;0;0</CAN1_STAT_IRQHandler>
-        <CAN1_ERR_IRQHandler>0;0;0;0;0;0</CAN1_ERR_IRQHandler>
+        <CAN1_ERR_IRQHandler>1;1;0;0;0;1</CAN1_ERR_IRQHandler>
         <TMR1_BRK_TMR9_IRQHandler>0;0;0;0;0;0</TMR1_BRK_TMR9_IRQHandler>
         <TMR1_OVF_TMR10_IRQHandler>0;0;0;0;0;0</TMR1_OVF_TMR10_IRQHandler>
         <TMR1_TRG_HALL_TMR11_IRQHandler>0;0;0;0;0;0</TMR1_TRG_HALL_TMR11_IRQHandler>
         <TMR1_CH_IRQHandler>0;0;0;0;0;0</TMR1_CH_IRQHandler>
         <SPI2_IRQHandler>0;0;0;0;0;0</SPI2_IRQHandler>
         <USART1_IRQHandler>0;0;0;0;0;0</USART1_IRQHandler>
+        <TMR6_DAC_GLOBAL_IRQHandler>0;0;0;0;0;0</TMR6_DAC_GLOBAL_IRQHandler>
+        <TMR7_GLOBAL_IRQHandler>1;2;0;0;0;1</TMR7_GLOBAL_IRQHandler>
         <FPU_IRQHandler>0;0;0;0;0;0</FPU_IRQHandler>
         <DMAMUX_IRQHandler>0;0;0;0;0;0</DMAMUX_IRQHandler>
     </NVIC>
     <GPIO>
+        <Signal SignalName="ADC2_IN5" PinName="PA5">
+            <Parameters name="Label" value="TEMP"/>
+        </Signal>
+        <Signal SignalName="ADC2_IN7" PinName="PA7">
+            <Parameters name="Label" value="SOA"/>
+        </Signal>
+        <Signal SignalName="ADC2_IN8" PinName="PB0">
+            <Parameters name="Label" value="SOB"/>
+        </Signal>
+        <Signal SignalName="ADC1_IN9" PinName="PB1">
+            <Parameters name="Label" value="VBUS"/>
+        </Signal>
+        <Signal SignalName="ADC2_IN10" PinName="PB2">
+            <Parameters name="Label" value="SOC"/>
+        </Signal>
         <Signal SignalName="GPIO_Output" PinName="PB10">
             <Parameters name="GPIO_Outputlevel" value="GPIO_OUTPUTLEVEL_HIGH"/>
             <Parameters name="Label" value="ENC"/>
@@ -167,6 +228,13 @@
         </Signal>
         <Signal SignalName="GPIO_Output" PinName="PA15">
             <Parameters name="GPIO_Outputlevel" value="GPIO_OUTPUTLEVEL_HIGH"/>
+            <Parameters name="Label" value="nSLEEP"/>
+        </Signal>
+        <Signal SignalName="GPIO_Input" PinName="PB3">
+            <Parameters name="Label" value="nFAULT"/>
+        </Signal>
+        <Signal SignalName="GPIO_Output" PinName="PB6">
+            <Parameters name="Label" value="CS"/>
         </Signal>
     </GPIO>
     <ClockConfiguration>
@@ -199,6 +267,7 @@
         <PinSub pinname="PA5" signalname="ADC2_IN5" signaltype="2"/>
         <PinSub pinname="PA7" signalname="ADC2_IN7" signaltype="3"/>
         <PinSub pinname="PB0" signalname="ADC2_IN8" signaltype="2"/>
+        <PinSub pinname="PB1" signalname="ADC1_IN9" signaltype="2"/>
         <PinSub pinname="PB2" signalname="ADC2_IN10" signaltype="2"/>
         <PinSub pinname="PB10" signalname="GPIO_Output" signaltype="3"/>
         <PinSub pinname="PA8" signalname="TMR1_CH1" signaltype="2"/>
@@ -210,8 +279,8 @@
         <PinSub pinname="PA14" signalname="DEBUG_SWCLK" signaltype="2"/>
         <PinSub pinname="PA15" signalname="GPIO_Output" signaltype="3"/>
         <PinSub pinname="PB3" signalname="GPIO_Input" signaltype="3"/>
-        <PinSub pinname="PB4" signalname="SPI2_MISO" signaltype="2"/>
         <PinSub pinname="PB5" signalname="SPI2_MOSI" signaltype="2"/>
+        <PinSub pinname="PB6" signalname="GPIO_Output" signaltype="3"/>
         <PinSub pinname="PB8" signalname="SPI2_SCK" signaltype="2"/>
     </PINInfo>
     <ProjectInfomation>
@@ -242,7 +311,10 @@
         <RankSub RankNum="20" FixPosFlag="FALSE" FuncName="wk_usart1_init" InstanceName="USART1" CodeSection="usart1 function" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="22" FixPosFlag="FALSE" FuncName="wk_can1_init" InstanceName="CAN1" CodeSection="can1 function" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="25" FixPosFlag="FALSE" FuncName="wk_spi2_init" InstanceName="SPI2" CodeSection="spi2 function" MainDoNotCallFlag="FALSE"/>
-        <RankSub RankNum="30" FixPosFlag="FALSE" FuncName="wk_crc_init" InstanceName="CRC" CodeSection="crc function" MainDoNotCallFlag="FALSE"/>
         <RankSub RankNum="41" FixPosFlag="FALSE" FuncName="wk_tmr1_init" InstanceName="TMR1" CodeSection="tmr1 function" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="11" FixPosFlag="FALSE" FuncName="wk_adc1_init" InstanceName="ADC1" CodeSection="adc1 function" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="15" FixPosFlag="FALSE" FuncName="wk_dma1_channel3_init" InstanceName="DMA1_Channel3" CodeSection="dma1_channel3_init" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="44" FixPosFlag="FALSE" FuncName="wk_tmr6_init" InstanceName="TMR6" CodeSection="tmr6 function" MainDoNotCallFlag="FALSE"/>
+        <RankSub RankNum="45" FixPosFlag="FALSE" FuncName="wk_tmr7_init" InstanceName="TMR7" CodeSection="tmr7 function" MainDoNotCallFlag="FALSE"/>
     </FunctionRankInfo>
 </Root>

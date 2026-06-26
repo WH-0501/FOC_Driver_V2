@@ -12,7 +12,6 @@
 .\objects\system_at32m412_416.o: ..\..\libraries\drivers\inc\at32m412_416_adc.h
 .\objects\system_at32m412_416.o: ..\..\libraries\cmsis\cm4\device_support\at32m412_416.h
 .\objects\system_at32m412_416.o: ..\..\libraries\drivers\inc\at32m412_416_can.h
-.\objects\system_at32m412_416.o: ..\..\libraries\drivers\inc\at32m412_416_crc.h
 .\objects\system_at32m412_416.o: ..\..\libraries\drivers\inc\at32m412_416_crm.h
 .\objects\system_at32m412_416.o: ..\..\libraries\drivers\inc\at32m412_416_debug.h
 .\objects\system_at32m412_416.o: ..\..\libraries\drivers\inc\at32m412_416_dma.h

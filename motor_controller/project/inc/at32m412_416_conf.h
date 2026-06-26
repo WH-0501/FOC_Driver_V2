@@ -54,7 +54,7 @@ extern "C" {
 #define ADC_MODULE_ENABLED
 #define CAN_MODULE_ENABLED
 /*#define CMP_MODULE_ENABLED----------------------*/
-#define CRC_MODULE_ENABLED
+/*#define CRC_MODULE_ENABLED----------------------*/
 #define CRM_MODULE_ENABLED
 /*#define DAC_MODULE_ENABLED----------------------*/
 #define DEBUG_MODULE_ENABLED

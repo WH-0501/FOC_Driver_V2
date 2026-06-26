@@ -18,7 +18,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "error.h"
+#include "error_types.h"
 #include "foc_filter.h"
 #include "foc_pid.h"
 
@@ -93,10 +93,25 @@ typedef struct
   float inductance_q;             ///< q 轴电感 Lq [H]
   float flux_linkage;             ///< 永磁磁链 ψf [Wb]（或等价常数）
   uint8_t pole_pairs;             ///< 极对数 p
+  int8_t direction;               ///< 方向系数：1 正向，-1 反向
+  float gear_ratio;               ///< 电机到关节减速比（直驱填 1.0）
   uint32_t encoder_counts_per_rev; ///< 机械旋转一圈编码器计数（分辨率定义依传感器）
   float theta_elec_offset_rad;    ///< 电角度零偏置 [rad]，对齐/校准后写入
   float theta_offset_rad;         ///< 机械角度零偏置 [rad]，对齐/校准后写入
 } motor_param_t;
+
+typedef struct
+{
+  pid_param_t id;       ///< d 轴电流环 PID 参数
+  pid_param_t iq;       ///< q 轴电流环 PID 参数
+  pid_param_t velocity; ///< 速度环 PID 参数
+  pid_param_t position; ///< 位置环 PID 参数
+} motor_pid_config_t;
+
+typedef struct
+{
+  uint16_t can_id;  ///< 电机节点 CAN ID（11-bit 标准帧建议范围：1~0x7FE）
+} motor_comm_config_t;
 
 /**
  * 保护与控制用限幅（非电机铭牌常数，但同样建议跑环时只读；部分由上位机下发）。
@@ -135,7 +150,10 @@ typedef struct
 {
   motor_param_t param;         ///< 电机铭牌/辨识参数
   motor_limits_t limits;       ///< 电气与保护限幅
-  motor_motion_cfg_t motion;   ///< 机械运动轨线约束
+  motor_motion_cfg_t motion;   ///< 机械运动轨迹约束
+  motor_pid_config_t pid;      ///< 各控制环 PID 配置参数
+  motor_comm_config_t comm;    ///< 通信配置
+  bool auto_align_electrical;  ///< 上电是否自动执行电角对齐
 } motor_config_t;
 
 typedef struct
@@ -198,26 +216,26 @@ typedef struct
   motor_actuation_t out; ///< 调制/功率级输出
   fsm_state_t fsm; ///< 运行状态机当前状态
 
-  /**< 三相电流 ADC 零漂：上电单次，PWM 须关断，在电流采样后由 board_current_offset_cal_step 推进 */
+  /**< 三相电流 ADC 零漂：上电单次，PWM 须关断，在电流采样后由上层 current_sense 推进 */
   bool current_offset_cal_pending;   ///< 1：请求从零开始累加（首部电流环 ISR 清零 pending 并开始）
   bool current_offset_calibrating; ///< 1：正在 ADC 累加平均（供观测或与 pending 区分阶段）
   bool current_offset_cal_done;    ///< 1：本轮上电零漂已完成，ampere 走 adc_offset 扣除路径
 
-  pid_t id_pid;         ///< d 轴电流环 PID 状态
-  pid_t iq_pid;         ///< q 轴电流环 PID 状态
-  pid_t velocity_pid;   ///< 速度环 PID 状态
-  pid_t position_pid;   ///< 位置环 PID 状态
+  pid_state_t id_pid;         ///< d 轴电流环 PID 状态
+  pid_state_t iq_pid;         ///< q 轴电流环 PID 状态
+  pid_state_t velocity_pid;   ///< 速度环 PID 状态
+  pid_state_t position_pid;   ///< 位置环 PID 状态
 
-  lpf1_t vbus_lpf; ///< 母线电压低通滤波器
-  lpf1_t v_a_lpf; ///< a 相电压低通滤波器
-  lpf1_t v_b_lpf; ///< b 相电压低通滤波器
-  lpf1_t v_c_lpf; ///< c 相电压低通滤波器
-  lpf1_t i_d_lpf; ///< d 轴电流低通滤波器
-  lpf1_t i_q_lpf; ///< q 轴电流低通滤波器
-  lpf1_t i_mod_lpf; ///< 模电流低通滤波器
-  lpf1_t i_bus_lpf; ///< 母线电流低通滤波器
-  lpf1_t v_d_lpf; ///< d 轴电压低通滤波器
-  lpf1_t v_q_lpf; ///< q 轴电压低通滤波器
+  lpf1_t vbus_lpf;      ///< 母线电压低通滤波器
+  lpf1_t v_a_lpf;       ///< a 相电压低通滤波器
+  lpf1_t v_b_lpf;       ///< b 相电压低通滤波器
+  lpf1_t v_c_lpf;       ///< c 相电压低通滤波器
+  lpf1_t i_d_lpf;       ///< d 轴电流低通滤波器
+  lpf1_t i_q_lpf;       ///< q 轴电流低通滤波器
+  lpf1_t i_mod_lpf;     ///< 模电流低通滤波器
+  lpf1_t i_bus_lpf;     ///< 母线电流低通滤波器
+  lpf1_t v_d_lpf;       ///< d 轴电压低通滤波器
+  lpf1_t v_q_lpf;       ///< q 轴电压低通滤波器
 
   lpf1_t speed_rad_s_lpf; ///< 速度低通滤波器
 

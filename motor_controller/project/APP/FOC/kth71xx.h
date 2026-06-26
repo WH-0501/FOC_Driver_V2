@@ -1,5 +1,5 @@
 /**
- * @file kth711x.h
+ * @file kth71xx.h
  * @author your name (you@domain.com)
  * @brief 
  * @version 0.1
@@ -30,4 +30,4 @@ void KTH71_Init(void);
 }
 #endif
 
-#endif /* __KTH711x_H__ */
+#endif /* __KTH71xx_H__ */

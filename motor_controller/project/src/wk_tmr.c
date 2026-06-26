@@ -87,7 +87,7 @@ void wk_tmr1_init(void)
   tmr_clock_source_div_set(TMR1, TMR_CLOCK_DIV1);
   tmr_repetition_counter_set(TMR1, 0);
   tmr_period_buffer_enable(TMR1, FALSE);
-  tmr_base_init(TMR1, 899, 4);
+  tmr_base_init(TMR1, 2249, 1);
 
   /* configure primary mode settings */
   tmr_sub_sync_mode_set(TMR1, FALSE);
@@ -157,7 +157,7 @@ void wk_tmr1_init(void)
   tmr_brkdt_struct.fcsoen_state = FALSE;
   tmr_brkdt_struct.fcsodis_state = FALSE;
   tmr_brkdt_struct.wp_level = TMR_WP_OFF;
-  tmr_brkdt_struct.deadtime = 9;
+  tmr_brkdt_struct.deadtime = 0;
   tmr_brkdt_config(TMR1, &tmr_brkdt_struct);
   tmr_brk_filter_value_set(TMR1, 0);
 
@@ -174,6 +174,66 @@ void wk_tmr1_init(void)
   /* add user code begin tmr1_init 2 */
 
   /* add user code end tmr1_init 2 */
+}
+
+/**
+  * @brief  init tmr6 function.
+  * @param  none
+  * @retval none
+  */
+void wk_tmr6_init(void)
+{
+  /* add user code begin tmr6_init 0 */
+
+  /* add user code end tmr6_init 0 */
+
+  /* add user code begin tmr6_init 1 */
+
+  /* add user code end tmr6_init 1 */
+
+  /* configure counter settings */
+  tmr_cnt_dir_set(TMR6, TMR_COUNT_UP);
+  tmr_period_buffer_enable(TMR6, FALSE);
+  tmr_base_init(TMR6, 65535, 179);
+
+  /* configure primary mode settings */
+  tmr_primary_mode_select(TMR6, TMR_PRIMARY_SEL_RESET);
+
+  tmr_counter_enable(TMR6, TRUE);
+
+  /* add user code begin tmr6_init 2 */
+
+  /* add user code end tmr6_init 2 */
+}
+
+/**
+  * @brief  init tmr7 function.
+  * @param  none
+  * @retval none
+  */
+void wk_tmr7_init(void)
+{
+  /* add user code begin tmr7_init 0 */
+
+  /* add user code end tmr7_init 0 */
+
+  /* add user code begin tmr7_init 1 */
+
+  /* add user code end tmr7_init 1 */
+
+  /* configure counter settings */
+  tmr_cnt_dir_set(TMR7, TMR_COUNT_UP);
+  tmr_period_buffer_enable(TMR7, FALSE);
+  tmr_base_init(TMR7, 999, 179);
+
+  /* configure primary mode settings */
+  tmr_primary_mode_select(TMR7, TMR_PRIMARY_SEL_RESET);
+
+  tmr_counter_enable(TMR7, TRUE);
+
+  /* add user code begin tmr7_init 2 */
+
+  /* add user code end tmr7_init 2 */
 }
 
 /* add user code begin 1 */

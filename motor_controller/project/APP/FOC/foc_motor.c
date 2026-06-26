@@ -1,5 +1,9 @@
 #include "foc_motor.h"
+#include "common.h"
+#include "current_sense.h"
 #include "foc_filter.h"
+#include "math_compat.h"
+#include "kth71xx.h"
 #include "board.h"
 #include "at32m412_416_tmr.h"
 
@@ -15,12 +19,20 @@ void foc_motor_init(void)
 void foc_get_motor_angle(void)
 {
     unsigned short angle_raw;
+    float pole_pairs;
+    float direction;
+    float gear_ratio;
     KTH71_ReadAngle(&angle_raw);
 
     // 机械角度. 映射到 [0, 2π]
     float angle = (float)angle_raw * RAW_ANGLE_U16_TO_RAD;
 
-    g_motor.state.theta_elec_rad = angle_normalize((angle * POLE_PAIRS * DIR) - g_motor.config.param.theta_elec_offset_rad);
+    pole_pairs = (g_motor.config.param.pole_pairs > 0u) ? (float)g_motor.config.param.pole_pairs : 1.0f;
+    direction = (g_motor.config.param.direction == -1) ? -1.0f : 1.0f;
+    gear_ratio = (g_motor.config.param.gear_ratio > 0.0f) ? g_motor.config.param.gear_ratio : 1.0f;
+
+    g_motor.state.theta_elec_rad = angle_normalize(
+                        (angle * pole_pairs * direction) - g_motor.config.param.theta_elec_offset_rad);
     
     static float last_angle = 0;
     float diff_angle = angle - last_angle;
@@ -36,8 +48,8 @@ void foc_get_motor_angle(void)
      * (full_rotations + angle / _2PI) * 360: 电机轴累积转了多少圈的机械角度(°)
      * g_motor.config.param.theta_elec_offset_rad: 电角度偏移
      */
-    g_motor.state.position_rad = (full_rotations + angle / _2PI) * 360 - g_motor.config.param.theta_offset_rad;
-    g_motor.state.theta_joint_rad = g_motor.state.position_rad / GEAR_RATIO; // 关节角度 = 电角度 * 减速比
+    g_motor.state.position_rad = (full_rotations + angle / _2PI) * _2PI - g_motor.config.param.theta_offset_rad;
+    g_motor.state.theta_joint_rad = g_motor.state.position_rad / gear_ratio; // 关节角度 = 电角度 * 减速比
 
     last_angle = angle;
 }
@@ -66,20 +78,18 @@ void foc_get_motor_speed(void)
 
     if (delta_tim < 1) delta_tim = 1;
 
-    float velocity = (g_motor.state.position_rad - last_angle) / (float)delta_tim * 1000000.0f;
+    float velocity_rad_s = (g_motor.state.position_rad - last_angle) / (float)delta_tim * 1000000.0f;
     
     last_angle = g_motor.state.position_rad;
     last_vel_us = vel_us;
 
-    // deg/s 转 RPM: (deg/s) * 60s/min / 360°/rev = deg/s / 6
-    velocity = velocity / 6; 
-
-    g_motor.state.speed_rad_s = lpf1_update(&g_motor.speed_rad_s_lpf, velocity);
+    g_motor.state.speed_rad_s = lpf1_update(&g_motor.speed_rad_s_lpf, velocity_rad_s);
 }
 
 void foc_get_motor_current(void)
 {
     board_get_phase_current(&g_motor);
+    current_sense_process_sample(&g_motor);
 
     clarke_transform(g_motor.state.phase_current.ampere[0], /* ia */
         g_motor.state.phase_current.ampere[1], /* ib */

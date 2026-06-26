@@ -15,7 +15,6 @@
 .\objects\wk_gpio.o: ..\..\libraries\drivers\inc\at32m412_416_adc.h
 .\objects\wk_gpio.o: ..\..\libraries\cmsis\cm4\device_support\at32m412_416.h
 .\objects\wk_gpio.o: ..\..\libraries\drivers\inc\at32m412_416_can.h
-.\objects\wk_gpio.o: ..\..\libraries\drivers\inc\at32m412_416_crc.h
 .\objects\wk_gpio.o: ..\..\libraries\drivers\inc\at32m412_416_crm.h
 .\objects\wk_gpio.o: ..\..\libraries\drivers\inc\at32m412_416_debug.h
 .\objects\wk_gpio.o: ..\..\libraries\drivers\inc\at32m412_416_dma.h

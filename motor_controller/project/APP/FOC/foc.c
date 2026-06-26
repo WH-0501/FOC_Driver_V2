@@ -1,34 +1,59 @@
 #include "foc.h"
 #include "foc_motor.h"
+#include "current_sense.h"
+#include "../config/motor_config.h"
 #include <string.h>
 
 motor_handle_t g_motor;
 
-void foc_init(void)
+void foc_align_electrical(void);
+
+static void foc_pid_apply_param(pid_state_t *pid, uint8_t mode)
 {
+  if (pid == NULL)
+  {
+    return;
+  }
+  foc_pid_init(pid, mode);
+}
+
+void foc_init(const motor_config_t *config)
+{
+  motor_config_t local_cfg;
+
   memset(&g_motor, 0, sizeof(g_motor));
 
   g_motor.ctrl_mode = CTRL_MODE_IDLE;
   g_motor.fsm = STATE_IDLE;
-  g_motor.current_offset_cal_pending = true;
-  g_motor.current_offset_calibrating = false;
-  g_motor.current_offset_cal_done = false;
+  current_sense_init(&g_motor);
 
-  // 根据参数进行初始化
-  g_motor.config.param.pole_pairs = 1;
-  g_motor.config.param.encoder_counts_per_rev = 4096;
-  g_motor.config.limits.vbus_nominal = 24.0f;
-  g_motor.config.limits.vbus_uv_threshold = 10.0f;
-  g_motor.config.limits.id_limit = 30.0f;
-  g_motor.config.limits.iq_limit = 30.0f;
-  g_motor.config.limits.vd_limit = 12.0f;
-  g_motor.config.limits.vq_limit = 12.0f;
-  /* sw_ocp / hold_ms、vbus_ov_threshold：默认 0，由上位机或工艺写入 */
+  if (config != NULL)
+  {
+    g_motor.config = *config;
+  }
+  else
+  {
+    motor_config_set_defaults(&local_cfg);
+    g_motor.config = local_cfg;
+  }
 
-  g_motor.config.motion.max_speed_rad_s = 300.0f;
-  g_motor.config.motion.max_accel_rad_s2 = 1000.0f;
-  g_motor.config.motion.max_jerk_rad_s3 = 20000.0f;
-  /* snap 未接入规划器时保持 0 */
+  if (g_motor.config.param.pole_pairs == 0u)
+  {
+    g_motor.config.param.pole_pairs = 1u;
+  }
+  if ((g_motor.config.param.direction != 1) && (g_motor.config.param.direction != -1))
+  {
+    g_motor.config.param.direction = 1;
+  }
+  if (g_motor.config.param.gear_ratio <= 0.0f)
+  {
+    g_motor.config.param.gear_ratio = 1.0f;
+  }
+
+  foc_pid_apply_param(&g_motor.id_pid, 2u);
+  foc_pid_apply_param(&g_motor.iq_pid, 2u);
+  foc_pid_apply_param(&g_motor.velocity_pid, 1u);
+  foc_pid_apply_param(&g_motor.position_pid, 0u);
 
   /* LPF：fc 为截止频率 [Hz]，fs = 电流环对 lpf1_update 的调用频率（例 20 kHz） */
   lpf1_init(&g_motor.vbus_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
@@ -44,13 +69,13 @@ void foc_init(void)
 
   lpf1_init(&g_motor.speed_rad_s_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
 
-  /*
-   * 依赖 board_init() 已打开的电流采样（抢占 ADC）；main 中须先 board_init() 再本函数。
-   * 零漂须在 PWM 关断、逆变器 Hi-Z / 三相无流下完成。
-   */
-  board_current_offset_calibration(&g_motor);
+  /* 电流零漂校准在上层 current_sense 完成，board 仅负责 ADC raw 采集。 */
+  current_sense_calibrate_blocking(&g_motor);
 
-  foc_align_electrical();
+  if (g_motor.config.auto_align_electrical)
+  {
+    foc_align_electrical();
+  }
 }
 
 /**
@@ -89,29 +114,29 @@ void foc_voltage(float Uq, float Ud, float angle_el)
  */
 void foc_current(float id, float iq, float angle_el, float phase_vel)
 {
+  float v_d_ctrl = 0.0f;
+  float v_q_ctrl = 0.0f;
+
   // 电流环 PI 控制
   float id_error = id - g_motor.state.i_d;
   float iq_error = iq - g_motor.state.i_q;
-  float v_d = id_error * g_motor.id_pid.kp + id_error * g_motor.id_pid.ki + id_error * g_motor.id_pid.kd;
-  float v_q = iq_error * g_motor.iq_pid.kp + iq_error * g_motor.iq_pid.ki + iq_error * g_motor.iq_pid.kd;
+  (void)id_error;
+  (void)iq_error;
+  (void)foc_pid_calc(&g_motor.id_pid, &g_motor.config.pid.id, id, g_motor.state.i_d, &v_d_ctrl);
+  (void)foc_pid_calc(&g_motor.iq_pid, &g_motor.config.pid.iq, iq, g_motor.state.i_q, &v_q_ctrl);
 
   // 电压归一化 = 1/(2/3 * vbus)
   float v_d_norm = 1.5f * g_motor.state.vbus_filtered;
   float v_q_norm = 1.5f * g_motor.state.vbus_filtered;
 
-  g_motor.state.v_d = v_d * v_d_norm;
-  g_motor.state.v_q = v_q * v_q_norm;
+  g_motor.state.v_d = v_d_ctrl * v_d_norm;
+  g_motor.state.v_q = v_q_ctrl * v_q_norm;
 
   // Vector modulation saturation, lock integrator if saturated
   float factor = 0.9f * SQRT_3_DIV_2 / sqrtf(SQ(g_motor.state.v_d) + SQ(g_motor.state.v_q));
   if (factor < 1.0f) {
     g_motor.state.v_d *= factor;
     g_motor.state.v_q *= factor;
-    g_motor.id_pid.ki *= 0.99f;
-    g_motor.iq_pid.ki *= 0.99f;
-  } else {
-    g_motor.id_pid.ki += id_error * (g_motor.id_pid.ki * FOC_CURRENT_MEAS_PERIOD);
-    g_motor.iq_pid.ki += iq_error * (g_motor.iq_pid.ki * FOC_CURRENT_MEAS_PERIOD);
   }
 
   float alpha, beta;
@@ -128,7 +153,7 @@ void foc_current(float id, float iq, float angle_el, float phase_vel)
 
 void foc_update(void)
 {
-  motor_fault_poll_measurements(&g_motor);
+  motor_fault_protect(&g_motor);
 }
 
 void foc_align_electrical(void)
@@ -182,8 +207,12 @@ void foc_torque_open_control(float target_torque)
   foc_voltage(Uq, Ud, g_motor.state.theta_elec_rad);
 }
 
+float uq_now = 0.0f;
+float omega_now = 0.0f;
+float shaft_angle = 0.0f;   /* 电压矢量电角，纯积分，不跟编码器 */
 void foc_speed_open_control(float target_speed)
 {
+#if 0
   float Ud = 0.0f;
   float Uq = 0.5f;
 
@@ -192,6 +221,17 @@ void foc_speed_open_control(float target_speed)
   g_motor.ref.position_rad = g_motor.state.position_rad + g_motor.ref.speed_rad_s * ts;
 
   foc_voltage(Uq, Ud, g_motor.ref.position_rad * g_motor.config.param.pole_pairs);
+#else
+  const float dt = OPEN_LOOP_TS;
+  const float omega_step = OPEN_LOOP_OMEGA_RAMP_RATE * dt;
+  // const float uq_step = OPEN_LOOP_UQ_RAMP_RATE * dt;
+
+  omega_now = ramp_toward(omega_now, target_speed, omega_step);
+  // uq_now = ramp_toward(uq_now, OL_UQ_MAX/*uq_target_pu*/, uq_step);
+  uq_now = OPEN_LOOP_UQ_MAX;
+  shaft_angle = angle_normalize(shaft_angle + g_motor.config.param.pole_pairs * omega_now * dt);
+  foc_voltage(uq_now, 0.0f, shaft_angle);
+#endif
 }
 
 void foc_position_open_control(float target_position)

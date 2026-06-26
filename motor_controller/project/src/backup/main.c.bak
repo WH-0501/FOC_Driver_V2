@@ -41,6 +41,7 @@
 #include "board.h"
 #include "dwt_profile_delay.h"
 #include "foc.h"
+#include "gate_driver.h"
 /* add user code end private includes */
 
 /* private typedef -----------------------------------------------------------*/
@@ -138,10 +139,34 @@ int main(void)
 
   // 2. 通信初始化
 
-  // 3. board 初始化
-  board_init(); /* 设电流零漂请求位，须在 foc_init 之后避免 memset 清掉 */
+  // 3. board 初始化（ADC 抢占等）；桥臂须保持关断，零漂在 foc_init() 末尾阻塞完成
+  board_init(&g_motor);
 
-  // 4. FOC 初始化
+  // 4. gate driver 初始化并注册 active driver（必须先于 foc_init）
+  gate_driver_init_t gate_driver_init_cfg = {
+    .type = GATE_DRIVER_TYPE_MP6540,
+    .hw = {
+      .port_nSLEEP  = GPIOA,
+      .pin_nSLEEP   = GPIO_PINS_15,
+      .port_ENA     = GPIOA,
+      .pin_ENA      = GPIO_PINS_12,
+      .port_ENB     = GPIOA,
+      .pin_ENB      = GPIO_PINS_11,
+      .port_ENC     = GPIOB,
+      .pin_ENC      = GPIO_PINS_10,
+      .port_FAULT   = GPIOB,
+      .pin_FAULT    = GPIO_PINS_3,
+    },
+  };
+  if (gate_driver_init(&gate_driver_init_cfg) != GATE_DRIVER_INIT_OK)
+  {
+    while (1)
+    {
+      /* TODO: 上报故障并进入安全态 */
+    }
+  }
+
+  // 5. FOC 初始化（末尾含阻塞电流零漂校准）
   foc_init();
   /* add user code end 2 */
 
@@ -149,7 +174,6 @@ int main(void)
   {
     /* add user code begin 3 */
     foc_update();
-    foc_state_machine_loop();
     /* add user code end 3 */
   }
 }

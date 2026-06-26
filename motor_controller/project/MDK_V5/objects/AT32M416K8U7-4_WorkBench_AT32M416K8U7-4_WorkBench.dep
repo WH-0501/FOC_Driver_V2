@@ -1,7 +1,7 @@
 Dependencies for Project 'AT32M416K8U7-4_WorkBench', Target 'AT32M416K8U7-4_WorkBench': (DO NOT MODIFY !)
 CompilerVersion: 5060960::V5.06 update 7 (build 960)::.\ARM_Compiler_5.06u7
-F (..\src\at32m412_416_int.c)(0x69FD368E)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_int.o --omf_browse .\objects\at32m412_416_int.crf --depend .\objects\at32m412_416_int.d)
-I (..\inc\at32m412_416_int.h)(0x69FD368D)
+F (..\src\at32m412_416_int.c)(0x6A3B76A1)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_int.o --omf_browse .\objects\at32m412_416_int.crf --depend .\objects\at32m412_416_int.d)
+I (..\inc\at32m412_416_int.h)(0x6A3B76A1)
 I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
 I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
@@ -11,10 +11,9 @@ I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
 I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
@@ -26,37 +25,20 @@ I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-I (..\inc\wk_system.h)(0x69FD368D)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdio.h)(0x5E8E3CC2)
-F (..\src\at32m412_416_wk_config.c)(0x69FD368D)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_wk_config.o --omf_browse .\objects\at32m412_416_wk_config.crf --depend .\objects\at32m412_416_wk_config.d)
-I (..\inc\at32m412_416_wk_config.h)(0x69FD368D)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdio.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\src\main.c)(0x69FD368D)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\main.o --omf_browse .\objects\main.crf --depend .\objects\main.d)
-I (..\inc\at32m412_416_wk_config.h)(0x69FD368D)
+I (..\inc\wk_system.h)(0x6A3B76A1)
+I (..\Board\board.h)(0x6A3DF501)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+I (..\APP\datatypes.h)(0x6A3DDFD7)
+I (..\APP\error_types.h)(0x6A3DF00E)
+I (..\APP\FOC\foc_filter.h)(0x6A3DE800)
+I (..\APP\FOC\foc_math.h)(0x6A3DECD8)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (..\APP\FOC\foc_pid.h)(0x6A3DECF1)
+F (..\src\at32m412_416_wk_config.c)(0x6A3B76A1)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_wk_config.o --omf_browse .\objects\at32m412_416_wk_config.crf --depend .\objects\at32m412_416_wk_config.d)
+I (..\inc\at32m412_416_wk_config.h)(0x6A3B76A1)
 I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdio.h)(0x5E8E3CC2)
 I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
@@ -67,10 +49,9 @@ I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
 I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
@@ -82,17 +63,8 @@ I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-I (..\inc\wk_adc.h)(0x69FD368D)
-I (..\inc\wk_can.h)(0x69FD368D)
-I (..\inc\wk_crc.h)(0x69FD368D)
-I (..\inc\wk_spi.h)(0x69FD368D)
-I (..\inc\wk_tmr.h)(0x69FD368D)
-I (..\inc\wk_usart.h)(0x69FD368D)
-I (..\inc\wk_dma.h)(0x69FD368D)
-I (..\inc\wk_gpio.h)(0x69FD368D)
-I (..\inc\wk_system.h)(0x69FD368D)
-F (..\src\wk_system.c)(0x69FD368D)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\wk_system.o --omf_browse .\objects\wk_system.crf --depend .\objects\wk_system.d)
-I (..\inc\wk_system.h)(0x69FD368D)
+F (..\src\main.c)(0x6A3DF19A)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\main.o --omf_browse .\objects\main.crf --depend .\objects\main.d)
+I (..\inc\at32m412_416_wk_config.h)(0x6A3B76A1)
 I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdio.h)(0x5E8E3CC2)
 I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
@@ -103,10 +75,9 @@ I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
 I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
@@ -118,9 +89,63 @@ I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\src\wk_adc.c)(0x69FD368D)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\wk_adc.o --omf_browse .\objects\wk_adc.crf --depend .\objects\wk_adc.d)
-I (..\inc\wk_adc.h)(0x69FD368D)
-I (..\inc\at32m412_416_wk_config.h)(0x69FD368D)
+I (..\inc\wk_adc.h)(0x6A3B76A1)
+I (..\inc\wk_can.h)(0x6A3B76A1)
+I (..\inc\wk_spi.h)(0x6A3B76A1)
+I (..\inc\wk_tmr.h)(0x6A3B76A1)
+I (..\inc\wk_usart.h)(0x6A3B76A1)
+I (..\inc\wk_dma.h)(0x6A3B76A1)
+I (..\inc\wk_gpio.h)(0x6A3B76A1)
+I (..\inc\wk_system.h)(0x6A3B76A1)
+I (..\Board\board.h)(0x6A3DF501)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+I (..\APP\datatypes.h)(0x6A3DDFD7)
+I (..\APP\error_types.h)(0x6A3DF00E)
+I (..\APP\FOC\foc_filter.h)(0x6A3DE800)
+I (..\APP\FOC\foc_math.h)(0x6A3DECD8)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (..\APP\FOC\foc_pid.h)(0x6A3DECF1)
+I (..\Board\dwt_profile_delay.h)(0x6A3E0BD2)
+I (..\APP\FOC\foc.h)(0x6A3DE123)
+I (..\APP\FOC\foc_fault.h)(0x6A3DDF14)
+I (..\APP\common.h)(0x6A3E0BCE)
+I (..\APP\Driver\gate/gate_driver.h)(0x6A3DE8EE)
+I (..\APP\Driver\gate/../../../Board/platform_gpio_types.h)(0x6A3DE946)
+I (..\APP\Driver\storage/eeprom.h)(0x6A3CE10A)
+I (..\APP\Driver\storage/flash.h)(0x6A3CE10E)
+I (..\APP\config\motor_config.h)(0x6A3C7E98)
+I (..\APP\config\motor_config_storage_ops.h)(0x6A3CDFA3)
+F (..\src\wk_system.c)(0x6A3B76A1)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\wk_system.o --omf_browse .\objects\wk_system.crf --depend .\objects\wk_system.d)
+I (..\inc\wk_system.h)(0x6A3B76A1)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\src\wk_adc.c)(0x6A3B76A1)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\wk_adc.o --omf_browse .\objects\wk_adc.crf --depend .\objects\wk_adc.d)
+I (..\inc\wk_adc.h)(0x6A3B76A1)
+I (..\inc\at32m412_416_wk_config.h)(0x6A3B76A1)
 I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdio.h)(0x5E8E3CC2)
 I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
@@ -131,10 +156,9 @@ I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
 I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
@@ -146,9 +170,9 @@ I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\src\wk_can.c)(0x69FD368D)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\wk_can.o --omf_browse .\objects\wk_can.crf --depend .\objects\wk_can.d)
-I (..\inc\wk_can.h)(0x69FD368D)
-I (..\inc\at32m412_416_wk_config.h)(0x69FD368D)
+F (..\src\wk_can.c)(0x6A3B76A1)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\wk_can.o --omf_browse .\objects\wk_can.crf --depend .\objects\wk_can.d)
+I (..\inc\wk_can.h)(0x6A3B76A1)
+I (..\inc\at32m412_416_wk_config.h)(0x6A3B76A1)
 I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdio.h)(0x5E8E3CC2)
 I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
@@ -159,10 +183,9 @@ I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
 I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
@@ -174,9 +197,9 @@ I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\src\wk_crc.c)(0x69FD368D)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\wk_crc.o --omf_browse .\objects\wk_crc.crf --depend .\objects\wk_crc.d)
-I (..\inc\wk_crc.h)(0x69FD368D)
-I (..\inc\at32m412_416_wk_config.h)(0x69FD368D)
+F (..\src\wk_spi.c)(0x6A3B76A1)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\wk_spi.o --omf_browse .\objects\wk_spi.crf --depend .\objects\wk_spi.d)
+I (..\inc\wk_spi.h)(0x6A3B76A1)
+I (..\inc\at32m412_416_wk_config.h)(0x6A3B76A1)
 I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdio.h)(0x5E8E3CC2)
 I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
@@ -187,10 +210,9 @@ I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
 I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
@@ -202,9 +224,9 @@ I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\src\wk_spi.c)(0x69FD368D)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\wk_spi.o --omf_browse .\objects\wk_spi.crf --depend .\objects\wk_spi.d)
-I (..\inc\wk_spi.h)(0x69FD368D)
-I (..\inc\at32m412_416_wk_config.h)(0x69FD368D)
+F (..\src\wk_tmr.c)(0x6A3B76A1)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\wk_tmr.o --omf_browse .\objects\wk_tmr.crf --depend .\objects\wk_tmr.d)
+I (..\inc\wk_tmr.h)(0x6A3B76A1)
+I (..\inc\at32m412_416_wk_config.h)(0x6A3B76A1)
 I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdio.h)(0x5E8E3CC2)
 I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
@@ -215,10 +237,9 @@ I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
 I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
@@ -230,9 +251,9 @@ I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\src\wk_tmr.c)(0x69FD368D)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\wk_tmr.o --omf_browse .\objects\wk_tmr.crf --depend .\objects\wk_tmr.d)
-I (..\inc\wk_tmr.h)(0x69FD368D)
-I (..\inc\at32m412_416_wk_config.h)(0x69FD368D)
+F (..\src\wk_usart.c)(0x6A3B76A1)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\wk_usart.o --omf_browse .\objects\wk_usart.crf --depend .\objects\wk_usart.d)
+I (..\inc\wk_usart.h)(0x6A3B76A1)
+I (..\inc\at32m412_416_wk_config.h)(0x6A3B76A1)
 I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdio.h)(0x5E8E3CC2)
 I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
@@ -243,10 +264,9 @@ I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
 I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
@@ -258,9 +278,9 @@ I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\src\wk_usart.c)(0x69FD368D)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\wk_usart.o --omf_browse .\objects\wk_usart.crf --depend .\objects\wk_usart.d)
-I (..\inc\wk_usart.h)(0x69FD368D)
-I (..\inc\at32m412_416_wk_config.h)(0x69FD368D)
+F (..\src\wk_dma.c)(0x6A3B76A1)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\wk_dma.o --omf_browse .\objects\wk_dma.crf --depend .\objects\wk_dma.d)
+I (..\inc\wk_dma.h)(0x6A3B76A1)
+I (..\inc\at32m412_416_wk_config.h)(0x6A3B76A1)
 I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdio.h)(0x5E8E3CC2)
 I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
@@ -271,10 +291,9 @@ I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
 I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
@@ -286,9 +305,9 @@ I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\src\wk_dma.c)(0x69FD368D)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\wk_dma.o --omf_browse .\objects\wk_dma.crf --depend .\objects\wk_dma.d)
-I (..\inc\wk_dma.h)(0x69FD368D)
-I (..\inc\at32m412_416_wk_config.h)(0x69FD368D)
+F (..\src\wk_gpio.c)(0x6A3B76A1)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\wk_gpio.o --omf_browse .\objects\wk_gpio.crf --depend .\objects\wk_gpio.d)
+I (..\inc\wk_gpio.h)(0x6A3B76A1)
+I (..\inc\at32m412_416_wk_config.h)(0x6A3B76A1)
 I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdio.h)(0x5E8E3CC2)
 I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
@@ -299,10 +318,9 @@ I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
 I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
@@ -314,23 +332,650 @@ I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\src\wk_gpio.c)(0x69FD368D)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\wk_gpio.o --omf_browse .\objects\wk_gpio.crf --depend .\objects\wk_gpio.d)
-I (..\inc\wk_gpio.h)(0x69FD368D)
-I (..\inc\at32m412_416_wk_config.h)(0x69FD368D)
+F (..\..\libraries\drivers\src\at32m412_416_crm.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_crm.o --omf_browse .\objects\at32m412_416_crm.crf --depend .\objects\at32m412_416_crm.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\..\libraries\drivers\src\at32m412_416_tmr.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_tmr.o --omf_browse .\objects\at32m412_416_tmr.crf --depend .\objects\at32m412_416_tmr.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\..\libraries\drivers\src\at32m412_416_gpio.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_gpio.o --omf_browse .\objects\at32m412_416_gpio.crf --depend .\objects\at32m412_416_gpio.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\..\libraries\drivers\src\at32m412_416_usart.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_usart.o --omf_browse .\objects\at32m412_416_usart.crf --depend .\objects\at32m412_416_usart.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\..\libraries\drivers\src\at32m412_416_pwc.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_pwc.o --omf_browse .\objects\at32m412_416_pwc.crf --depend .\objects\at32m412_416_pwc.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\..\libraries\drivers\src\at32m412_416_adc.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_adc.o --omf_browse .\objects\at32m412_416_adc.crf --depend .\objects\at32m412_416_adc.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\..\libraries\drivers\src\at32m412_416_spi.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_spi.o --omf_browse .\objects\at32m412_416_spi.crf --depend .\objects\at32m412_416_spi.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\..\libraries\drivers\src\at32m412_416_dma.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_dma.o --omf_browse .\objects\at32m412_416_dma.crf --depend .\objects\at32m412_416_dma.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\..\libraries\drivers\src\at32m412_416_debug.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_debug.o --omf_browse .\objects\at32m412_416_debug.crf --depend .\objects\at32m412_416_debug.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\..\libraries\drivers\src\at32m412_416_flash.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_flash.o --omf_browse .\objects\at32m412_416_flash.crf --depend .\objects\at32m412_416_flash.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\..\libraries\drivers\src\at32m412_416_misc.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_misc.o --omf_browse .\objects\at32m412_416_misc.crf --depend .\objects\at32m412_416_misc.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\..\libraries\drivers\src\at32m412_416_scfg.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_scfg.o --omf_browse .\objects\at32m412_416_scfg.crf --depend .\objects\at32m412_416_scfg.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\..\libraries\drivers\src\at32m412_416_can.c)(0x69FD366C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\at32m412_416_can.o --omf_browse .\objects\at32m412_416_can.crf --depend .\objects\at32m412_416_can.d)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (.\startup_at32m412_416.s)(0x6A3B76A1)(--cpu Cortex-M4.fp.sp -g --apcs=interwork -IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include--pd "__UVISION_VERSION SETA 539" --pd "AT32M416K8U7_4 SETA 1"--list .\listings\startup_at32m412_416.lst --xref -o .\objects\startup_at32m412_416.o --depend .\objects\startup_at32m412_416.d)
+F (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.c)(0x69FD366A)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\system_at32m412_416.o --omf_browse .\objects\system_at32m412_416.crf --depend .\objects\system_at32m412_416.d)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\Board\board.c)(0x6A39DE6F)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\board.o --omf_browse .\objects\board.crf --depend .\objects\board.d)
+I (..\Board\board.h)(0x6A3DF501)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+I (..\APP\datatypes.h)(0x6A3DDFD7)
+I (..\APP\error_types.h)(0x6A3DF00E)
+I (..\APP\FOC\foc_filter.h)(0x6A3DE800)
+I (..\APP\FOC\foc_math.h)(0x6A3DECD8)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (..\APP\FOC\foc_pid.h)(0x6A3DECF1)
+F (..\Board\board_at32.c)(0x6A3DF094)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\board_at32_1.o --omf_browse .\objects\board_at32_1.crf --depend .\objects\board_at32_1.d)
+I (..\Board\board.h)(0x6A3DF501)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+I (..\APP\datatypes.h)(0x6A3DDFD7)
+I (..\APP\error_types.h)(0x6A3DF00E)
+I (..\APP\FOC\foc_filter.h)(0x6A3DE800)
+I (..\APP\FOC\foc_math.h)(0x6A3DECD8)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (..\APP\FOC\foc_pid.h)(0x6A3DECF1)
+I (..\APP\FOC\foc.h)(0x6A3DE123)
+I (..\APP\FOC\foc_fault.h)(0x6A3DDF14)
+I (..\APP\common.h)(0x6A3E0BCE)
+I (..\Board\dwt_profile_delay.h)(0x6A3E0BD2)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\Board\dwt_profile_delay.c)(0x6A3DF1B6)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\dwt_profile_delay.o --omf_browse .\objects\dwt_profile_delay.crf --depend .\objects\dwt_profile_delay.d)
+I (..\Board\dwt_profile_delay.h)(0x6A3E0BD2)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\APP\FOC\current_sense.c)(0x6A3E14E3)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\current_sense.o --omf_browse .\objects\current_sense.crf --depend .\objects\current_sense.d)
+I (..\APP\FOC\current_sense.h)(0x6A3CCCF3)
+I (..\APP\datatypes.h)(0x6A3DDFD7)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\APP\error_types.h)(0x6A3DF00E)
+I (..\APP\FOC\foc_filter.h)(0x6A3DE800)
+I (..\APP\FOC\foc_math.h)(0x6A3DECD8)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (..\APP\FOC\foc_pid.h)(0x6A3DECF1)
+I (..\APP\FOC\../Driver/gate/gate_driver.h)(0x6A3DE8EE)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+I (..\APP\FOC\../Driver/gate/../../../Board/platform_gpio_types.h)(0x6A3DE946)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+I (..\Board\board.h)(0x6A3DF501)
+F (..\APP\FOC\foc.c)(0x6A3E14F0)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\foc_1.o --omf_browse .\objects\foc_1.crf --depend .\objects\foc_1.d)
+I (..\APP\FOC\foc.h)(0x6A3DE123)
+I (..\Board\board.h)(0x6A3DF501)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+I (..\APP\datatypes.h)(0x6A3DDFD7)
+I (..\APP\error_types.h)(0x6A3DF00E)
+I (..\APP\FOC\foc_filter.h)(0x6A3DE800)
+I (..\APP\FOC\foc_math.h)(0x6A3DECD8)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (..\APP\FOC\foc_pid.h)(0x6A3DECF1)
+I (..\APP\FOC\foc_fault.h)(0x6A3DDF14)
+I (..\APP\common.h)(0x6A3E0BCE)
+I (..\Board\dwt_profile_delay.h)(0x6A3E0BD2)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+I (..\APP\FOC\foc_motor.h)(0x6A3DF2A8)
+I (..\APP\FOC\current_sense.h)(0x6A3CCCF3)
+I (..\APP\FOC\../Driver/gate/gate_driver.h)(0x6A3DE8EE)
+I (..\APP\FOC\../Driver/gate/../../../Board/platform_gpio_types.h)(0x6A3DE946)
+I (..\APP\FOC\../config/motor_config.h)(0x6A3C7E98)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\string.h)(0x5E8E3CC2)
+F (..\APP\FOC\foc_filter.c)(0x6A3DF39A)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\foc_filter.o --omf_browse .\objects\foc_filter.crf --depend .\objects\foc_filter.d)
+I (..\APP\FOC\foc_filter.h)(0x6A3DE800)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (..\APP\FOC\foc_math.h)(0x6A3DECD8)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+F (..\APP\FOC\foc_math.c)(0x6A043B2B)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\foc_math.o --omf_browse .\objects\foc_math.crf --depend .\objects\foc_math.d)
+F (..\APP\FOC\foc_motor.c)(0x6A3DF302)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\foc_motor.o --omf_browse .\objects\foc_motor.crf --depend .\objects\foc_motor.d)
+I (..\APP\FOC\foc_motor.h)(0x6A3DF2A8)
+I (..\APP\datatypes.h)(0x6A3DDFD7)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\APP\error_types.h)(0x6A3DF00E)
+I (..\APP\FOC\foc_filter.h)(0x6A3DE800)
+I (..\APP\FOC\foc_math.h)(0x6A3DECD8)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (..\APP\FOC\foc_pid.h)(0x6A3DECF1)
+I (..\APP\common.h)(0x6A3E0BCE)
+I (..\Board\dwt_profile_delay.h)(0x6A3E0BD2)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+I (..\APP\FOC\current_sense.h)(0x6A3CCCF3)
+I (..\APP\FOC\../Driver/gate/gate_driver.h)(0x6A3DE8EE)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+I (..\APP\FOC\../Driver/gate/../../../Board/platform_gpio_types.h)(0x6A3DE946)
+I (..\APP\FOC\kth71xx.h)(0x6A3DF29E)
+I (..\Board\board.h)(0x6A3DF501)
+F (..\APP\FOC\foc_pid.c)(0x6A3DF355)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\foc_pid.o --omf_browse .\objects\foc_pid.crf --depend .\objects\foc_pid.d)
+I (..\APP\FOC\foc_pid.h)(0x6A3DECF1)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\APP\error_types.h)(0x6A3DF00E)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\Board\dwt_profile_delay.h)(0x6A3E0BD2)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+F (..\APP\FOC\foc_fault.c)(0x6A3DECDE)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\foc_fault.o --omf_browse .\objects\foc_fault.crf --depend .\objects\foc_fault.d)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\FOC\foc_fault.h)(0x6A3DDF14)
+I (..\APP\error_types.h)(0x6A3DF00E)
+I (..\APP\datatypes.h)(0x6A3DDFD7)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\APP\FOC\foc_filter.h)(0x6A3DE800)
+I (..\APP\FOC\foc_math.h)(0x6A3DECD8)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (..\APP\FOC\foc_pid.h)(0x6A3DECF1)
+I (..\Board\board.h)(0x6A3DF501)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+I (..\APP\Driver/gate/gate_driver.h)(0x6A3DE8EE)
+I (..\APP\Driver/gate/../../../Board/platform_gpio_types.h)(0x6A3DE946)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+F (..\APP\FOC\kth71xx.c)(0x6A3DF3F8)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\kth71xx.o --omf_browse .\objects\kth71xx.crf --depend .\objects\kth71xx.d)
+I (..\APP\FOC\kth71xx.h)(0x6A3DF29E)
+I (..\APP\datatypes.h)(0x6A3DDFD7)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\APP\error_types.h)(0x6A3DF00E)
+I (..\APP\FOC\foc_filter.h)(0x6A3DE800)
+I (..\APP\FOC\foc_math.h)(0x6A3DECD8)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (..\APP\FOC\foc_pid.h)(0x6A3DECF1)
+I (..\inc\wk_spi.h)(0x6A3B76A1)
+I (..\inc\at32m412_416_wk_config.h)(0x6A3B76A1)
 I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdio.h)(0x5E8E3CC2)
 I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
 I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
 I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
@@ -342,371 +987,126 @@ I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_adc.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_adc.o --omf_browse .\objects\at32m412_416_adc.crf --depend .\objects\at32m412_416_adc.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\inc\wk_system.h)(0x6A3B76A1)
+F (..\APP\Driver\gate\gate_driver.c)(0x6A3CCC89)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\gate_driver.o --omf_browse .\objects\gate_driver.crf --depend .\objects\gate_driver.d)
+I (..\APP\Driver\gate\gate_driver.h)(0x6A3DE8EE)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (..\APP\Driver\gate\../../compiler_port.h)(0x6A3DEB4F)
+I (..\APP\Driver\gate\../../../Board/platform_gpio_types.h)(0x6A3DE946)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
 I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
 I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
 I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
 I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_can.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_can.o --omf_browse .\objects\at32m412_416_can.crf --depend .\objects\at32m412_416_can.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_crc.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_crc.o --omf_browse .\objects\at32m412_416_crc.crf --depend .\objects\at32m412_416_crc.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_crm.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_crm.o --omf_browse .\objects\at32m412_416_crm.crf --depend .\objects\at32m412_416_crm.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_debug.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_debug.o --omf_browse .\objects\at32m412_416_debug.crf --depend .\objects\at32m412_416_debug.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_dma.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_dma.o --omf_browse .\objects\at32m412_416_dma.crf --depend .\objects\at32m412_416_dma.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_flash.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_flash.o --omf_browse .\objects\at32m412_416_flash.crf --depend .\objects\at32m412_416_flash.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_gpio.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_gpio.o --omf_browse .\objects\at32m412_416_gpio.crf --depend .\objects\at32m412_416_gpio.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_misc.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_misc.o --omf_browse .\objects\at32m412_416_misc.crf --depend .\objects\at32m412_416_misc.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_pwc.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_pwc.o --omf_browse .\objects\at32m412_416_pwc.crf --depend .\objects\at32m412_416_pwc.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_scfg.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_scfg.o --omf_browse .\objects\at32m412_416_scfg.crf --depend .\objects\at32m412_416_scfg.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_spi.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_spi.o --omf_browse .\objects\at32m412_416_spi.crf --depend .\objects\at32m412_416_spi.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_tmr.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_tmr.o --omf_browse .\objects\at32m412_416_tmr.crf --depend .\objects\at32m412_416_tmr.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (..\..\libraries\drivers\src\at32m412_416_usart.c)(0x69FD366C)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\at32m412_416_usart.o --omf_browse .\objects\at32m412_416_usart.crf --depend .\objects\at32m412_416_usart.d)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
-I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
-I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
-F (.\startup_at32m412_416.s)(0x69FD368D)(--cpu Cortex-M4.fp.sp -g --apcs=interwork -IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include--pd "__UVISION_VERSION SETA 539" --pd "AT32M416K8U7_4 SETA 1"--list .\listings\startup_at32m412_416.lst --xref -o .\objects\startup_at32m412_416.o --depend .\objects\startup_at32m412_416.d)
-F (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.c)(0x69FD366A)(-c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER-o .\objects\system_at32m412_416.o --omf_browse .\objects\system_at32m412_416.crf --depend .\objects\system_at32m412_416.d)
-I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
-I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
-I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
-I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
-I (..\inc\at32m412_416_conf.h)(0x69FD368D)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
 I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
-I (..\..\libraries\drivers\inc\at32m412_416_crc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+I (..\APP\Driver\gate\mp6540.h)(0x6A3DE89C)
+F (..\APP\Driver\gate\mp6540.c)(0x6A3DE89C)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\mp6540.o --omf_browse .\objects\mp6540.crf --depend .\objects\mp6540.d)
+I (..\APP\Driver\gate\mp6540.h)(0x6A3DE89C)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (..\APP\Driver\gate\gate_driver.h)(0x6A3DE8EE)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+I (..\APP\Driver\gate\../../compiler_port.h)(0x6A3DEB4F)
+I (..\APP\Driver\gate\../../../Board/platform_gpio_types.h)(0x6A3DE946)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+I (..\APP\Driver\gate\mp6540_hal_adapt.h)(0x6A3DE89C)
+I (..\Board\dwt_profile_delay.h)(0x6A3E0BD2)
+F (..\APP\Driver\storage\eeprom.c)(0x6A3DDDA3)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\eeprom.o --omf_browse .\objects\eeprom.crf --depend .\objects\eeprom.d)
+I (..\APP\Driver\storage\eeprom.h)(0x6A3CE10A)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stddef.h)(0x5E8E3CC2)
+F (..\APP\Driver\storage\flash.c)(0x6A3CE429)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\flash.o --omf_browse .\objects\flash.crf --depend .\objects\flash.d)
+I (..\APP\Driver\storage\flash.h)(0x6A3CE10E)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\..\libraries\drivers\inc\at32m412_416_flash.h)(0x69FD366B)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_gpio.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_misc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_pwc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
+I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\string.h)(0x5E8E3CC2)
+F (..\APP\config\motor_config.c)(0x6A3C845A)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\motor_config.o --omf_browse .\objects\motor_config.crf --depend .\objects\motor_config.d)
+I (..\APP\config\motor_config.h)(0x6A3C7E98)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\APP\datatypes.h)(0x6A3DDFD7)
+I (..\APP\error_types.h)(0x6A3DF00E)
+I (..\APP\FOC\foc_filter.h)(0x6A3DE800)
+I (..\APP\FOC\foc_math.h)(0x6A3DECD8)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (..\APP\FOC\foc_pid.h)(0x6A3DECF1)
+I (..\APP\common.h)(0x6A3E0BCE)
+I (..\Board\dwt_profile_delay.h)(0x6A3E0BD2)
+I (..\..\libraries\cmsis\cm4\device_support\at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\core_cm4.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_version.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_compiler.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\cmsis_armcc.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\core_support\mpu_armv7.h)(0x69FD366A)
+I (..\..\libraries\cmsis\cm4\device_support\system_at32m412_416.h)(0x69FD366A)
+I (..\..\libraries\drivers\inc\at32m412_416_def.h)(0x69FD366B)
+I (..\inc\at32m412_416_conf.h)(0x6A3B76A1)
+I (..\..\libraries\drivers\inc\at32m412_416_adc.h)(0x69FD366B)
+I (..\..\libraries\drivers\inc\at32m412_416_can.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_crm.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_debug.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_dma.h)(0x69FD366B)
@@ -718,3 +1118,18 @@ I (..\..\libraries\drivers\inc\at32m412_416_scfg.h)(0x69FD366B)
 I (..\..\libraries\drivers\inc\at32m412_416_spi.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_tmr.h)(0x69FD366C)
 I (..\..\libraries\drivers\inc\at32m412_416_usart.h)(0x69FD366C)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\string.h)(0x5E8E3CC2)
+F (..\APP\config\motor_config_storage_ops.c)(0x6A3CDFBE)(--c99 --gnu -c --cpu Cortex-M4.fp.sp -g -O0 --apcs=interwork --split_sections -I ..\..\libraries\drivers\inc -I ..\..\libraries\cmsis\cm4\core_support -I ..\..\libraries\cmsis\cm4\device_support -I ..\inc -I ..\Board -I ..\APP -I ..\APP\FOC -I ..\APP\Driver -I ..\APP\config-IC:\Users\descfly\AppData\Local\Arm\Packs\ArteryTek\AT32M412_416_DFP\2.0.5\Device\Include-D__UVISION_VERSION="539" -DAT32M416K8U7_4 -DAT32M416K8U7_4 -DUSE_STDPERIPH_DRIVER -DPLATFORM_AT32-o .\objects\motor_config_storage_ops.o --omf_browse .\objects\motor_config_storage_ops.crf --depend .\objects\motor_config_storage_ops.d)
+I (..\APP\config\motor_config_storage_ops.h)(0x6A3CDFA3)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdbool.h)(0x5E8E3CC2)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\stdint.h)(0x5E8E3CC2)
+I (..\APP\config\motor_config.h)(0x6A3C7E98)
+I (..\APP\datatypes.h)(0x6A3DDFD7)
+I (..\APP\error_types.h)(0x6A3DF00E)
+I (..\APP\FOC\foc_filter.h)(0x6A3DE800)
+I (..\APP\FOC\foc_math.h)(0x6A3DECD8)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\math.h)(0x5E8E3CC2)
+I (..\APP\compiler_port.h)(0x6A3DEB4F)
+I (..\APP\math_compat.h)(0x6A3DF282)
+I (..\APP\FOC\foc_pid.h)(0x6A3DECF1)
+I (C:\Keil_v5\ARM\ARM_Compiler_5.06u7\include\string.h)(0x5E8E3CC2)

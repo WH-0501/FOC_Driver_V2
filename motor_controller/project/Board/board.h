@@ -6,77 +6,27 @@
 #endif
 
 #include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
 #include "datatypes.h"
-
-
-/*
- * ADC 数字量 → 引脚电压：与 README「电流采样」一致时，相电流通道为
- *   V_SO = V_BIAS + (R_TERM * I_LOAD) / I_SCALE ，其中 I_SCALE=9200，R_TERM、V_BIAS 见下宏。
- * 运行态：用零电流时学到的 adc_offset 作偏置；校准态：用标称 V_BIAS（1.65V）作偏置。
- */
-#ifndef BOARD_ADC_VREF_V
-#define BOARD_ADC_VREF_V (3.3f)
-#endif
-#ifndef BOARD_ADC_FULL_SCALE
-#define BOARD_ADC_FULL_SCALE (4095.0f)
-#endif
-
-#ifndef BOARD_ADC_VOLTS_PER_LSB
-#define BOARD_ADC_VOLTS_PER_LSB (BOARD_ADC_VREF_V / BOARD_ADC_FULL_SCALE)
-#endif
-
-/** 电流镜比例 I_LOAD : I_SO，README 为 9200 */
-#ifndef BOARD_SO_ISCALE
-#define BOARD_SO_ISCALE (9200.0f)
-#endif
-/** 终端电阻 R_REF (Ω)，README 示例 3300Ω */
-#ifndef BOARD_SO_RTERM_OHM
-#define BOARD_SO_RTERM_OHM (3300.0f)
-#endif
-/** SOx 静态偏置电压 V_REF (V)，README 分压 1.65V */
-#ifndef BOARD_SO_BIAS_V
-#define BOARD_SO_BIAS_V (1.65f)
-#endif
-
-/** I = ΔV * (I_SCALE / R_TERM)，单位 A/V */
-#ifndef BOARD_SO_AMPS_PER_VOLT
-#define BOARD_SO_AMPS_PER_VOLT (BOARD_SO_ISCALE / BOARD_SO_RTERM_OHM)
-#endif
-
-/**
- * @brief 观测/给定链路上一阶 LPF 的采样率 fs [Hz]，须与本函数中 lpf1_update() 调用周期一致。
- *        电流环 20 kHz、PWM 40 kHz 时：只要滤波在电流环里每周期更新一次，则 fs = 20 k，
- *        不是 PWM 频率（除非某量在 40 kHz 另开任务递推再另设一套 LPF）。
- */
-#ifndef FOC_CURRENT_LOOP_FS_HZ
-#define FOC_CURRENT_LOOP_FS_HZ (20000.0f)
-#endif
-/** 测量低通截止频率 [Hz]，须 < fs/2；母线可另设更慢以抑纹波 */
-#ifndef FOC_MEAS_LPF_FC_HZ
-#define FOC_MEAS_LPF_FC_HZ (2000.0f) // FOC_CURRENT_LOOP_FS_HZ / 10.0f
-#endif
-
-#ifndef FOC_CURRENT_MEAS_PERIOD
-#define FOC_CURRENT_MEAS_PERIOD (float)(1.0f / (float)FOC_CURRENT_LOOP_FS_HZ)
-#endif
-
+#include "error_types.h"
 
 void board_init(motor_handle_t *m);
 void board_deinit(void);
 
 void board_get_phase_current(motor_handle_t *m);
 
-void board_apply_phase_current(motor_handle_t *m);
-
-void board_current_offset_cal_step(motor_handle_t *m);
-
-/**
- * PWM 关断前提下阻塞完成电流零漂：重复 board_get_phase_current + board_current_offset_cal_step
- * 直至 current_offset_cal_done。应在 motor_handle 已初始化（如 foc_init）后调用。
- */
-void board_current_offset_calibration(motor_handle_t *m);
-
 void board_current_loop_irq_handler(void *adc_handle);
 #define CURRENT_LOOP_IRQ_HANDLER board_current_loop_irq_handler
+
+error_t current_hw_init(void);
+error_t current_hw_deinit(void);
+error_t pwm_hw_init(void);
+
+/* PWM总开关接口 */
+error_t pwm_hw_start(void);
+error_t pwm_hw_stop(void);
+
+error_t set_pwm(motor_actuation_t *actuation);
 
 #endif /* __BOARD_H__ */

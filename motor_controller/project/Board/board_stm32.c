@@ -192,8 +192,6 @@ void board_get_phase_current(motor_handle_t *m)
       (uint16_t)HAL_ADCEx_InjectedGetValue(HADC_PHASE_CURRENT, ADC_INJECTED_RANK_3);
   s->phase_current.adc_raw[2] =
       (uint16_t)HAL_ADCEx_InjectedGetValue(HADC_PHASE_CURRENT, ADC_INJECTED_RANK_4);
-
-  board_apply_phase_current(m);
 }
 
 void board_current_loop_irq_handler(void *adc_handle)

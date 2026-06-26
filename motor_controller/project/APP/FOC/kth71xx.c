@@ -26,9 +26,11 @@
 
 #define READ_MISO	   	 		gpio_input_data_bit_read(GPIOB, GPIO_PINS_5)
 
-#define SET_MISO_INPUT		PB_SET_INPUT(GPIO_PINS_5)
 
-#define SET_MISO_OUTPUT		PB_SET_OUTPUT(GPIO_PINS_5)
+// #define SET_MISO_INPUT		PB_SET_INPUT(GPIO_PINS_5)
+// #define SET_MISO_OUTPUT		PB_SET_OUTPUT(GPIO_PINS_5)
+#define SET_MISO_INPUT		PB_SET_INPUT(5u)
+#define SET_MISO_OUTPUT		PB_SET_OUTPUT(5u)
 
 #define MISO_SET		    	gpio_bits_set(GPIOB, GPIO_PINS_5)
 #define MISO_CLR		    	gpio_bits_reset(GPIOB, GPIO_PINS_5)

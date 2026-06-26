@@ -69,7 +69,7 @@ void dwt_blocking_delay_us(uint32_t us)
 
   uint32_t start_ticks = dwt_get_ticks();
   uint32_t delay_ticks = (uint32_t)(us * dwt_cycle_tim.dwt_freq_MHz);
-  uint32_t end_ticks = start_tick + delay_ticks;
+  uint32_t end_ticks = start_ticks + delay_ticks;
 
   // 处理计数器溢出
   if (end_ticks >= start_ticks) {

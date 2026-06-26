@@ -15,8 +15,9 @@
 #define __FOC_MATH_H__
 
 #include <math.h>
-
-#define CLAMP(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
+#include <stdint.h>
+#include "compiler_port.h"
+#include "math_compat.h"
 
 #define _PI (3.14159265359f)
 #define _2PI (6.28318530718f)
@@ -35,7 +36,7 @@
  * @param angle 角度
  * @return float 归一化后的角度
  */
-static inline float angle_normalize(float angle)
+APP_STATIC_INLINE float angle_normalize(float angle)
 {
 	float a = fmodf(angle, _2PI);
 	return ((a>=0) ? a : (a + _2PI));
@@ -50,7 +51,7 @@ static inline float angle_normalize(float angle)
  * @param i_alpha 两相电流 α 轴分量
  * @param i_beta 两相电流 β 轴分量
  */
-static inline void clarke_transform(float ia, float ib, float ic, float *i_alpha, float *i_beta)
+APP_STATIC_INLINE void clarke_transform(float ia, float ib, float ic, float *i_alpha, float *i_beta)
 {
   *i_alpha = ia;
   *i_beta = (ib - ic) * ONE_DIV_SQRT_3;
@@ -65,7 +66,7 @@ static inline void clarke_transform(float ia, float ib, float ic, float *i_alpha
  * @param ib B 相电流
  * @param ic C 相电流
  */
-static inline void inv_clarke_transform(float i_alpha, float i_beta, float *ia, float *ib, float *ic)
+APP_STATIC_INLINE void inv_clarke_transform(float i_alpha, float i_beta, float *ia, float *ib, float *ic)
 {
   *ia = i_alpha;
   *ib = i_beta * SQRT_3_DIV_2 + i_alpha * ONE_DIV_SQRT_3;
@@ -82,7 +83,7 @@ static inline void inv_clarke_transform(float i_alpha, float i_beta, float *ia, 
  * @param i_d d 轴电流
  * @param i_q q 轴电流
  */
-static inline void park_transform(float i_alpha, float i_beta, float theta, float *i_d, float *i_q)
+APP_STATIC_INLINE void park_transform(float i_alpha, float i_beta, float theta, float *i_d, float *i_q)
 {
   const float c = cosf(theta);
   const float s = sinf(theta);
@@ -100,7 +101,7 @@ static inline void park_transform(float i_alpha, float i_beta, float theta, floa
  * @param i_alpha 两相电流 α 轴分量
  * @param i_beta 两相电流 β 轴分量
  */
-static inline void inv_park_transform(float d, float q, float theta, float *i_alpha, float *i_beta)
+APP_STATIC_INLINE void inv_park_transform(float d, float q, float theta, float *i_alpha, float *i_beta)
 {
   const float c = cosf(theta);
   const float s = sinf(theta);
@@ -118,7 +119,7 @@ static inline void inv_park_transform(float d, float q, float theta, float *i_al
  * @param svm_b B 相 PWM 占空比
  * @param svm_c C 相 PWM 占空比
  */
-static inline void svm(float Ua, float Ub, float Uc, float *svm_a, float *svm_b, float *svm_c)
+APP_STATIC_INLINE void svm(float Ua, float Ub, float Uc, float *svm_a, float *svm_b, float *svm_c)
 {
 	float Umax, Umin, Ucom;
   // Umin = fminf(Ua, fminf(Ub, Uc));
@@ -158,7 +159,7 @@ static inline void svm(float Ua, float Ub, float Uc, float *svm_a, float *svm_b,
  * @param duty_c C 相 PWM 占空比. [0~1]
  * @return 0 成功, -1 失败. 如果任何结果为 NaN, 则返回 -1
  */
-static inline int svpwm(float alpha, float beta, float *duty_a, float *duty_b, float *duty_c)
+APP_STATIC_INLINE int svpwm(float alpha, float beta, float *duty_a, float *duty_b, float *duty_c)
 {
     int Sextant;
 
@@ -267,11 +268,13 @@ static inline int svpwm(float alpha, float beta, float *duty_a, float *duty_b, f
     } break;
     }
 
-    // if any of the results becomes NaN, result_valid will evaluate to false
-    int result_valid = *duty_a >= 0.0f && *duty_a <= 1.0f && *duty_b >= 0.0f && *duty_b <= 1.0f && *duty_c >= 0.0f
-                       && *duty_c <= 1.0f;
-
-    return result_valid ? 0 : -1;
+    // if any of the results becomes NaN, return fail
+    if ((*duty_a >= 0.0f && *duty_a <= 1.0f && *duty_b >= 0.0f && *duty_b <= 1.0f &&
+         *duty_c >= 0.0f && *duty_c <= 1.0f))
+    {
+        return 0;
+    }
+    return -1;
 }
 
 #endif

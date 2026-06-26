@@ -28,7 +28,6 @@
 #include "at32m412_416_wk_config.h"
 #include "wk_adc.h"
 #include "wk_can.h"
-#include "wk_crc.h"
 #include "wk_spi.h"
 #include "wk_tmr.h"
 #include "wk_usart.h"
@@ -41,6 +40,11 @@
 #include "board.h"
 #include "dwt_profile_delay.h"
 #include "foc.h"
+#include "gate/gate_driver.h"
+#include "storage/eeprom.h"
+#include "storage/flash.h"
+#include "motor_config.h"
+#include "motor_config_storage_ops.h"
 /* add user code end private includes */
 
 /* private typedef -----------------------------------------------------------*/
@@ -112,7 +116,7 @@ int main(void)
   /* user need to modify define values DMAx_CHANNELy_XXX_BASE_ADDR 
      and DMAx_CHANNELy_BUFFER_SIZE in at32xxx_wk_config.h */
   wk_dma_channel_config(DMA1_CHANNEL1, 
-                        (uint32_t)&ADC2->odt, 
+                        (uint32_t)&ADC1->odt, 
                         DMA1_CHANNEL1_MEMORY_BASE_ADDR, 
                         DMA1_CHANNEL1_BUFFER_SIZE);
   dma_channel_enable(DMA1_CHANNEL1, TRUE);
@@ -126,23 +130,77 @@ int main(void)
   /* init spi2 function. */
   wk_spi2_init();
 
-  /* init crc function. */
-  wk_crc_init();
-
   /* init tmr1 function. */
   wk_tmr1_init();
 
+  /* init adc1 function. */
+  wk_adc1_init();
+
+  /* init dma1 channel3 */
+  wk_dma1_channel3_init();
+  /* config dma channel transfer parameter */
+  /* user need to modify define values DMAx_CHANNELy_XXX_BASE_ADDR 
+     and DMAx_CHANNELy_BUFFER_SIZE in at32xxx_wk_config.h */
+  wk_dma_channel_config(DMA1_CHANNEL3, 
+                        (uint32_t)&USART1->dt, 
+                        DMA1_CHANNEL3_MEMORY_BASE_ADDR, 
+                        DMA1_CHANNEL3_BUFFER_SIZE);
+  dma_channel_enable(DMA1_CHANNEL3, TRUE);
+
+  /* init tmr6 function. */
+  wk_tmr6_init();
+
+  /* init tmr7 function. */
+  wk_tmr7_init();
+
   /* add user code begin 2 */
   dwt_init();
-  // 1. 读取配置参数
+  motor_cfg_storage_adapter_t motor_cfg_adapter = {
+    .eeprom_read = eeprom_read,
+    .eeprom_write = eeprom_write,
+    .flash_read = flash_read,
+    .flash_erase = flash_erase,
+    .flash_write = flash_write,
+  };
+
+  // 0. 注册配置存储后端（支持三种模式，见 motor_config_storage_ops.h）
+  (void)motor_config_register_storage_ops_by_mode(MOTOR_CFG_STORAGE_MODE_DEFAULT,
+                                                   &motor_cfg_adapter);
+
+  // 1. 读取电机配置
+  motor_config_t motor_cfg;
+  (void)motor_config_init(&motor_cfg);
 
   // 2. 通信初始化
 
-  // 3. board 初始化（ADC 抢占等）；桥臂须保持关断，零漂在 foc_init() 末尾阻塞完成
-  board_init();
+  // 3. board 初始化（ADC 抢占等）
+  board_init(&g_motor);
 
-  // 4. FOC 初始化（末尾含阻塞电流零漂校准）
-  foc_init();
+  // 4. gate driver 初始化并注册 active driver（必须先于 foc_init）
+  gate_driver_init_t gate_driver_init_cfg = {
+    .type = GATE_DRIVER_TYPE_MP6540,
+    .hw.port_nSLEEP   = nSLEEP_GPIO_PORT,
+    .hw.pin_nSLEEP    = nSLEEP_PIN,
+    .hw.port_ENA      = ENA_GPIO_PORT,
+    .hw.pin_ENA       = ENA_PIN,
+    .hw.port_ENB      = ENB_GPIO_PORT,
+    .hw.pin_ENB       = ENB_PIN,
+    .hw.port_ENC      = ENC_GPIO_PORT,
+    .hw.pin_ENC       = ENC_PIN,
+    .hw.port_FAULT    = nFAULT_GPIO_PORT,
+    .hw.pin_FAULT     = nFAULT_PIN,
+  };
+
+  if (gate_driver_init(&gate_driver_init_cfg) != GATE_DRIVER_INIT_OK)
+  {
+    while (1)
+    {
+      /* TODO: 上报故障并进入安全态 */
+    }
+  }
+
+  // 5. FOC 初始化（末尾含阻塞电流零漂校准）
+  foc_init(&motor_cfg);
   /* add user code end 2 */
 
   while(1)

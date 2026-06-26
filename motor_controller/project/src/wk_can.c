@@ -44,6 +44,8 @@ void wk_can1_init(void)
 
   gpio_init_type gpio_init_struct;
   can_bittime_type can_bittime_struct;
+  can_filter_config_type can_filter_struct;
+
   /* add user code begin can1_init 1 */
 
   /* add user code end can1_init 1 */
@@ -90,7 +92,52 @@ void wk_can1_init(void)
   /* enable the ISO 11898-1:2015 protocol mode of CAN-FD */
   can_fd_iso_mode_enable(CAN1, TRUE);
 
+  /*can_filter_0_config--------------------------------------------------------------*/
+  can_filter_default_para_init(&can_filter_struct);
+
+  can_filter_struct.mask_para.id_type = FALSE;
+  can_filter_struct.code_para.id_type = CAN_ID_STANDARD;
+  can_filter_struct.mask_para.id = 0x000;
+  can_filter_struct.code_para.id = 0x000;
+  can_filter_struct.mask_para.data_length = 0xF;
+  can_filter_struct.code_para.data_length = 0x0;
+  can_filter_struct.mask_para.frame_type = TRUE;
+  can_filter_struct.code_para.frame_type = CAN_FRAME_DATA;
+  can_filter_struct.mask_para.recv_frame = TRUE;
+  can_filter_struct.code_para.recv_frame = CAN_RECV_NORMAL;
+  can_filter_struct.mask_para.fd_format = TRUE;
+  can_filter_struct.code_para.fd_format = CAN_FORMAT_CLASSIC;
+  can_filter_struct.mask_para.fd_rate_switch = TRUE;
+  can_filter_struct.code_para.fd_rate_switch = CAN_BRS_OFF;
+  can_filter_struct.mask_para.fd_error_state = TRUE;
+  can_filter_struct.code_para.fd_error_state = CAN_ESI_ACTIVE;
+  can_filter_set(CAN1, CAN_FILTER_NUM_0, &can_filter_struct);
+
+  /*can_filter_1_config--------------------------------------------------------------*/
+  can_filter_default_para_init(&can_filter_struct);
+
+  can_filter_struct.mask_para.id_type = FALSE;
+  can_filter_struct.code_para.id_type = CAN_ID_STANDARD;
+  can_filter_struct.mask_para.id = 0x7FF;
+  can_filter_struct.code_para.id = 0x7FF;
+  can_filter_struct.mask_para.data_length = 0xF;
+  can_filter_struct.code_para.data_length = 0x0;
+  can_filter_struct.mask_para.frame_type = TRUE;
+  can_filter_struct.code_para.frame_type = CAN_FRAME_DATA;
+  can_filter_struct.mask_para.recv_frame = TRUE;
+  can_filter_struct.code_para.recv_frame = CAN_RECV_NORMAL;
+  can_filter_struct.mask_para.fd_format = TRUE;
+  can_filter_struct.code_para.fd_format = CAN_FORMAT_CLASSIC;
+  can_filter_struct.mask_para.fd_rate_switch = TRUE;
+  can_filter_struct.code_para.fd_rate_switch = CAN_BRS_OFF;
+  can_filter_struct.mask_para.fd_error_state = TRUE;
+  can_filter_struct.code_para.fd_error_state = CAN_ESI_ACTIVE;
+  can_filter_set(CAN1, CAN_FILTER_NUM_1, &can_filter_struct);
+
   can_software_reset(CAN1, FALSE);
+
+  can_filter_enable(CAN1, CAN_FILTER_NUM_0, TRUE);
+  can_filter_enable(CAN1, CAN_FILTER_NUM_1, TRUE);
 
   /*can_base_config------------------------------------------------------------------*/
   can_retransmission_limit_set(CAN1, CAN_RE_TRANS_TIMES_UNLIMIT);
@@ -102,6 +149,27 @@ void wk_can1_init(void)
   can_error_warning_set(CAN1, 11);
   can_restricted_operation_enable(CAN1, FALSE);
   can_receive_all_enable(CAN1, FALSE);
+
+  /* enable error interrupt */
+  can_interrupt_enable(CAN1, CAN_EIE_INT, TRUE);
+
+  /* enable rxbuf almost full interrupt */
+  can_interrupt_enable(CAN1, CAN_RAFIE_INT, TRUE);
+
+  /* enable rxbuf full interrupt */
+  can_interrupt_enable(CAN1, CAN_RFIE_INT, TRUE);
+
+  /* enable rxbuf overflow interrupt */
+  can_interrupt_enable(CAN1, CAN_ROIE_INT, TRUE);
+
+  /* enable receiver interrupt */
+  can_interrupt_enable(CAN1, CAN_RIE_INT, TRUE);
+
+  /* enable bus error interrupt */
+  can_interrupt_enable(CAN1, CAN_BEIE_INT, TRUE);
+
+  /* enable error passive interrupt */
+  can_interrupt_enable(CAN1, CAN_EPIE_INT, TRUE);
 
   /* add user code begin can1_init 2 */
 

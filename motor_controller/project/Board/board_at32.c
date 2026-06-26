@@ -19,7 +19,7 @@ extern void foc_control_loop(void);
 
 uint16_t pwm_compare_top = 0;
 
-static uint16_t pwm_compare_top(void)
+static uint16_t pwm_get_compare_top(void)
 {
   return (uint16_t)PWM_TIM_HANDLE->pr;
 }
@@ -47,7 +47,7 @@ error_t pwm_hw_init(void)
   };
   set_pwm(&actuation);
 
-  pwm_compare_top = pwm_compare_top();
+  pwm_compare_top = pwm_get_compare_top();
 
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, FALSE);
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, FALSE);
@@ -61,9 +61,9 @@ error_t pwm_hw_deinit(void)
 {
   /* 工程未注册 TMR1 中断服务程序时不打开定时器中断；停机语义留给 pwm_hw_stop */
   motor_actuation_t actuation = {
-    .duty_a = 0,
-    .duty_b = 0,
-    .duty_c = 0,
+    .duty_a = 0.0f,
+    .duty_b = 0.0f,
+    .duty_c = 0.0f,
   };
   set_pwm(&actuation);
 
@@ -123,8 +123,6 @@ void board_get_phase_current(motor_handle_t *m)
   s->phase_current.adc_raw[0] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_2);
   s->phase_current.adc_raw[1] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_3);
   s->phase_current.adc_raw[2] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_4);
-
-  board_apply_phase_current(m);
 }
 
 void board_current_loop_irq_handler(void *adc_handle)

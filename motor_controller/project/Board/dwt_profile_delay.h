@@ -23,6 +23,9 @@ typedef struct {
   float dwt_freq_MHz_inv; // DWT 频率的倒数. 每 CPU 周期多少 us
 } DWTCycleTime_t;
 
+#define delay_ms(ms) dwt_blocking_delay_ms(ms)
+#define delay_us(us) dwt_blocking_delay_us(us)
+
 /**
  * @brief 初始化 DWT
  * 

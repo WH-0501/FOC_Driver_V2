@@ -66,8 +66,8 @@ extern "C" {
 //#define DMA1_CHANNEL2_MEMORY_BASE_ADDR   0
 //#define DMA1_CHANNEL2_PERIPHERAL_BASE_ADDR   0
 
-//#define DMA1_CHANNEL3_BUFFER_SIZE   0
-//#define DMA1_CHANNEL3_MEMORY_BASE_ADDR   0
+#define DMA1_CHANNEL3_BUFFER_SIZE   0
+#define DMA1_CHANNEL3_MEMORY_BASE_ADDR   0
 //#define DMA1_CHANNEL3_PERIPHERAL_BASE_ADDR   0
 
 //#define DMA1_CHANNEL4_BUFFER_SIZE   0
@@ -88,12 +88,28 @@ extern "C" {
 /* add user code end dma define */
 
 /* Private defines -------------------------------------------------------------*/
+#define TEMP_PIN    GPIO_PINS_5
+#define TEMP_GPIO_PORT    GPIOA
+#define SOA_PIN    GPIO_PINS_7
+#define SOA_GPIO_PORT    GPIOA
+#define SOB_PIN    GPIO_PINS_0
+#define SOB_GPIO_PORT    GPIOB
+#define VBUS_PIN    GPIO_PINS_1
+#define VBUS_GPIO_PORT    GPIOB
+#define SOC_PIN    GPIO_PINS_2
+#define SOC_GPIO_PORT    GPIOB
 #define ENC_PIN    GPIO_PINS_10
 #define ENC_GPIO_PORT    GPIOB
 #define ENB_PIN    GPIO_PINS_11
 #define ENB_GPIO_PORT    GPIOA
 #define ENA_PIN    GPIO_PINS_12
 #define ENA_GPIO_PORT    GPIOA
+#define nSLEEP_PIN    GPIO_PINS_15
+#define nSLEEP_GPIO_PORT    GPIOA
+#define nFAULT_PIN    GPIO_PINS_3
+#define nFAULT_GPIO_PORT    GPIOB
+#define CS_PIN    GPIO_PINS_6
+#define CS_GPIO_PORT    GPIOB
 
 /* exported functions ------------------------------------------------------- */
   /* system clock config. */

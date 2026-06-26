@@ -12,7 +12,6 @@
 .\objects\at32m412_416_pwc.o: ..\..\libraries\drivers\inc\at32m412_416_def.h
 .\objects\at32m412_416_pwc.o: ..\inc\at32m412_416_conf.h
 .\objects\at32m412_416_pwc.o: ..\..\libraries\drivers\inc\at32m412_416_can.h
-.\objects\at32m412_416_pwc.o: ..\..\libraries\drivers\inc\at32m412_416_crc.h
 .\objects\at32m412_416_pwc.o: ..\..\libraries\drivers\inc\at32m412_416_crm.h
 .\objects\at32m412_416_pwc.o: ..\..\libraries\drivers\inc\at32m412_416_debug.h
 .\objects\at32m412_416_pwc.o: ..\..\libraries\drivers\inc\at32m412_416_dma.h

@@ -157,9 +157,9 @@ void wk_tmr1_init(void)
   tmr_brkdt_struct.fcsoen_state = FALSE;
   tmr_brkdt_struct.fcsodis_state = FALSE;
   tmr_brkdt_struct.wp_level = TMR_WP_OFF;
-  tmr_brkdt_struct.deadtime = 0;
+  tmr_brkdt_struct.deadtime = 9;
   tmr_brkdt_config(TMR1, &tmr_brkdt_struct);
-  tmr_brk_filter_value_set(TMR1, 9);
+  tmr_brk_filter_value_set(TMR1, 0);
 
   /* break 2 config */
   tmr_brk2_struct.brk2_enable = FALSE;
