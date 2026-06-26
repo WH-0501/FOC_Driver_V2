@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.cpp": "cpp",
+        "at32m412_416_wk_config.h": "c",
+        "eeprom.h": "c",
+        "board.h": "c",
+        "stdint.h": "c",
+        "stdbool.h": "c"
+    }
+}
