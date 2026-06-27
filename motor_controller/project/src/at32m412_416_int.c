@@ -30,7 +30,6 @@
 /* private includes ----------------------------------------------------------*/
 /* add user code begin private includes */
 #include "board.h"
-#include "../APP/logger/logger.h"
 /* add user code end private includes */
 
 /* private typedef -----------------------------------------------------------*/
@@ -232,7 +231,7 @@ void SysTick_Handler(void)
 void DMA1_Channel3_IRQHandler(void)
 {
   /* add user code begin DMA1_Channel3_IRQ 0 */
-  logger_dma_irq_handler();
+  board_uart_dma_irq_handler();
   /* add user code end DMA1_Channel3_IRQ 0 */
 
   /* add user code begin DMA1_Channel3_IRQ 1 */

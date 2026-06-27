@@ -29,4 +29,22 @@ error_t pwm_hw_stop(void);
 
 error_t set_pwm(motor_actuation_t *actuation);
 
+typedef struct
+{
+  uint16_t ring_size;
+  uint16_t used;
+  uint16_t free;
+  uint16_t tx_inflight;
+  uint8_t dma_busy;
+  uint32_t dropped_messages;
+  uint32_t dropped_bytes;
+} board_uart_diag_t;
+
+void board_uart_stream_mode_set(uint8_t enabled);
+uint8_t board_uart_tx_try(const uint8_t *data, uint16_t len);
+uint8_t board_uart_log_try(const uint8_t *data, uint16_t len);
+uint8_t board_uart_tx_busy(void);
+void board_uart_dma_irq_handler(void);
+void board_uart_get_diag(board_uart_diag_t *diag);
+
 #endif /* __BOARD_H__ */

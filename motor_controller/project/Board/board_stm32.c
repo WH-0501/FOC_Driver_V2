@@ -208,3 +208,55 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
   board_current_loop_irq_handler((void *)hadc);
 }
+
+static volatile uint8_t s_board_uart_stream_mode;
+
+void board_uart_stream_mode_set(uint8_t enabled)
+{
+  s_board_uart_stream_mode = (enabled != 0u) ? 1u : 0u;
+}
+
+uint8_t board_uart_tx_try(const uint8_t *data, uint16_t len)
+{
+  extern UART_HandleTypeDef huart1;
+
+  if ((data == NULL) || (len == 0u))
+  {
+    return 0u;
+  }
+  return (HAL_UART_Transmit(&huart1, (uint8_t *)data, len, 10u) == HAL_OK) ? 1u : 0u;
+}
+
+uint8_t board_uart_log_try(const uint8_t *data, uint16_t len)
+{
+  if (s_board_uart_stream_mode != 0u)
+  {
+    return 0u;
+  }
+  return board_uart_tx_try(data, len);
+}
+
+uint8_t board_uart_tx_busy(void)
+{
+  return 0u;
+}
+
+void board_uart_dma_irq_handler(void)
+{
+}
+
+void board_uart_get_diag(board_uart_diag_t *diag)
+{
+  if (diag == NULL)
+  {
+    return;
+  }
+
+  diag->ring_size = 0u;
+  diag->used = 0u;
+  diag->free = 0u;
+  diag->tx_inflight = 0u;
+  diag->dma_busy = 0u;
+  diag->dropped_messages = 0u;
+  diag->dropped_bytes = 0u;
+}

@@ -1,9 +1,0 @@
-.\objects\foc_filter.o: ..\APP\FOC\foc_filter.c
-.\objects\foc_filter.o: ..\APP\FOC\foc_filter.h
-.\objects\foc_filter.o: C:\Keil_v5\ARM\ARM_Compiler_5.06u7\Bin\..\include\stdint.h
-.\objects\foc_filter.o: C:\Keil_v5\ARM\ARM_Compiler_5.06u7\Bin\..\include\stdbool.h
-.\objects\foc_filter.o: ..\APP\FOC\foc_math.h
-.\objects\foc_filter.o: C:\Keil_v5\ARM\ARM_Compiler_5.06u7\Bin\..\include\math.h
-.\objects\foc_filter.o: ..\APP\compiler_port.h
-.\objects\foc_filter.o: ..\APP\math_compat.h
-.\objects\foc_filter.o: C:\Keil_v5\ARM\ARM_Compiler_5.06u7\Bin\..\include\stddef.h

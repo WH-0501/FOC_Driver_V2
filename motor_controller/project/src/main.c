@@ -39,6 +39,7 @@
 /* add user code begin private includes */
 #include "board.h"
 #include "logger.h"
+#include "Debug.h"
 #include "dwt_profile_delay.h"
 #include "foc.h"
 #include "gate/gate_driver.h"
@@ -148,14 +149,7 @@ int main(void)
 
   /* init dma1 channel3 */
   wk_dma1_channel3_init();
-  /* config dma channel transfer parameter */
-  /* user need to modify define values DMAx_CHANNELy_XXX_BASE_ADDR 
-     and DMAx_CHANNELy_BUFFER_SIZE in at32xxx_wk_config.h */
-  wk_dma_channel_config(DMA1_CHANNEL3, 
-                        (uint32_t)&USART1->dt, 
-                        DMA1_CHANNEL3_MEMORY_BASE_ADDR, 
-                        DMA1_CHANNEL3_BUFFER_SIZE);
-  dma_channel_enable(DMA1_CHANNEL3, TRUE);
+  /* DMA1 channel3 is configured on-demand by logger/streaming sender. */
 
   /* add user code begin 2 */
   Logger_Init(LOG_OUTPUT_UART);
@@ -215,7 +209,7 @@ int main(void)
   {
     /* add user code begin 3 */
     foc_update();
-    LOG_INFO("test!");
+    VoFaDisUart();
     /* add user code end 3 */
   }
 }
