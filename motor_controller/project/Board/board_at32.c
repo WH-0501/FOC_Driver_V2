@@ -22,10 +22,6 @@ extern void foc_control_loop(void);
 
 uint16_t pwm_compare_top = 0;
 
-#ifndef BOARD_UART_DMA_RING_SIZE
-#define BOARD_UART_DMA_RING_SIZE 1024u
-#endif
-
 #ifndef BOARD_UART_RAW_TX_BUF_SIZE
 #define BOARD_UART_RAW_TX_BUF_SIZE 256u
 #endif
@@ -33,12 +29,8 @@ uint16_t pwm_compare_top = 0;
 static uint8_t s_board_uart_dma_inited;
 static volatile uint8_t s_board_uart_stream_mode;
 static uint8_t s_board_uart_raw_buf[BOARD_UART_RAW_TX_BUF_SIZE];
-static uint8_t s_board_uart_log_ring[BOARD_UART_DMA_RING_SIZE];
-static volatile uint16_t s_board_uart_log_head;
-static volatile uint16_t s_board_uart_log_tail;
-static volatile uint16_t s_board_uart_log_tx_len;
-static volatile uint8_t s_board_uart_log_busy;
-static volatile uint8_t s_board_uart_raw_busy;
+static volatile uint8_t s_board_uart_busy;
+static volatile uint16_t s_board_uart_tx_len;
 static volatile uint32_t s_board_uart_dropped_messages;
 static volatile uint32_t s_board_uart_dropped_bytes;
 
@@ -171,104 +163,10 @@ static void board_uart_dma_init_once(void)
   s_board_uart_dma_inited = 1u;
 }
 
-static uint16_t board_uart_ring_available(void)
-{
-  uint16_t head;
-  uint16_t tail;
-
-  head = s_board_uart_log_head;
-  tail = s_board_uart_log_tail;
-  if (head >= tail)
-  {
-    return (uint16_t)(BOARD_UART_DMA_RING_SIZE - (head - tail) - 1u);
-  }
-  return (uint16_t)(tail - head - 1u);
-}
-
-static uint16_t board_uart_ring_used(void)
-{
-  uint16_t head;
-  uint16_t tail;
-
-  head = s_board_uart_log_head;
-  tail = s_board_uart_log_tail;
-  if (head >= tail)
-  {
-    return (uint16_t)(head - tail);
-  }
-  return (uint16_t)(BOARD_UART_DMA_RING_SIZE - (tail - head));
-}
-
-static void board_uart_start_log_tx_locked(void)
-{
-  uint16_t head;
-  uint16_t tail;
-  uint16_t tx_len;
-
-  if ((s_board_uart_log_busy != 0u) || (s_board_uart_raw_busy != 0u))
-  {
-    return;
-  }
-  if (s_board_uart_stream_mode != 0u)
-  {
-    return;
-  }
-
-  head = s_board_uart_log_head;
-  tail = s_board_uart_log_tail;
-  if (head == tail)
-  {
-    return;
-  }
-
-  if (head > tail)
-  {
-    tx_len = (uint16_t)(head - tail);
-  }
-  else
-  {
-    tx_len = (uint16_t)(BOARD_UART_DMA_RING_SIZE - tail);
-  }
-
-  if (tx_len == 0u)
-  {
-    return;
-  }
-
-  s_board_uart_log_tx_len = tx_len;
-  s_board_uart_log_busy = 1u;
-  dma_channel_enable(DMA1_CHANNEL3, FALSE);
-  dma_flag_clear(DMA1_GL3_FLAG);
-  wk_dma_channel_config(DMA1_CHANNEL3, (uint32_t)&USART1->dt, (uint32_t)&s_board_uart_log_ring[tail], tx_len);
-  dma_channel_enable(DMA1_CHANNEL3, TRUE);
-}
-
 void board_uart_stream_mode_set(uint8_t enabled)
 {
-  uint32_t primask;
-
   board_uart_dma_init_once();
-  primask = __get_PRIMASK();
-  __disable_irq();
   s_board_uart_stream_mode = (enabled != 0u) ? 1u : 0u;
-  if (enabled != 0u)
-  {
-    dma_channel_enable(DMA1_CHANNEL3, FALSE);
-    dma_flag_clear(DMA1_GL3_FLAG);
-    s_board_uart_log_head = 0u;
-    s_board_uart_log_tail = 0u;
-    s_board_uart_log_tx_len = 0u;
-    s_board_uart_log_busy = 0u;
-    s_board_uart_raw_busy = 0u;
-  }
-  else
-  {
-    board_uart_start_log_tx_locked();
-  }
-  if (primask == 0u)
-  {
-    __enable_irq();
-  }
 }
 
 uint8_t board_uart_tx_try(const uint8_t *data, uint16_t len)
@@ -288,7 +186,7 @@ uint8_t board_uart_tx_try(const uint8_t *data, uint16_t len)
   board_uart_dma_init_once();
   primask = __get_PRIMASK();
   __disable_irq();
-  if ((s_board_uart_raw_busy != 0u) || (s_board_uart_log_busy != 0u))
+  if (s_board_uart_busy != 0u)
   {
     if (primask == 0u)
     {
@@ -298,7 +196,8 @@ uint8_t board_uart_tx_try(const uint8_t *data, uint16_t len)
   }
 
   memcpy(s_board_uart_raw_buf, data, len);
-  s_board_uart_raw_busy = 1u;
+  s_board_uart_busy = 1u;
+  s_board_uart_tx_len = len;
   dma_channel_enable(DMA1_CHANNEL3, FALSE);
   dma_flag_clear(DMA1_GL3_FLAG);
   wk_dma_channel_config(DMA1_CHANNEL3, (uint32_t)&USART1->dt, (uint32_t)s_board_uart_raw_buf, len);
@@ -313,54 +212,31 @@ uint8_t board_uart_tx_try(const uint8_t *data, uint16_t len)
 
 uint8_t board_uart_log_try(const uint8_t *data, uint16_t len)
 {
-  uint32_t primask;
-  uint16_t free_space;
-  uint16_t i;
-
   if ((data == NULL) || (len == 0u))
   {
     return 0u;
   }
 
-  board_uart_dma_init_once();
-  primask = __get_PRIMASK();
-  __disable_irq();
-  if ((s_board_uart_stream_mode != 0u) || (s_board_uart_raw_busy != 0u))
+  if (s_board_uart_stream_mode != 0u)
   {
     s_board_uart_dropped_messages += 1u;
     s_board_uart_dropped_bytes += len;
-    if (primask == 0u)
-    {
-      __enable_irq();
-    }
     return 0u;
   }
 
-  free_space = board_uart_ring_available();
-  if (free_space < len)
+  if (board_uart_tx_try(data, len) == 0u)
   {
     s_board_uart_dropped_messages += 1u;
-    s_board_uart_dropped_bytes += (uint32_t)(len - free_space);
-    len = free_space;
+    s_board_uart_dropped_bytes += len;
+    return 0u;
   }
 
-  for (i = 0u; i < len; ++i)
-  {
-    s_board_uart_log_ring[s_board_uart_log_head] = data[i];
-    s_board_uart_log_head = (uint16_t)((s_board_uart_log_head + 1u) % BOARD_UART_DMA_RING_SIZE);
-  }
-
-  board_uart_start_log_tx_locked();
-  if (primask == 0u)
-  {
-    __enable_irq();
-  }
-  return (len > 0u) ? 1u : 0u;
+  return 1u;
 }
 
 uint8_t board_uart_tx_busy(void)
 {
-  if ((s_board_uart_raw_busy != 0u) || (s_board_uart_log_busy != 0u))
+  if (s_board_uart_busy != 0u)
   {
     return 1u;
   }
@@ -376,9 +252,8 @@ void board_uart_dma_irq_handler(void)
   {
     dma_channel_enable(DMA1_CHANNEL3, FALSE);
     dma_flag_clear(DMA1_GL3_FLAG);
-    s_board_uart_raw_busy = 0u;
-    s_board_uart_log_busy = 0u;
-    s_board_uart_log_tx_len = 0u;
+    s_board_uart_busy = 0u;
+    s_board_uart_tx_len = 0u;
     return;
   }
 
@@ -389,19 +264,10 @@ void board_uart_dma_irq_handler(void)
 
   dma_channel_enable(DMA1_CHANNEL3, FALSE);
   dma_flag_clear(DMA1_GL3_FLAG);
-
-  if (s_board_uart_raw_busy != 0u)
-  {
-    s_board_uart_raw_busy = 0u;
-    return;
-  }
-
   primask = __get_PRIMASK();
   __disable_irq();
-  s_board_uart_log_tail = (uint16_t)((s_board_uart_log_tail + s_board_uart_log_tx_len) % BOARD_UART_DMA_RING_SIZE);
-  s_board_uart_log_tx_len = 0u;
-  s_board_uart_log_busy = 0u;
-  board_uart_start_log_tx_locked();
+  s_board_uart_busy = 0u;
+  s_board_uart_tx_len = 0u;
   if (primask == 0u)
   {
     __enable_irq();
@@ -419,10 +285,10 @@ void board_uart_get_diag(board_uart_diag_t *diag)
 
   primask = __get_PRIMASK();
   __disable_irq();
-  diag->ring_size = BOARD_UART_DMA_RING_SIZE;
-  diag->used = board_uart_ring_used();
-  diag->free = board_uart_ring_available();
-  diag->tx_inflight = s_board_uart_log_tx_len;
+  diag->ring_size = 0u;
+  diag->used = 0u;
+  diag->free = 0u;
+  diag->tx_inflight = s_board_uart_tx_len;
   diag->dma_busy = board_uart_tx_busy();
   diag->dropped_messages = s_board_uart_dropped_messages;
   diag->dropped_bytes = s_board_uart_dropped_bytes;

@@ -28,9 +28,9 @@ void VoFaDisUart(void)
     Send.Data[1].FloatData = phase_current.adc_raw[1];
     Send.Data[2].FloatData = phase_current.adc_raw[2];
     // Send.Data[3].FloatData = phase_current.ampere[0] + phase_current.ampere[1] + phase_current.ampere[2];
-    Send.Data[3].FloatData = phase_current.adc_offset[0];
-    Send.Data[4].FloatData = phase_current.adc_offset[1];
-    Send.Data[5].FloatData = phase_current.adc_offset[2];
+    Send.Data[3].FloatData = 2000; // phase_current.adc_offset[0];
+    Send.Data[4].FloatData = 2000; // phase_current.adc_offset[1];
+    Send.Data[5].FloatData = 2000; // phase_current.adc_offset[2];
 
     UartTemp[0] = Send.Data[0].ByteData[0]; //The first data
     UartTemp[1] = Send.Data[0].ByteData[1]; //
