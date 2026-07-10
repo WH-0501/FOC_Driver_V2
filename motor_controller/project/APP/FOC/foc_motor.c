@@ -1,13 +1,11 @@
 #include "foc_motor.h"
+#include "motor_axis.h"
 #include "common.h"
 #include "current_sense.h"
 #include "foc_filter.h"
-#include "math_compat.h"
 #include "kth71xx.h"
 #include "board.h"
 #include "at32m412_416_tmr.h"
-
-extern motor_handle_t g_motor;
 
 static int32_t full_rotations = 0;
 
@@ -92,9 +90,9 @@ void foc_get_motor_current(void)
     current_sense_process_sample(&g_motor);
 
     clarke_transform(g_motor.state.phase_current.ampere[0], /* ia */
-        g_motor.state.phase_current.ampere[1], /* ib */
-        g_motor.state.phase_current.ampere[2], /* ic */
-        &g_motor.state.i_alpha, &g_motor.state.i_beta);
+                     g_motor.state.phase_current.ampere[1], /* ib */
+                     g_motor.state.phase_current.ampere[2], /* ic */
+                     &g_motor.state.i_alpha, &g_motor.state.i_beta);
 
     float id = 0.0f, iq = 0.0f;
     park_transform(g_motor.state.i_alpha, g_motor.state.i_beta, 

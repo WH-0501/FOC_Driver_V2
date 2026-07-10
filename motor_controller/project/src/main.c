@@ -37,12 +37,10 @@
 
 /* private includes ----------------------------------------------------------*/
 /* add user code begin private includes */
-#include "board.h"
+#include "mc_interface.h"
 #include "logger.h"
 #include "Debug.h"
 #include "dwt_profile_delay.h"
-#include "foc.h"
-#include "gate/gate_driver.h"
 #include "storage/eeprom.h"
 #include "storage/flash.h"
 #include "motor_config.h"
@@ -155,6 +153,7 @@ int main(void)
   Logger_Init(LOG_OUTPUT_UART);
   LOG_INFO("Logger initialized");
   dwt_init();
+
   motor_cfg_storage_adapter_t motor_cfg_adapter = {
     .eeprom_read = eeprom_read,
     .eeprom_write = eeprom_write,
@@ -173,34 +172,13 @@ int main(void)
 
   // 2. 通信初始化
 
-  // 3. board 初始化（ADC 抢占等）
-  board_init(&g_motor);
-
-  // 4. gate driver 初始化并注册 active driver（必须先于 foc_init）
-  gate_driver_init_t gate_driver_init_cfg = {
-    .type = GATE_DRIVER_TYPE_MP6540,
-    .hw.port_nSLEEP   = nSLEEP_GPIO_PORT,
-    .hw.pin_nSLEEP    = nSLEEP_PIN,
-    .hw.port_ENA      = ENA_GPIO_PORT,
-    .hw.pin_ENA       = ENA_PIN,
-    .hw.port_ENB      = ENB_GPIO_PORT,
-    .hw.pin_ENB       = ENB_PIN,
-    .hw.port_ENC      = ENC_GPIO_PORT,
-    .hw.pin_ENC       = ENC_PIN,
-    .hw.port_FAULT    = nFAULT_GPIO_PORT,
-    .hw.pin_FAULT     = nFAULT_PIN,
-  };
-
-  if (gate_driver_init(&gate_driver_init_cfg) != GATE_DRIVER_INIT_OK)
+  if (mc_init(&motor_cfg) != MC_INIT_OK)
   {
     while (1)
     {
-      /* TODO: 上报故障并进入安全态 */
+      /* TODO: 上报 gate driver 初始化失败 */
     }
   }
-
-  // 5. FOC 初始化（末尾含阻塞电流零漂校准）
-  foc_init(&motor_cfg);
 
   LOG_INFO("Motor controller initialized");
   /* add user code end 2 */
@@ -208,7 +186,7 @@ int main(void)
   while(1)
   {
     /* add user code begin 3 */
-    foc_update();
+    mc_poll();
     VoFaDisUart();
     /* add user code end 3 */
   }

@@ -1,13 +1,8 @@
 #include "current_sense.h"
 #include "board.h"
+#include "motor_axis.h"
 
-/**
- * @brief 电流采样零漂校准步骤
- * 
- * @param m 电机句柄
- * @return void
- */
-static void current_sense_offset_cal_step(motor_handle_t *m) 
+static void current_sense_offset_cal_step(motor_handle_t *m)
 {
     uint32_t i;
     static uint32_t s_cnt;
@@ -60,12 +55,6 @@ static void current_sense_offset_cal_step(motor_handle_t *m)
     }
 }
 
-/**
- * @brief 将ADC原始值转换为物理量
- * 
- * @param m 电机句柄
- * @return void
- */
 static void current_sense_apply_raw_to_physical(motor_handle_t *m)
 {
     uint32_t i;
@@ -82,20 +71,43 @@ static void current_sense_apply_raw_to_physical(motor_handle_t *m)
 
     for (i = 0U; i < 3U; i++)
     {
-        float v_pin;
-        if (!m->current_offset_cal_done) /* 如果零漂校准未完成，则使用原始值 */
+        float v_pin = 0.0f;
+        if (!m->current_offset_cal_done)
         {
             v_pin = (float)state->phase_current.adc_raw[i] * kv;
             state->phase_current.ampere[i] = (v_pin - CURRENT_SENSE_SO_BIAS_V) * gain;
-        } else /* 如果零漂校准已完成，则使用校准后的值 */
+        }
+        else
         {
-            v_pin = (float)((int32_t)state->phase_current.adc_raw[i] - (int32_t)state->phase_current.adc_offset[i]) * kv;
+            v_pin = (float)((uint16_t)state->phase_current.adc_raw[i] - (uint16_t)state->phase_current.adc_offset[i]) * kv;
             state->phase_current.ampere[i] = v_pin * gain;
         }
     }
 
     state->board_temp.value =
         (float)state->board_temp.adc_raw * CURRENT_SENSE_ADC_VREF_V / CURRENT_SENSE_ADC_FULL_SCALE;
+}
+
+static void current_sense_run_offset_cal_blocking(motor_handle_t *m)
+{
+    if (m == NULL)
+    {
+        return;
+    }
+
+    motor_axis_prepare_dc_cal(m);
+
+    m->current_offset_cal_pending = true;
+    m->current_offset_calibrating = false;
+    m->current_offset_cal_done = false;
+
+    while (!m->current_offset_cal_done)
+    {
+        board_get_phase_current(m);
+        current_sense_process_sample(m);
+    }
+
+    motor_axis_disarm(m);
 }
 
 void current_sense_init(motor_handle_t *m)
@@ -115,32 +127,8 @@ void current_sense_init(motor_handle_t *m)
     {
         m->state.phase_current.adc_offset[i] = 0U;
     }
-}
 
-void current_sense_calibrate_blocking(motor_handle_t *m)
-{
-    const gate_driver_t *drv = gate_driver_get_active();
-
-    if (m == NULL)
-    {
-        return;
-    }
-
-    (void)pwm_hw_stop();
-
-    gate_driver_enter_inactive_state(drv);
-
-    m->current_offset_cal_pending = true;
-    m->current_offset_calibrating = false;
-    m->current_offset_cal_done = false;
-
-    while (!m->current_offset_cal_done)
-    {
-        board_get_phase_current(m);
-        current_sense_process_sample(m);
-    }
-
-    gate_driver_exit_inactive_state(drv);
+    current_sense_run_offset_cal_blocking(m);
 }
 
 void current_sense_process_sample(motor_handle_t *m)

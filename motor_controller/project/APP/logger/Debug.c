@@ -1,11 +1,9 @@
 #include "Debug.h"
-#include "datatypes.h"
+#include "motor_axis.h"
 #include "../../Board/board.h"
 
 unsigned char UartTemp[28];
 SENDDATA Send;
-
-extern motor_handle_t g_motor;
 
 void VoFaDisUart(void)
 {
@@ -23,14 +21,23 @@ void VoFaDisUart(void)
     }
 
     motor_phase_current_t phase_current = g_motor.state.phase_current;
+    float ia = 0.0f, ib = 0.0f, ic = 0.0f, i_sum = 0.0f;
+    __disable_irq();
+	{
+		ia = g_motor.state.phase_current.ampere[0];
+		ib = g_motor.state.phase_current.ampere[1];
+		ic = g_motor.state.phase_current.ampere[2];
+	}
+	__enable_irq();
+    i_sum = ia + ib + ic;
 
-    Send.Data[0].FloatData = phase_current.adc_raw[0]; // phase_current.ampere[0];
-    Send.Data[1].FloatData = phase_current.adc_raw[1];
-    Send.Data[2].FloatData = phase_current.adc_raw[2];
-    // Send.Data[3].FloatData = phase_current.ampere[0] + phase_current.ampere[1] + phase_current.ampere[2];
-    Send.Data[3].FloatData = 2000; // phase_current.adc_offset[0];
-    Send.Data[4].FloatData = 2000; // phase_current.adc_offset[1];
-    Send.Data[5].FloatData = 2000; // phase_current.adc_offset[2];
+    Send.Data[0].FloatData = ia; // phase_current.adc_raw[0];
+    Send.Data[1].FloatData = ib; // phase_current.adc_raw[1];
+    Send.Data[2].FloatData = ic; // phase_current.adc_raw[2];
+    Send.Data[3].FloatData = i_sum;
+    // Send.Data[3].FloatData = phase_current.adc_offset[0];
+    // Send.Data[4].FloatData = phase_current.adc_offset[1];
+    // Send.Data[5].FloatData = phase_current.adc_offset[2];
 
     UartTemp[0] = Send.Data[0].ByteData[0]; //The first data
     UartTemp[1] = Send.Data[0].ByteData[1]; //

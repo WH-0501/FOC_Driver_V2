@@ -10,9 +10,23 @@
 #include <stddef.h>
 #include "datatypes.h"
 #include "error_types.h"
+#include "gate_hw_binding.h"
 
-void board_init(motor_handle_t *m);
+typedef void (*board_current_loop_cb_t)(void);
+
+/** BSP：ADC/PWM/UART 等平台抽象（不开启电流环 IRQ，见 board_current_loop_start） */
+void board_init(void);
 void board_deinit(void);
+
+/** 电流环 ISR 就绪：先 register_callback，再 start */
+void board_current_loop_start(void);
+void board_current_loop_stop(void);
+
+/** 读取本板预驱 GPIO 绑定；成功返回 0 */
+int board_get_gate_hw(gate_hw_binding_t *hw);
+
+void board_register_current_loop_callback(board_current_loop_cb_t cb);
+void board_invoke_current_loop(void);
 
 void board_get_phase_current(motor_handle_t *m);
 
@@ -21,11 +35,12 @@ void board_current_loop_irq_handler(void *adc_handle);
 
 error_t current_hw_init(void);
 error_t current_hw_deinit(void);
-error_t pwm_hw_init(void);
 
-/* PWM总开关接口 */
+error_t pwm_hw_init(void);
 error_t pwm_hw_start(void);
 error_t pwm_hw_stop(void);
+error_t pwm_hw_lowside_brake_on(void);
+error_t pwm_hw_lowside_brake_off(void);
 
 error_t set_pwm(motor_actuation_t *actuation);
 

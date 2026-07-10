@@ -1,8 +1,8 @@
 #include <math.h>
 #include "foc_fault.h"
+#include "foc_fsm.h"
 #include "math_compat.h"
-#include "board.h"
-#include "Driver/gate/gate_driver.h"
+#include "gate/gate_driver.h"
 
 void motor_fault_raise(motor_handle_t *m, fault_t bits)
 {
@@ -56,12 +56,6 @@ int motor_fault_is_latched(const motor_handle_t *m)
   return (m != NULL && m->fault.latched != FAULT_NONE);
 }
 
-/**
- * @brief 故障保护：根据状态与配置刷新瞬时故障位并锁存
- *
- * @param m 电机句柄
- * @return void
- */
 void motor_fault_protect(motor_handle_t *m)
 {
   const motor_limits_t *L;
@@ -79,25 +73,21 @@ void motor_fault_protect(motor_handle_t *m)
 
   m->fault.status &= ~FAULT_POLL_MASK;
 
-  /* nFault 异常 */
   if (gate_driver_read_fault(gate_driver_get_active()))
   {
     motor_fault_raise(m, FAULT_GATE_DRIVER);
   }
 
-  /* 母线欠压 */
   if (L->vbus_uv_threshold > 0.f && S->vbus > 0.f && S->vbus < L->vbus_uv_threshold)
   {
     motor_fault_raise(m, FAULT_BUS_UV);
   }
 
-  /* 母线过压 */
   if (L->vbus_ov_threshold > 0.f && S->vbus > L->vbus_ov_threshold)
   {
     motor_fault_raise(m, FAULT_BUS_OV);
   }
 
-  /* 软件过流 */
   if (L->sw_ocp > 0.f)
   {
     i_abs_max = FMAX(fabsf(S->phase_current.ampere[0]),
@@ -108,20 +98,17 @@ void motor_fault_protect(motor_handle_t *m)
     }
   }
 
-  /* 电机过温 */
   if (L->temp_limit > 0.f && S->temperature > L->temp_limit)
   {
     motor_fault_raise(m, FAULT_OVERTEMP_MOTOR);
   }
 
-  /* 超速 */
   if (m->config.motion.max_speed_rad_s > 0.f &&
       fabsf(S->speed_rad_s) > m->config.motion.max_speed_rad_s)
   {
     motor_fault_raise(m, FAULT_OVER_SPEED);
   }
 
-  /* 缺相 */
   if (L->phase_diag_i_avg_min_a > 0.f &&
       (L->phase_imbalance_ratio_max > 0.f || L->phase_imbalance_warn_ratio > 0.f))
   {
@@ -145,13 +132,8 @@ void motor_fault_protect(motor_handle_t *m)
     }
   }
 
-  /* 如果已锁存任一故障，默认拉低 pwm_enable */
   if (motor_fault_is_latched(m))
   {
-    const gate_driver_t *drv = gate_driver_get_active();
-    m->out.pwm_enable = 0u;
-    (void)pwm_hw_stop();
-    /* gate driver 进入非激活态（关相使能并进入休眠等）。 */
-    gate_driver_enter_inactive_state(drv);
+    foc_on_fault_latched(m);
   }
 }

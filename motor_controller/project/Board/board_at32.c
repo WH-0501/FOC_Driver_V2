@@ -6,14 +6,12 @@
  * PWM 计数周期与 wk_tmr1_init() 中 tmr_base_init(TMR1, pr, ...) 的 pr 一致，占空比按 compare/pr 缩放。
  */
 #include "board.h"
-#include "foc.h"
+#include "at32m412_416_wk_config.h"
 #include "at32m412_416_adc.h"
 #include "at32m412_416_tmr.h"
 #include "wk_dma.h"
 #include "wk_usart.h"
 #include <string.h>
-
-extern void foc_control_loop(void);
 
 #define PWM_TIM_HANDLE TMR1
 #define PWM_TIME_U_CHANNEL TMR_SELECT_CHANNEL_1
@@ -37,6 +35,26 @@ static volatile uint32_t s_board_uart_dropped_bytes;
 static uint16_t pwm_get_compare_top(void)
 {
   return (uint16_t)PWM_TIM_HANDLE->pr;
+}
+
+int board_get_gate_hw(gate_hw_binding_t *hw)
+{
+  if (hw == NULL)
+  {
+    return -1;
+  }
+
+  hw->port_nSLEEP = nSLEEP_GPIO_PORT;
+  hw->pin_nSLEEP = nSLEEP_PIN;
+  hw->port_ENA = ENA_GPIO_PORT;
+  hw->pin_ENA = ENA_PIN;
+  hw->port_ENB = ENB_GPIO_PORT;
+  hw->pin_ENB = ENB_PIN;
+  hw->port_ENC = ENC_GPIO_PORT;
+  hw->pin_ENC = ENC_PIN;
+  hw->port_FAULT = nFAULT_GPIO_PORT;
+  hw->pin_FAULT = nFAULT_PIN;
+  return 0;
 }
 
 error_t current_hw_init(void)
@@ -104,6 +122,43 @@ error_t pwm_hw_stop(void)
   return ERR_NONE;
 }
 
+/**
+ * @brief 打开低侧刹车
+ * 
+ * 低侧刹车：将三相 PWM 占空比设置为比较值，占空比为 100%。
+ * 此时，上桥臂导通，下桥臂关断，电机处于自由制动状态。
+ * 
+ * @return error_t 
+ */
+error_t pwm_hw_lowside_brake_on(void)
+{
+  if (pwm_compare_top == 0U)
+  {
+    pwm_compare_top = pwm_get_compare_top();
+  }
+
+  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, (uint32_t)pwm_compare_top);
+  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, (uint32_t)pwm_compare_top);
+  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, (uint32_t)pwm_compare_top);
+  return ERR_NONE;
+}
+
+/**
+ * @brief 关闭低侧刹车
+ * 
+ * 低侧刹车：将三相 PWM 占空比设置为 0，占空比为 0%。
+ * 此时，上桥臂关断，下桥臂导通，电机处于低侧刹车状态。
+ * 
+ * @return error_t 
+ */
+error_t pwm_hw_lowside_brake_off(void)
+{
+  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, 0U);
+  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, 0U);
+  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, 0U);
+  return ERR_NONE;
+}
+
 /*
  * @brief 设置 PWM 占空比
  * @param actuation 电机控制占空比结构体
@@ -147,7 +202,7 @@ void board_current_loop_irq_handler(void *adc_handle)
   /* ADC2 定义为 ((adc_type *)ADC2_BASE)，应与 ISR 传入指针同一实例 */
   if (adc_x == ADC2)
   {
-    foc_control_loop();
+    board_invoke_current_loop();
   }
 }
 

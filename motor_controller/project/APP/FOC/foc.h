@@ -1,21 +1,16 @@
 #ifndef __FOC_H__
 #define __FOC_H__
 
-#include "board.h"
+#include "motor_axis.h"
 #include "foc_fault.h"
 #include "foc_math.h"
 #include "common.h"
 
-/** 单轴 FOC 根实例：配置/给定/状态/输出/FSM/PID 均经此访问 */
-extern motor_handle_t g_motor;
-
 void foc_init(const motor_config_t *config);
-void foc_update(void);
 
-void foc_control_loop(void);
+void foc_control_loop(motor_handle_t *m);
+void foc_motor_run(void);
 
 void foc_pos_vel_loop_control(void);
-
-void foc_state_machine_loop(void);
 
 #endif /* __FOC_H__ */

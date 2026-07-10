@@ -2,7 +2,6 @@
  * STM32：工程中关闭 board_at32.c；可定义 HADC_PHASE_CURRENT（默认 &hadc2）。
  */
 #include "board.h"
-#include "foc.h"
 #include "main.h"
 
 // #define USE_6X_PWM_CTRL
@@ -32,8 +31,6 @@ extern ADC_HandleTypeDef hadc2;
 #define SET_W_H_PWM(val)      __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, value)
 
 uint16_t pwm_compare_top = 0;
-
-extern void foc_control_loop(void);
 
 static uint16_t pwm_compare_top(void)
 {
@@ -127,6 +124,27 @@ error_t pwm_hw_start(void)
   return ERR_NONE;
 }
 
+error_t pwm_hw_lowside_brake_on(void)
+{
+  if (pwm_compare_top == 0U)
+  {
+    pwm_compare_top = pwm_compare_top();
+  }
+
+  SET_U_H_PWM(pwm_compare_top);
+  SET_V_H_PWM(pwm_compare_top);
+  SET_W_H_PWM(pwm_compare_top);
+  return ERR_NONE;
+}
+
+error_t pwm_hw_lowside_brake_off(void)
+{
+  SET_U_H_PWM(0);
+  SET_V_H_PWM(0);
+  SET_W_H_PWM(0);
+  return ERR_NONE;
+}
+
 error_t pwm_hw_stop(void)
 {
   // 停止 PWM
@@ -200,7 +218,7 @@ void board_current_loop_irq_handler(void *adc_handle)
 
   if (adc_inst->Instance == ADC2)
   {
-    foc_control_loop();
+    board_invoke_current_loop();
   }
 }
 

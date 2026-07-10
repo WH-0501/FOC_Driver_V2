@@ -564,6 +564,11 @@
               <FilePath>..\APP\FOC\foc_fault.c</FilePath>
             </File>
             <File>
+              <FileName>foc_fsm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\FOC\foc_fsm.c</FilePath>
+            </File>
+            <File>
               <FileName>foc_filter.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\FOC\foc_filter.c</FilePath>
@@ -584,9 +589,19 @@
               <FilePath>..\APP\FOC\foc_pid.c</FilePath>
             </File>
             <File>
+              <FileName>motor_axis.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\FOC\motor_axis.c</FilePath>
+            </File>
+            <File>
               <FileName>kth71xx.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\FOC\kth71xx.c</FilePath>
+            </File>
+            <File>
+              <FileName>mc_interface.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\mc_interface.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -597,6 +612,11 @@
               <FileName>gate_driver.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\Driver\gate\gate_driver.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_driver.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\Driver\motor_driver.c</FilePath>
             </File>
             <File>
               <FileName>mp6540.c</FileName>

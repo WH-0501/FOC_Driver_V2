@@ -4,12 +4,17 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "../../compiler_port.h"
-#include "../../../Board/platform_gpio_types.h"
+#include "../../../Board/gate_hw_binding.h"
+
+typedef gate_hw_binding_t gate_driver_hw_cfg_t;
 
 typedef struct
 {
-    void (*enter_inactive_state)(void *ctx); /* 关相使能并进入休眠/高阻等非激活态 */
-    void (*exit_inactive_state)(void *ctx);  /* 退出非激活态并恢复可运行状态 */
+    void (*enter_inactive_state)(void *ctx);
+    void (*exit_inactive_state)(void *ctx);
+    void (*enter_sleep)(void *ctx);
+    void (*exit_sleep)(void *ctx);
+    void (*set_all_phase_en)(void *ctx, bool en);
     bool (*read_fault)(void *ctx);
 } gate_driver_ops_t;
 
@@ -31,26 +36,8 @@ typedef enum
 {
     GATE_DRIVER_TYPE_NONE = 0,
     GATE_DRIVER_TYPE_MP6540 = 1,
-    GATE_DRIVER_TYPE_DRV8311 = 2, /* 预留 */
+    GATE_DRIVER_TYPE_DRV8311 = 2,
 } gate_driver_type_t;
-
-/*
- * 通用 gate driver 硬件配置（上层统一传递，不直接绑定具体驱动结构体）。
- * 不同驱动按需使用其中字段；未使用字段可置 0。
- */
-typedef struct
-{
-    gpio_port_t port_nSLEEP;
-    gpio_pin_t pin_nSLEEP;
-    gpio_port_t port_ENA;
-    gpio_pin_t pin_ENA;
-    gpio_port_t port_ENB;
-    gpio_pin_t pin_ENB;
-    gpio_port_t port_ENC;
-    gpio_pin_t pin_ENC;
-    gpio_port_t port_FAULT;
-    gpio_pin_t pin_FAULT;
-} gate_driver_hw_cfg_t;
 
 typedef struct
 {
@@ -65,21 +52,8 @@ enum
     GATE_DRIVER_INIT_ERR_NOT_IMPL = -2,
 };
 
-/**
- * @brief 注册当前生效的功率驱动实例
- */
 void gate_driver_set_active(const gate_driver_t *drv);
-
-/**
- * @brief 获取当前生效的功率驱动实例；未注册时返回 NULL
- */
 const gate_driver_t *gate_driver_get_active(void);
-
-/**
- * @brief 根据配置初始化并注册当前生效驱动
- * @param init 配置参数；传 NULL 等价于清空当前驱动
- * @retval ERR_NONE 成功
- */
 int gate_driver_init(const gate_driver_init_t *init);
 
 APP_STATIC_INLINE void gate_driver_enter_inactive_state(const gate_driver_t *drv)
@@ -97,6 +71,33 @@ APP_STATIC_INLINE void gate_driver_exit_inactive_state(const gate_driver_t *drv)
         (drv->ops->exit_inactive_state != NULL))
     {
         drv->ops->exit_inactive_state(drv->ctx);
+    }
+}
+
+APP_STATIC_INLINE void gate_driver_enter_sleep(const gate_driver_t *drv)
+{
+    if ((drv != NULL) && (drv->ops != NULL) &&
+        (drv->ops->enter_sleep != NULL))
+    {
+        drv->ops->enter_sleep(drv->ctx);
+    }
+}
+
+APP_STATIC_INLINE void gate_driver_exit_sleep(const gate_driver_t *drv)
+{
+    if ((drv != NULL) && (drv->ops != NULL) &&
+        (drv->ops->exit_sleep != NULL))
+    {
+        drv->ops->exit_sleep(drv->ctx);
+    }
+}
+
+APP_STATIC_INLINE void gate_driver_set_all_phase_en(const gate_driver_t *drv, bool en)
+{
+    if ((drv != NULL) && (drv->ops != NULL) &&
+        (drv->ops->set_all_phase_en != NULL))
+    {
+        drv->ops->set_all_phase_en(drv->ctx, en);
     }
 }
 
