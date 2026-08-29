@@ -2,37 +2,38 @@
 #define __MP6540_HAL_ADAPT_H__
 
 #include "mp6540.h"
+
 #if defined(PLATFORM_AT32)
 #include "dwt_profile_delay.h"
 
 void MP6540_HW_GPIO_Set(gpio_port_t port, gpio_pin_t pin, bool level)
 {
-    if (port == NULL)
-    {
-        return;
-    }
-    if (level)
-    {
-        gpio_bits_set(port, pin);
-    }
-    else
-    {
-        gpio_bits_reset(port, pin);
-    }
+  if (port == NULL)
+  {
+    return;
+  }
+  if (level)
+  {
+    gpio_bits_set(port, pin);
+  }
+  else
+  {
+    gpio_bits_reset(port, pin);
+  }
 }
 
 bool MP6540_HW_GPIO_Read(gpio_port_t port, gpio_pin_t pin)
 {
-    if (port == NULL)
-    {
-        return false;
-    }
-    return (gpio_input_data_bit_read(port, pin) != RESET);
+  if (port == NULL)
+  {
+    return false;
+  }
+  return (gpio_input_data_bit_read(port, pin) != RESET);
 }
 
 void MP6540_HW_DelayMs(uint32_t ms)
 {
-    delay_ms(ms);
+  delay_ms(ms);
 }
 
 #elif defined(PLATFORM_STM32)
@@ -40,26 +41,53 @@ void MP6540_HW_DelayMs(uint32_t ms)
 
 void MP6540_HW_GPIO_Set(gpio_port_t port, gpio_pin_t pin, bool level)
 {
-    if (port == NULL)
-    {
-        return;
-    }
-    HAL_GPIO_WritePin(port, pin, level ? GPIO_PIN_SET : GPIO_PIN_RESET);
+  if (port == NULL)
+  {
+    return;
+  }
+  HAL_GPIO_WritePin(port, pin, level ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 bool MP6540_HW_GPIO_Read(gpio_port_t port, gpio_pin_t pin)
 {
-    if (port == NULL)
-    {
-        return false;
-    }
-    return (HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_SET);
+  if (port == NULL)
+  {
+    return false;
+  }
+  return (HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_SET);
 }
 
 void MP6540_HW_DelayMs(uint32_t ms)
 {
-    HAL_Delay(ms);
+  HAL_Delay(ms);
 }
+
+#elif defined(PLATFORM_GD32)
+#include "gd32f4xx_gpio.h"
+#include "dwt_profile_delay.h"
+
+void MP6540_HW_GPIO_Set(gpio_port_t port, gpio_pin_t pin, bool level)
+{
+  if (level)
+  {
+    gpio_bit_set(port, pin);
+  }
+  else
+  {
+    gpio_bit_reset(port, pin);
+  }
+}
+
+bool MP6540_HW_GPIO_Read(gpio_port_t port, gpio_pin_t pin)
+{
+  return (gpio_input_bit_get(port, pin) != RESET);
+}
+
+void MP6540_HW_DelayMs(uint32_t ms)
+{
+  delay_ms(ms);
+}
+
 #endif
 
 #endif /* __MP6540_HAL_ADAPT_H__ */

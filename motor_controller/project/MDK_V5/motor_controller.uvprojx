@@ -554,6 +554,16 @@
               <FilePath>..\APP\FOC\current_sense.c</FilePath>
             </File>
             <File>
+              <FileName>encoder.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\FOC\encoder.c</FilePath>
+            </File>
+            <File>
+              <FileName>motor_axis.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\FOC\motor_axis.c</FilePath>
+            </File>
+            <File>
               <FileName>foc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\FOC\foc.c</FilePath>
@@ -579,24 +589,14 @@
               <FilePath>..\APP\FOC\foc_math.c</FilePath>
             </File>
             <File>
-              <FileName>foc_motor.c</FileName>
+              <FileName>foc_sense.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\APP\FOC\foc_motor.c</FilePath>
+              <FilePath>..\APP\FOC\foc_sense.c</FilePath>
             </File>
             <File>
               <FileName>foc_pid.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\FOC\foc_pid.c</FilePath>
-            </File>
-            <File>
-              <FileName>motor_axis.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\APP\FOC\motor_axis.c</FilePath>
-            </File>
-            <File>
-              <FileName>kth71xx.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\APP\FOC\kth71xx.c</FilePath>
             </File>
             <File>
               <FileName>mc_interface.c</FileName>
@@ -617,6 +617,11 @@
               <FileName>motor_driver.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\Driver\motor_driver.c</FilePath>
+            </File>
+            <File>
+              <FileName>kth71xx.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\Driver\encoder\kth71xx.c</FilePath>
             </File>
             <File>
               <FileName>mp6540.c</FileName>

@@ -1,87 +1,129 @@
 #include "motor_driver.h"
 #include "board.h"
-#include "gate/gate_driver.h"
 
-static bool s_motor_driver_armed;
-
-static void motor_driver_apply_disarm(void)
+static error_t motor_driver_bind_gate(motor_driver_t *drv, uint8_t axis_id)
 {
-  const gate_driver_t *drv = gate_driver_get_active();
+  gate_driver_init_t cfg;
 
-  (void)pwm_hw_stop();
-  (void)pwm_hw_lowside_brake_off();
-  gate_driver_exit_sleep(drv);
-  gate_driver_set_all_phase_en(drv, false);
-  (void)current_hw_init();
-  s_motor_driver_armed = false;
+  if (drv == NULL)
+  {
+    return ERR_FAIL;
+  }
+
+  cfg.type = GATE_DRIVER_TYPE_MP6540;
+  if (board_get_gate_hw(axis_id, &cfg.hw) != 0)
+  {
+    drv->gate = NULL;
+    return ERR_FAIL;
+  }
+
+  MP6540_Init(&drv->mp6540, &cfg.hw);
+  drv->gate = MP6540_AsGateDriver(&drv->mp6540);
+  if (drv->gate == NULL)
+  {
+    return ERR_FAIL;
+  }
+
+  return ERR_NONE;
 }
 
-static void motor_driver_apply_arm(void)
+error_t motor_driver_init(motor_driver_t *drv, uint8_t axis_id)
 {
-  const gate_driver_t *drv = gate_driver_get_active();
+  if (drv == NULL)
+  {
+    return ERR_FAIL;
+  }
 
-  (void)pwm_hw_init();
-  (void)pwm_hw_lowside_brake_off();
-  gate_driver_exit_sleep(drv);
-  gate_driver_set_all_phase_en(drv, true);
-  (void)pwm_hw_start();
-  (void)current_hw_init();
-  s_motor_driver_armed = true;
+  drv->armed = false;
+  drv->axis_id = axis_id;
+  drv->gate = NULL;
+
+  if (motor_driver_bind_gate(drv, axis_id) != ERR_NONE)
+  {
+    return ERR_FAIL;
+  }
+
+  motor_driver_shutdown(drv);
+  return ERR_NONE;
 }
 
-void motor_driver_init(void)
+const gate_driver_t *motor_driver_get_gate(const motor_driver_t *drv)
 {
-  s_motor_driver_armed = false;
-  motor_driver_shutdown();
+  if (drv == NULL)
+  {
+    return NULL;
+  }
+
+  return drv->gate;
 }
 
-void motor_driver_arm(void)
+void motor_driver_arm(motor_driver_t *drv)
 {
-  if (s_motor_driver_armed)
+  if ((drv == NULL) || (drv->gate == NULL) || drv->armed)
   {
     return;
   }
 
-  motor_driver_apply_arm();
+  (void)pwm_hw_init(drv->axis_id);
+  gate_driver_exit_sleep(drv->gate);
+  gate_driver_set_all_phase_en(drv->gate, true);
+  (void)pwm_hw_start(drv->axis_id);
+  drv->armed = true;
 }
 
-void motor_driver_disarm(void)
+void motor_driver_disarm(motor_driver_t *drv)
 {
-  motor_driver_apply_disarm();
+  if ((drv == NULL) || (drv->gate == NULL))
+  {
+    return;
+  }
+
+  (void)pwm_hw_stop(drv->axis_id);
+  gate_driver_exit_sleep(drv->gate);
+  gate_driver_set_all_phase_en(drv->gate, false);
+  drv->armed = false;
 }
 
-void motor_driver_shutdown(void)
+void motor_driver_shutdown(motor_driver_t *drv)
 {
-  const gate_driver_t *drv = gate_driver_get_active();
+  if ((drv == NULL) || (drv->gate == NULL))
+  {
+    return;
+  }
 
-  (void)pwm_hw_stop();
-  (void)pwm_hw_lowside_brake_off();
-  gate_driver_enter_inactive_state(drv);
-  (void)current_hw_deinit();
-  s_motor_driver_armed = false;
+  (void)pwm_hw_stop(drv->axis_id);
+  gate_driver_enter_inactive_state(drv->gate);
+  drv->armed = false;
 }
 
-bool motor_driver_is_armed(void)
+bool motor_driver_is_armed(const motor_driver_t *drv)
 {
-  return s_motor_driver_armed;
+  if (drv == NULL)
+  {
+    return false;
+  }
+
+  return drv->armed;
 }
 
-void motor_driver_prepare_dc_offset_cal(void)
+void motor_driver_prepare_dc_offset_cal(motor_driver_t *drv)
 {
-  const gate_driver_t *drv = gate_driver_get_active();
+  if ((drv == NULL) || (drv->gate == NULL))
+  {
+    return;
+  }
 
-  (void)current_hw_deinit();
-  (void)pwm_hw_init();
-  gate_driver_exit_sleep(drv);
-  gate_driver_set_all_phase_en(drv, true);
-  (void)pwm_hw_lowside_brake_on();
-  (void)pwm_hw_start();
-  s_motor_driver_armed = false;
+  (void)pwm_hw_init(drv->axis_id);
+  gate_driver_exit_sleep(drv->gate);
+  gate_driver_set_all_phase_en(drv->gate, true);
+  (void)pwm_hw_lowside_brake_on(drv->axis_id);
+  (void)pwm_hw_start(drv->axis_id);
+  drv->armed = false;
 }
 
-error_t motor_driver_set_pwm(const motor_actuation_t *actuation)
+error_t motor_driver_set_pwm(motor_driver_t *drv, const motor_actuation_t *actuation)
 {
-  if (!s_motor_driver_armed)
+  if ((drv == NULL) || !drv->armed)
   {
     return ERR_FAIL;
   }
@@ -91,5 +133,5 @@ error_t motor_driver_set_pwm(const motor_actuation_t *actuation)
     return ERR_FAIL;
   }
 
-  return set_pwm((motor_actuation_t *)actuation);
+  return set_pwm(drv->axis_id, (motor_actuation_t *)actuation);
 }

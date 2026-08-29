@@ -1,45 +1,107 @@
 /*
- * STM32：工程中关闭 board_at32.c；可定义 HADC_PHASE_CURRENT（默认 &hadc2）。
+ * STM32 板级实现。工程中编入本文件并定义 PLATFORM_STM32，勿同时编入其它 board_*.c。
+ *
+ * 假定 CubeMX/HAL 已在 main 中完成时钟、GPIO、ADC2、TIM1、TIM6 初始化；
+ * board_init() 仅做电机功率级就绪检查；电流环/PWM 运行时控制与 AT32 语义对齐。
+ *
+ * 预驱引脚：在 main.h 或工程宏中定义 BOARD_GATE_*（见下方 #ifndef 默认值）。
  */
 #include "board.h"
 #include "main.h"
+#include "motor_axis.h"
 
-// #define USE_6X_PWM_CTRL
+#ifndef BOARD_GATE_NSLEEP_PORT
+#define BOARD_GATE_NSLEEP_PORT GPIOA
+#define BOARD_GATE_NSLEEP_PIN GPIO_PIN_15
+#define BOARD_GATE_ENA_PORT GPIOA
+#define BOARD_GATE_ENA_PIN GPIO_PIN_12
+#define BOARD_GATE_ENB_PORT GPIOA
+#define BOARD_GATE_ENB_PIN GPIO_PIN_11
+#define BOARD_GATE_ENC_PORT GPIOB
+#define BOARD_GATE_ENC_PIN GPIO_PIN_10
+#define BOARD_GATE_FAULT_PORT GPIOB
+#define BOARD_GATE_FAULT_PIN GPIO_PIN_3
+#endif
 
-#define TIM1_CLK_MHZ  (168)
-#define PWM_FREQUENCY (20000)
-#define PWM_PERIOD_CYCLES (uint16_t)((TIM1_CLK_MHZ * (uint32_t)1000000u / ((uint32_t)(PWM_FREQUENCY))) & 0xFFFE)
-#define PWM_TIM_ARR (uint16_t)(PWM_PERIOD_CYCLES / 2u)  // 16位最大值为65535
-// #define PWM_TIM_ARR  (6000)
-
-
+#ifndef HADC_PHASE_CURRENT
 extern ADC_HandleTypeDef hadc2;
 #define HADC_PHASE_CURRENT (&hadc2)
+#endif
 
+#ifndef PWM_TIM_HANDLE
+extern TIM_HandleTypeDef htim1;
 #define PWM_TIM_HANDLE (&htim1)
+#endif
+
+#ifndef BOARD_TIME_US_HANDLE
+extern TIM_HandleTypeDef htim6;
+#define BOARD_TIME_US_HANDLE (&htim6)
+#endif
+
 #define PWM_TIME_U_CHANNEL TIM_CHANNEL_1
 #define PWM_TIME_V_CHANNEL TIM_CHANNEL_2
 #define PWM_TIME_W_CHANNEL TIM_CHANNEL_3
-// #define SET_U_H_PWM(val)      (PWM_TIM_HANDLE.Instance->CCR1 = val)
-// #define SET_V_H_PWM(val)      (PWM_TIM_HANDLE.Instance->CCR2 = val)
-// #define SET_W_H_PWM(val)      (PWM_TIM_HANDLE.Instance->CCR3 = val)
-// #define SET_U_L_PWM(val)      (val)
-// #define SET_V_L_PWM(val)      (val)
-// #define SET_W_L_PWM(val)      (val)
-#define SET_U_H_PWM(val)      __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, value)
-#define SET_V_H_PWM(val)      __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, value)
-#define SET_W_H_PWM(val)      __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, value)
 
 uint16_t pwm_compare_top = 0;
 
-static uint16_t pwm_compare_top(void)
+static uint16_t pwm_get_compare_top(void)
 {
-  return (uint16_t)TIM1->ARR;
+  return (uint16_t)PWM_TIM_HANDLE->Instance->ARR;
+}
+
+void board_init(void)
+{
+  pwm_compare_top = pwm_get_compare_top();
+}
+
+void board_deinit(void)
+{
+  uint8_t i;
+
+  (void)current_hw_deinit();
+  for (i = 0u; i < MOTOR_AXIS_COUNT; i++)
+  {
+    (void)pwm_hw_stop(i);
+  }
+}
+
+uint32_t board_time_us(void)
+{
+  return (uint32_t)__HAL_TIM_GET_COUNTER(BOARD_TIME_US_HANDLE);
+}
+
+static int board_pwm_axis_supported(uint8_t axis_id)
+{
+  return motor_axis_is_present_id(axis_id) ? 0 : -1;
+}
+
+int board_get_gate_hw(uint8_t axis_id, gate_hw_binding_t *hw)
+{
+  if (hw == NULL)
+  {
+    return -1;
+  }
+
+  if (axis_id == 0u)
+  {
+    hw->port_nSLEEP = BOARD_GATE_NSLEEP_PORT;
+    hw->pin_nSLEEP = BOARD_GATE_NSLEEP_PIN;
+    hw->port_ENA = BOARD_GATE_ENA_PORT;
+    hw->pin_ENA = BOARD_GATE_ENA_PIN;
+    hw->port_ENB = BOARD_GATE_ENB_PORT;
+    hw->pin_ENB = BOARD_GATE_ENB_PIN;
+    hw->port_ENC = BOARD_GATE_ENC_PORT;
+    hw->pin_ENC = BOARD_GATE_ENC_PIN;
+    hw->port_FAULT = BOARD_GATE_FAULT_PORT;
+    hw->pin_FAULT = BOARD_GATE_FAULT_PIN;
+    return 0;
+  }
+
+  return -1;
 }
 
 error_t current_hw_init(void)
 {
-  // 初始化 ADC
   if (HAL_ADCEx_Calibration_Start(HADC_PHASE_CURRENT, ADC_SINGLE_ENDED) != HAL_OK)
   {
     return ERR_FAIL;
@@ -60,134 +122,119 @@ error_t current_hw_deinit(void)
   return ERR_NONE;
 }
 
-error_t pwm_hw_init(void)
+error_t pwm_hw_init(uint8_t axis_id)
 {
-  // 初始化 PWM
-  HAL_TIM_Base_Start_IT(PWM_TIM_HANDLE); /* 开启PWM的定时器周期中断 */
-  HAL_TIM_OC_Start_IT(PWM_TIM_HANDLE, TIM_CHANNEL_4); /* 开启通道四的触发中断 */
-
-  pwm_compare_top = pwm_compare_top();
-
-  // 关闭 PWM 波形输出
-  SET_U_H_PWM(0);
-  SET_V_H_PWM(0);
-  SET_W_H_PWM(0);
-#ifdef USE_6X_PWM_CTRL
-  SET_U_L_PWM(0);
-  SET_V_L_PWM(0);
-  SET_W_L_PWM(0);
-#endif
-  return ERR_NONE;
-}
-
-error_t pwm_hw_deinit(void)
-{
-  // 停止 PWM
-  if (HAL_TIM_Base_Stop_IT(PWM_TIM_HANDLE) != HAL_OK)
+  if (board_pwm_axis_supported(axis_id) != 0)
   {
     return ERR_FAIL;
   }
-  if (HAL_TIM_PWM_Stop_IT(PWM_TIM_HANDLE, TIM_CHANNEL_4) != HAL_OK)
-  {
-    return ERR_FAIL;
-  }
-  return ERR_NONE;
-}
 
-error_t pwm_hw_start(void)
-{
-  // 启动 PWM
-  if (HAL_TIM_PWM_Start(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL) != HAL_OK
-    #ifdef USE_6X_PWM_CTRL
-      || HAL_TIMEx_PWMN_Start(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL) != HAL_OK
-    #endif
-    )
-  {
-    return ERR_FAIL;
-  }
-  if (HAL_TIM_PWM_Start(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL) != HAL_OK
-    #ifdef USE_6X_PWM_CTRL
-      || HAL_TIMEx_PWMN_Start(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL) != HAL_OK
-    #endif
-    )
-  {
-    return ERR_FAIL;
-  }
-  if (HAL_TIM_PWM_Start(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL) != HAL_OK
-    #ifdef USE_6X_PWM_CTRL
-      || HAL_TIMEx_PWMN_Start(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL) != HAL_OK
-    #endif
-    )
-  {
-    return ERR_FAIL;
-  }
-  return ERR_NONE;
-}
-
-error_t pwm_hw_lowside_brake_on(void)
-{
   if (pwm_compare_top == 0U)
   {
-    pwm_compare_top = pwm_compare_top();
+    pwm_compare_top = pwm_get_compare_top();
   }
 
-  SET_U_H_PWM(pwm_compare_top);
-  SET_V_H_PWM(pwm_compare_top);
-  SET_W_H_PWM(pwm_compare_top);
+  __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, 0U);
+  __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, 0U);
+  __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, 0U);
   return ERR_NONE;
 }
 
-error_t pwm_hw_lowside_brake_off(void)
+error_t pwm_hw_start(uint8_t axis_id)
 {
-  SET_U_H_PWM(0);
-  SET_V_H_PWM(0);
-  SET_W_H_PWM(0);
-  return ERR_NONE;
-}
-
-error_t pwm_hw_stop(void)
-{
-  // 停止 PWM
-  if (HAL_TIM_PWM_Stop(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL) != HAL_OK 
-    #ifdef USE_6X_PWM_CTRL
-      || HAL_TIMEx_PWMN_Stop(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL) != HAL_OK
-    #endif
-    )
-  {
-    return ERR_FAIL;
-  }
-  
-  if (HAL_TIM_PWM_Stop(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL) != HAL_OK
-    #ifdef USE_6X_PWM_CTRL
-      || HAL_TIMEx_PWMN_Stop(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL) != HAL_OK
-    #endif
-    )
+  if (board_pwm_axis_supported(axis_id) != 0)
   {
     return ERR_FAIL;
   }
 
-  if (HAL_TIM_PWM_Stop(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL) != HAL_OK
-    #ifdef USE_6X_PWM_CTRL
-      || HAL_TIMEx_PWMN_Stop(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL) != HAL_OK
-    #endif
-    )
+  if (HAL_TIM_PWM_Start(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL) != HAL_OK)
+  {
+    return ERR_FAIL;
+  }
+  if (HAL_TIM_PWM_Start(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL) != HAL_OK)
+  {
+    return ERR_FAIL;
+  }
+  if (HAL_TIM_PWM_Start(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL) != HAL_OK)
+  {
+    return ERR_FAIL;
+  }
+  return ERR_NONE;
+}
+
+error_t pwm_hw_lowside_brake_off(uint8_t axis_id)
+{
+  if (board_pwm_axis_supported(axis_id) != 0)
   {
     return ERR_FAIL;
   }
 
+  __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, 0U);
+  __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, 0U);
+  __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, 0U);
   return ERR_NONE;
 }
 
-error_t set_pwm(motor_actuation_t *actuation)
+error_t pwm_hw_stop(uint8_t axis_id)
 {
-  SET_U_H_PWM(actuation->duty_a * pwm_compare_top); // or use PWM_TIM_ARR replace pwm_compare_top
-  SET_V_H_PWM(actuation->duty_b * pwm_compare_top);
-  SET_W_H_PWM(actuation->duty_c * pwm_compare_top);
-// #ifdef USE_6X_PWM_CTRL
-//   SET_U_L_PWM(actuation->duty_a * PWM_TIM_ARR);
-//   SET_V_L_PWM(actuation->duty_b * PWM_TIM_ARR);
-//   SET_W_L_PWM(actuation->duty_c * PWM_TIM_ARR);
-// #endif
+  if (board_pwm_axis_supported(axis_id) != 0)
+  {
+    return ERR_FAIL;
+  }
+
+  (void)pwm_hw_lowside_brake_off(axis_id);
+
+  if (HAL_TIM_PWM_Stop(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL) != HAL_OK)
+  {
+    return ERR_FAIL;
+  }
+  if (HAL_TIM_PWM_Stop(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL) != HAL_OK)
+  {
+    return ERR_FAIL;
+  }
+  if (HAL_TIM_PWM_Stop(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL) != HAL_OK)
+  {
+    return ERR_FAIL;
+  }
+  return ERR_NONE;
+}
+
+error_t pwm_hw_lowside_brake_on(uint8_t axis_id)
+{
+  if (board_pwm_axis_supported(axis_id) != 0)
+  {
+    return ERR_FAIL;
+  }
+
+  if (pwm_compare_top == 0U)
+  {
+    pwm_compare_top = pwm_get_compare_top();
+  }
+
+  __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, pwm_compare_top);
+  __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, pwm_compare_top);
+  __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, pwm_compare_top);
+  return ERR_NONE;
+}
+
+error_t set_pwm(uint8_t axis_id, motor_actuation_t *actuation)
+{
+  if ((actuation == NULL) || (board_pwm_axis_supported(axis_id) != 0))
+  {
+    return ERR_FAIL;
+  }
+
+  if (pwm_compare_top == 0U)
+  {
+    pwm_compare_top = pwm_get_compare_top();
+  }
+
+  __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL,
+                        (uint32_t)(actuation->duty_a * (float)pwm_compare_top));
+  __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL,
+                        (uint32_t)(actuation->duty_b * (float)pwm_compare_top));
+  __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL,
+                        (uint32_t)(actuation->duty_c * (float)pwm_compare_top));
   return ERR_NONE;
 }
 
@@ -201,7 +248,6 @@ void board_get_phase_current(motor_handle_t *m)
   }
 
   s = &m->state;
-
   s->board_temp.adc_raw =
       (uint16_t)HAL_ADCEx_InjectedGetValue(HADC_PHASE_CURRENT, ADC_INJECTED_RANK_1);
   s->phase_current.adc_raw[0] =
@@ -216,7 +262,7 @@ void board_current_loop_irq_handler(void *adc_handle)
 {
   ADC_HandleTypeDef *adc_inst = (ADC_HandleTypeDef *)adc_handle;
 
-  if (adc_inst->Instance == ADC2)
+  if ((adc_inst != NULL) && (adc_inst->Instance == ADC2))
   {
     board_invoke_current_loop();
   }

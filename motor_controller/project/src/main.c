@@ -167,12 +167,13 @@ int main(void)
                                                    &motor_cfg_adapter);
 
   // 1. 读取电机配置
-  motor_config_t motor_cfg;
+  motor_system_config_t motor_cfg;
   (void)motor_config_init(&motor_cfg);
 
   // 2. 通信初始化
 
-  if (mc_init(&motor_cfg) != MC_INIT_OK)
+  // 3. 电机控制器初始化
+  if (mc_init(&motor_cfg) != MC_OK)
   {
     while (1)
     {

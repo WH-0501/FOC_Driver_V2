@@ -5,7 +5,9 @@
  * - motor_param_t：铭牌或离线识别得到的电机本体参数，电流环内通常当只读使用
  * - motor_limits_t：母线/电流/电压限幅与保护
  * - motor_motion_cfg_t：机械侧轨线约束（最大角速度/角加速度/jerk/snap），供规划/外环使用
- * - motor_config_t：param + limits + motion 聚合，便于整体加载/落盘
+ * - motor_config_t：单轴 param + limits + motion + pid
+ * - motor_system_config_t：axis[MOTOR_AXIS_COUNT] 多轴配置（motor_config.h）
+ * - encoder_sample_t：编码器/机械节点位置速度观测量（encoder 模块写入，state 与 observer 共用）
  * - motor_state_t：运行时测量 + 电气观测
  * - motor_reference_t / motor_actuation_t：给定 / PWM 等
  * - control_mode_t / motor_handle_t.ctrl_mode：外环工作模式（给定 ref 哪条有效）
@@ -49,7 +51,7 @@ typedef enum
 
 /**
  * 控制模式：决定外环如何产生电流目标（ref.id / ref.iq 或由速度环、位置环算出）。
- * 速度/位置模式下的 ref.speed_rad_s、ref.position_rad 与被跟踪的 state 量一致（机械角 [rad]、[rad/s]）。
+ * 速度/位置模式下的 ref 与 state.joint 一致（关节侧 position_rad / velocity_rad_s）。
  */
 typedef enum
 {
@@ -96,8 +98,8 @@ typedef struct
   int8_t direction;               ///< 方向系数：1 正向，-1 反向
   float gear_ratio;               ///< 电机到关节减速比（直驱填 1.0）
   uint32_t encoder_counts_per_rev; ///< 机械旋转一圈编码器计数（分辨率定义依传感器）
-  float theta_elec_offset_rad;    ///< 电角度零偏置 [rad]，对齐/校准后写入
-  float theta_offset_rad;         ///< 机械角度零偏置 [rad]，对齐/校准后写入
+  float theta_elec_offset_rad;    ///< FOC 电角零偏 [rad]（对齐流程写入，见 foc_align_electrical）
+  float theta_offset_rad;         ///< SHAFT 机械零偏 [rad]（bind.zero_rad 为 0 时使用）
 } motor_param_t;
 
 typedef struct
@@ -161,8 +163,8 @@ typedef struct
   float id;             ///< d 轴电流给定 [A]
   float iq;             ///< q 轴电流给定 [A]
   float torque_nm;      ///< 转矩给定 [N·m]（若外环用转矩模式）
-  float speed_rad_s;    ///< 机械角速度给定 [rad/s]
-  float position_rad;   ///< 机械角位置给定 [rad]
+  float speed_rad_s;    ///< 关节角速度给定 [rad/s]（同 state.joint.velocity_rad_s）
+  float position_rad;   ///< 关节角位置给定 [rad]（同 state.joint.position_rad）
 } motor_reference_t;
 
 typedef struct
@@ -172,6 +174,18 @@ typedef struct
   float duty_c;     ///< C 相占空比
   uint8_t pwm_enable; ///< 非 0 时允许输出 PWM
 } motor_actuation_t;
+
+/**
+ * 机械位置/速度观测量（shaft / joint 共用）。
+ * 定义于控制模型层；encoder 模块产出同类型写入 observer.sample 并发布到 motor_state。
+ */
+typedef struct
+{
+  uint32_t counts;
+  float angle_rad;      ///< 单圈机械角 [0, 2π) [rad]；joint 单编码器推算时可为 0
+  float position_rad;   ///< 多圈机械角 [rad]
+  float velocity_rad_s; ///< 机械角速度 [rad/s]
+} encoder_sample_t;
 
 typedef struct
 {
@@ -193,13 +207,12 @@ typedef struct
   float i_mod;   ///< 模电流 [A] iα 和 iβ 的合成电流
   float i_bus;   ///< 母线电流 [A]
 
-  float theta_elec_rad; ///< 电角 [rad]，Park/逆 Park 用
-  float theta_joint_rad; ///< 关节角度 [rad]
+  float theta_elec_rad;     ///< 电角 [rad]，由 shaft.angle_rad 换算，Park/逆 Park 用
+  encoder_sample_t shaft;   ///< 电机轴端
+  encoder_sample_t joint;   ///< 关节端；单编码器时由 shaft 经 gear_ratio 推算
+
   float sin_elec;       ///< sin(θ_e)，可与 θ 同步更新减少三角运算
   float cos_elec;       ///< cos(θ_e)
-
-  float position_rad;       ///< 机械角位置 [rad]
-  float speed_rad_s;        ///< 机械角速度 [rad/s]
 
   float temperature;        ///< 电机或关键温区温度（物理量与标定一致，如 ℃）
 
@@ -236,8 +249,6 @@ typedef struct
   lpf1_t i_bus_lpf;     ///< 母线电流低通滤波器
   lpf1_t v_d_lpf;       ///< d 轴电压低通滤波器
   lpf1_t v_q_lpf;       ///< q 轴电压低通滤波器
-
-  lpf1_t speed_rad_s_lpf; ///< 速度低通滤波器
 
   fault_report_t fault; ///< 故障码与锁存
 } motor_handle_t;

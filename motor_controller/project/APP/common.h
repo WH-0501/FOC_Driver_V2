@@ -9,7 +9,9 @@
 #define BUS_VOLTAGE     (24.0f) ///< 母线电压
 #define POLE_PAIRS      (5) ///< 极对数
 #define GEAR_RATIO      (50) ///< 电机到关节减速比（直驱填 1.0）
-#define ENCODER_COUNTS_PER_REV (4096) ///< 机械旋转一圈编码器计数（分辨率定义依传感器）
+/* 滤波参数 0x88(默认),有效分辨率 13bit */
+#define ENCODER_COUNTS_PER_REV (8192) ///< 机械旋转一圈编码器计数（分辨率定义依传感器）
+#define ENCODER_COUNTS_PER_REV_MASK (0x1FFF) ///< 13bit 有效分辨率掩码
 #define THETA_ELEC_OFFSET_RAD (0.0f) ///< 电角度零偏置 [rad]，对齐/校准后写入
 #define THETA_OFFSET_RAD (0.0f) ///< 机械角度零偏置 [rad]，对齐/校准后写入
 
@@ -26,7 +28,7 @@
 
 
 /* 16 位角度原始值 [0,65535] -> 弧度，满量程对齐 2π（与 KTH71 定义为 uint16 满刻度时一致） */
-#define RAW_ANGLE_U16_TO_RAD            (_2PI * (1.0f / 65535.0f))
+#define RAW_ANGLE_U16_TO_RAD            (_2PI * (1.0f / ENCODER_COUNTS_PER_REV)) // 13bit 有效分辨率
 #define DIFF_ANGLE_WRAP_THRESH_RAD      (0.8f * _2PI) // 超过此值视作跨一圈折返用于圈数校正
 
 

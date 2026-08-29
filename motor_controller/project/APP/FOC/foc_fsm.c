@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "foc_fsm.h"
 #include "control_mode.h"
 #include "motor_axis.h"
@@ -59,12 +60,7 @@ static void foc_fsm_on_run(motor_axis_t *axis, fsm_state_t state)
   switch (state)
   {
     case STATE_IDLE:
-      if (control_mode_needs_pwm(m->ctrl_mode) &&
-          !motor_fault_is_latched(m) &&
-          m->current_offset_cal_done)
-      {
-        foc_fsm_next_state(m, STATE_ENCODER_CALIBRATION);
-      }
+      /* 等待 mc_enable / foc_fsm_request_running 显式请求，不自动进入标定链 */
       break;
     case STATE_ENCODER_CALIBRATION:
     case STATE_RSLS_CALIBRATION:
@@ -140,6 +136,63 @@ fsm_state_t foc_fsm_get_state(const motor_handle_t *m)
   }
 
   return m->fsm;
+}
+
+void foc_fsm_request_running(motor_handle_t *m)
+{
+  if (m == NULL)
+  {
+    return;
+  }
+
+  if (m->fsm != STATE_IDLE)
+  {
+    return;
+  }
+
+  if (motor_fault_is_latched(m) || !m->current_offset_cal_done)
+  {
+    return;
+  }
+
+  if (!control_mode_needs_pwm(m->ctrl_mode))
+  {
+    return;
+  }
+
+  /* 零漂/电角对齐已在 foc_init 完成；运行时 enable 直达 RUNNING。
+   * 编码器/惯量等标定状态由未来独立 API 进入，不复用每次 enable。 */
+  foc_fsm_next_state(m, STATE_RUNNING);
+}
+
+bool foc_fsm_is_calibrating(fsm_state_t state)
+{
+  return (state >= STATE_ENCODER_CALIBRATION) && (state <= STATE_ANTICOGGING);
+}
+
+void foc_fsm_request_calibration(motor_handle_t *m, fsm_state_t entry_state)
+{
+  if (m == NULL)
+  {
+    return;
+  }
+
+  if (m->fsm != STATE_IDLE)
+  {
+    return;
+  }
+
+  if (motor_fault_is_latched(m) || !m->current_offset_cal_done)
+  {
+    return;
+  }
+
+  if (!foc_fsm_is_calibrating(entry_state))
+  {
+    return;
+  }
+
+  foc_fsm_next_state(m, entry_state);
 }
 
 void foc_on_fault_latched(motor_handle_t *m)

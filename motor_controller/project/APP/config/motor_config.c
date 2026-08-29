@@ -3,7 +3,7 @@
 #include <string.h>
 
 #define MOTOR_CONFIG_BLOB_MAGIC   (0x4D434647u) /* 'MCFG' */
-#define MOTOR_CONFIG_BLOB_VERSION (1u)
+#define MOTOR_CONFIG_BLOB_VERSION (2u)
 
 typedef struct
 {
@@ -16,7 +16,7 @@ typedef struct
 typedef struct
 {
   motor_config_blob_header_t header;
-  uint8_t payload[sizeof(motor_config_t)];
+  uint8_t payload[sizeof(motor_system_config_t)];
 } motor_config_blob_t;
 
 static const motor_config_storage_ops_t *s_storage_ops[MOTOR_CONFIG_MAX_STORAGE_BACKENDS];
@@ -24,7 +24,7 @@ static unsigned int s_storage_count = 0u;
 
 static uint32_t motor_config_checksum32(const uint8_t *data, uint32_t len)
 {
-  uint32_t hash = 2166136261u; /* FNV-1a seed */
+  uint32_t hash = 2166136261u;
   uint32_t i;
 
   for (i = 0u; i < len; ++i)
@@ -36,7 +36,7 @@ static uint32_t motor_config_checksum32(const uint8_t *data, uint32_t len)
   return hash;
 }
 
-static void motor_config_blob_build(motor_config_blob_t *blob, const motor_config_t *config)
+static void motor_config_blob_build(motor_config_blob_t *blob, const motor_system_config_t *config)
 {
   if ((blob == NULL) || (config == NULL))
   {
@@ -46,12 +46,35 @@ static void motor_config_blob_build(motor_config_blob_t *blob, const motor_confi
   memset(blob, 0, sizeof(*blob));
   blob->header.magic = MOTOR_CONFIG_BLOB_MAGIC;
   blob->header.version = MOTOR_CONFIG_BLOB_VERSION;
-  blob->header.payload_len = (uint16_t)sizeof(motor_config_t);
-  memcpy(blob->payload, config, sizeof(motor_config_t));
-  blob->header.checksum = motor_config_checksum32(blob->payload, sizeof(motor_config_t));
+  blob->header.payload_len = (uint16_t)sizeof(motor_system_config_t);
+  memcpy(blob->payload, config, sizeof(motor_system_config_t));
+  blob->header.checksum = motor_config_checksum32(blob->payload, sizeof(motor_system_config_t));
 }
 
-static bool motor_config_blob_parse(const motor_config_blob_t *blob, motor_config_t *config)
+static bool motor_config_blob_parse_v1(const motor_config_blob_t *blob, motor_system_config_t *config)
+{
+  motor_config_t legacy;
+
+  if ((blob == NULL) || (config == NULL))
+  {
+    return false;
+  }
+
+  if (blob->header.payload_len != (uint16_t)sizeof(motor_config_t))
+  {
+    return false;
+  }
+
+  memcpy(&legacy, blob->payload, sizeof(motor_config_t));
+  config->axis[0] = legacy;
+  for (uint8_t i = 1u; i < MOTOR_AXIS_COUNT; i++)
+  {
+    motor_config_set_axis_defaults(i, &config->axis[i]);
+  }
+  return true;
+}
+
+static bool motor_config_blob_parse(const motor_config_blob_t *blob, motor_system_config_t *config)
 {
   uint32_t checksum;
 
@@ -64,14 +87,6 @@ static bool motor_config_blob_parse(const motor_config_blob_t *blob, motor_confi
   {
     return false;
   }
-  if (blob->header.version != MOTOR_CONFIG_BLOB_VERSION)
-  {
-    return false;
-  }
-  if (blob->header.payload_len != (uint16_t)sizeof(motor_config_t))
-  {
-    return false;
-  }
 
   checksum = motor_config_checksum32(blob->payload, (uint32_t)blob->header.payload_len);
   if (checksum != blob->header.checksum)
@@ -79,7 +94,21 @@ static bool motor_config_blob_parse(const motor_config_blob_t *blob, motor_confi
     return false;
   }
 
-  memcpy(config, blob->payload, sizeof(motor_config_t));
+  if (blob->header.version == 1u)
+  {
+    return motor_config_blob_parse_v1(blob, config);
+  }
+
+  if (blob->header.version != MOTOR_CONFIG_BLOB_VERSION)
+  {
+    return false;
+  }
+  if (blob->header.payload_len != (uint16_t)sizeof(motor_system_config_t))
+  {
+    return false;
+  }
+
+  memcpy(config, blob->payload, sizeof(motor_system_config_t));
   return true;
 }
 
@@ -150,7 +179,7 @@ void motor_config_set_defaults(motor_config_t *config)
   config->pid.iq.kd = DEF_Q_KD;
   config->pid.iq.ramp = DEF_Q_RAMP;
   config->pid.iq.limit = config->limits.vq_limit;
-  config->pid.iq.d_filter = DEF_Q_D_FILTER; 
+  config->pid.iq.d_filter = DEF_Q_D_FILTER;
 
   config->pid.velocity.kp = DEF_VEL_KP;
   config->pid.velocity.ki = DEF_VEL_KI;
@@ -170,21 +199,51 @@ void motor_config_set_defaults(motor_config_t *config)
   config->auto_align_electrical = false;
 }
 
-bool motor_config_init(motor_config_t *config)
+void motor_config_set_axis_defaults(uint8_t axis_id, motor_config_t *config)
+{
+  if (config == NULL)
+  {
+    return;
+  }
+
+  motor_config_set_defaults(config);
+  config->comm.can_id = (uint16_t)(0x01u + axis_id);
+}
+
+void motor_config_system_set_defaults(motor_system_config_t *config)
+{
+  uint8_t i;
+
+  if (config == NULL)
+  {
+    return;
+  }
+
+  for (i = 0u; i < MOTOR_AXIS_COUNT; i++)
+  {
+    motor_config_set_axis_defaults(i, &config->axis[i]);
+  }
+}
+
+bool motor_config_init(motor_system_config_t *config)
 {
   bool loaded_from_storage;
+
+  if (config == NULL)
+  {
+    return false;
+  }
 
   loaded_from_storage = motor_config_load(config);
   if (!loaded_from_storage)
   {
-    /* 首次上电无有效参数时，回落默认参数并回写一次。 */
     (void)motor_config_save(config);
   }
 
   return loaded_from_storage;
 }
 
-bool motor_config_load(motor_config_t *config)
+bool motor_config_load(motor_system_config_t *config)
 {
   unsigned int i;
   motor_config_blob_t blob;
@@ -206,11 +265,11 @@ bool motor_config_load(motor_config_t *config)
     }
   }
 
-  motor_config_set_defaults(config);
+  motor_config_system_set_defaults(config);
   return false;
 }
 
-bool motor_config_save(const motor_config_t *config)
+bool motor_config_save(const motor_system_config_t *config)
 {
   unsigned int i;
   bool all_ok = true;
@@ -248,12 +307,12 @@ bool motor_config_save(const motor_config_t *config)
   return (any_write && all_ok);
 }
 
-bool motor_config_reset(motor_config_t *config)
+bool motor_config_reset(motor_system_config_t *config)
 {
-  motor_config_t defaults;
+  motor_system_config_t defaults;
   bool saved_ok;
 
-  motor_config_set_defaults(&defaults);
+  motor_config_system_set_defaults(&defaults);
   saved_ok = motor_config_save(&defaults);
 
   if (config != NULL)
@@ -261,7 +320,6 @@ bool motor_config_reset(motor_config_t *config)
     *config = defaults;
   }
 
-  /* 无存储后端时也认为 reset 成功（至少运行时拿到了默认值） */
   if (!motor_config_has_storage())
   {
     return true;

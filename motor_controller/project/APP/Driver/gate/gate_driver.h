@@ -52,10 +52,6 @@ enum
     GATE_DRIVER_INIT_ERR_NOT_IMPL = -2,
 };
 
-void gate_driver_set_active(const gate_driver_t *drv);
-const gate_driver_t *gate_driver_get_active(void);
-int gate_driver_init(const gate_driver_init_t *init);
-
 APP_STATIC_INLINE void gate_driver_enter_inactive_state(const gate_driver_t *drv)
 {
     if ((drv != NULL) && (drv->ops != NULL) &&

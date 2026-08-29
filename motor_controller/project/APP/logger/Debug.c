@@ -20,24 +20,32 @@ void VoFaDisUart(void)
         return;
     }
 
-    motor_phase_current_t phase_current = g_motor.state.phase_current;
-    float ia = 0.0f, ib = 0.0f, ic = 0.0f, i_sum = 0.0f;
-    __disable_irq();
-	{
-		ia = g_motor.state.phase_current.ampere[0];
-		ib = g_motor.state.phase_current.ampere[1];
-		ic = g_motor.state.phase_current.ampere[2];
-	}
-	__enable_irq();
-    i_sum = ia + ib + ic;
+    motor_axis_t *axis = motor_axis_get(0u);
 
-    Send.Data[0].FloatData = ia; // phase_current.adc_raw[0];
-    Send.Data[1].FloatData = ib; // phase_current.adc_raw[1];
-    Send.Data[2].FloatData = ic; // phase_current.adc_raw[2];
-    Send.Data[3].FloatData = i_sum;
-    // Send.Data[3].FloatData = phase_current.adc_offset[0];
-    // Send.Data[4].FloatData = phase_current.adc_offset[1];
-    // Send.Data[5].FloatData = phase_current.adc_offset[2];
+    if (axis == NULL)
+    {
+        return;
+    }
+
+    // motor_phase_current_t phase_current = axis->handle.state.phase_current;
+    // float ia = 0.0f, ib = 0.0f, ic = 0.0f, i_sum = 0.0f;
+    // __disable_irq();
+	// {
+	// 	ia = phase_current.ampere[0];
+	// 	ib = phase_current.ampere[1];
+	// 	ic = phase_current.ampere[2];
+	// }
+	// __enable_irq();
+    // i_sum = ia + ib + ic;
+
+    __disable_irq();
+    motor_state_t state = axis->handle.state;
+    Send.Data[0].FloatData = state.joint.position_rad;
+    Send.Data[1].FloatData = state.theta_elec_rad;
+    Send.Data[2].FloatData = state.shaft.position_rad;
+    Send.Data[3].FloatData = state.joint.velocity_rad_s;
+    // Send.Data[4].FloatData = state.angle_raw / 1000.0f;
+    __enable_irq();
 
     UartTemp[0] = Send.Data[0].ByteData[0]; //The first data
     UartTemp[1] = Send.Data[0].ByteData[1]; //

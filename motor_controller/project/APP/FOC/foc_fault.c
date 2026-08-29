@@ -2,6 +2,7 @@
 #include "foc_fault.h"
 #include "foc_fsm.h"
 #include "math_compat.h"
+#include "motor_axis.h"
 #include "gate/gate_driver.h"
 
 void motor_fault_raise(motor_handle_t *m, fault_t bits)
@@ -63,6 +64,8 @@ void motor_fault_protect(motor_handle_t *m)
   float i_abs_max;
   float a0, a1, a2, mx, mn, i_avg, imb;
 
+  const gate_driver_t *gate;
+
   if (m == NULL)
   {
     return;
@@ -73,7 +76,16 @@ void motor_fault_protect(motor_handle_t *m)
 
   m->fault.status &= ~FAULT_POLL_MASK;
 
-  if (gate_driver_read_fault(gate_driver_get_active()))
+  gate = NULL;
+  {
+    motor_axis_t *axis = motor_axis_from_handle(m);
+    if (axis != NULL)
+    {
+      gate = motor_driver_get_gate(&axis->driver);
+    }
+  }
+
+  if ((gate != NULL) && gate_driver_read_fault(gate))
   {
     motor_fault_raise(m, FAULT_GATE_DRIVER);
   }
@@ -104,7 +116,7 @@ void motor_fault_protect(motor_handle_t *m)
   }
 
   if (m->config.motion.max_speed_rad_s > 0.f &&
-      fabsf(S->speed_rad_s) > m->config.motion.max_speed_rad_s)
+      fabsf(S->joint.velocity_rad_s) > m->config.motion.max_speed_rad_s)
   {
     motor_fault_raise(m, FAULT_OVER_SPEED);
   }

@@ -1,12 +1,11 @@
 #include "foc.h"
-#include "foc_motor.h"
+#include "foc_sense.h"
 #include "foc_fsm.h"
 #include "current_sense.h"
 #include "motor_axis.h"
 #include "../config/motor_config.h"
+#include "dwt_profile_delay.h"
 #include <string.h>
-
-void foc_align_electrical(void);
 
 static void foc_pid_apply_param(pid_state_t *pid, uint8_t mode)
 {
@@ -17,26 +16,8 @@ static void foc_pid_apply_param(pid_state_t *pid, uint8_t mode)
   foc_pid_init(pid, mode);
 }
 
-void foc_init(const motor_config_t *config)
+static void foc_validate_config(motor_handle_t *m)
 {
-  motor_config_t local_cfg;
-  motor_axis_t *axis = motor_axis_get(0u);
-  motor_handle_t *m = &axis->handle;
-
-  memset(m, 0, sizeof(*m));
-  axis->electrical_align_done = false;
-  foc_fsm_init(m);
-
-  if (config != NULL)
-  {
-    m->config = *config;
-  }
-  else
-  {
-    motor_config_set_defaults(&local_cfg);
-    m->config = local_cfg;
-  }
-
   if (m->config.param.pole_pairs == 0u)
   {
     m->config.param.pole_pairs = 1u;
@@ -49,12 +30,10 @@ void foc_init(const motor_config_t *config)
   {
     m->config.param.gear_ratio = 1.0f;
   }
+}
 
-  foc_pid_apply_param(&m->id_pid, 2u);
-  foc_pid_apply_param(&m->iq_pid, 2u);
-  foc_pid_apply_param(&m->velocity_pid, 1u);
-  foc_pid_apply_param(&m->position_pid, 0u);
-
+static void foc_init_filters(motor_handle_t *m)
+{
   lpf1_init(&m->vbus_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
   lpf1_init(&m->v_a_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
   lpf1_init(&m->v_b_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
@@ -65,24 +44,21 @@ void foc_init(const motor_config_t *config)
   lpf1_init(&m->i_bus_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
   lpf1_init(&m->v_d_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
   lpf1_init(&m->v_q_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
-  lpf1_init(&m->speed_rad_s_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
-
-  current_sense_init(m);
-
-  if (m->config.auto_align_electrical)
-  {
-    foc_align_electrical();
-    axis->electrical_align_done = true;
-  }
 }
 
-void foc_voltage(float Uq, float Ud, float angle_el)
+static void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
 {
   float Ualpha, Ubeta;
   float Ua, Ub, Uc;
-  motor_handle_t *m = &g_motor;
+  float vbus = m->config.limits.vbus_nominal;
+  float Uq_max;
 
-  float Uq_max = sqrtf(BUS_VOLTAGE * BUS_VOLTAGE - Ud * Ud);
+  if (vbus <= 0.0f)
+  {
+    vbus = BUS_VOLTAGE;
+  }
+
+  Uq_max = sqrtf(vbus * vbus - Ud * Ud);
   Uq = CLAMP(Uq, -Uq_max, Uq_max);
 
   inv_park_transform(Ud, Uq, angle_el, &Ualpha, &Ubeta);
@@ -92,14 +68,13 @@ void foc_voltage(float Uq, float Ud, float angle_el)
   m->out.duty_a = CLAMP(m->out.duty_a, 0.0f, 1.0f);
   m->out.duty_b = CLAMP(m->out.duty_b, 0.0f, 1.0f);
   m->out.duty_c = CLAMP(m->out.duty_c, 0.0f, 1.0f);
-  (void)motor_axis_set_pwm(m, &m->out);
+  (void)motor_axis_apply_pwm(m, &m->out);
 }
 
-void foc_current(float id, float iq, float angle_el, float phase_vel)
+static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, float phase_vel)
 {
   float v_d_ctrl = 0.0f;
   float v_q_ctrl = 0.0f;
-  motor_handle_t *m = &g_motor;
   float alpha, beta;
   int result_valid;
 
@@ -132,23 +107,138 @@ void foc_current(float id, float iq, float angle_el, float phase_vel)
   result_valid = svpwm(alpha, beta, &m->out.duty_a, &m->out.duty_b, &m->out.duty_c);
   if (result_valid == 0)
   {
-    (void)motor_axis_set_pwm(m, &m->out);
+    (void)motor_axis_apply_pwm(m, &m->out);
   }
 
   m->state.i_bus = sqrtf(SQ(m->state.i_d) + SQ(m->state.i_q));
 }
 
-void foc_align_electrical(void)
+static void foc_align_electrical(motor_handle_t *m)
 {
-  motor_handle_t *m = &g_motor;
+  motor_axis_t *axis = motor_axis_from_handle(m);
+
+  if ((m == NULL) || (axis == NULL))
+  {
+    return;
+  }
 
   motor_axis_arm(m);
-  foc_voltage(ALIGN_ELECTRICAL_VOLTAGE_Q_V, ALIGN_ELECTRICAL_VOLTAGE_D_V, _3PI_2);
+  foc_voltage(m, ALIGN_ELECTRICAL_VOLTAGE_Q_V, ALIGN_ELECTRICAL_VOLTAGE_D_V, _3PI_2);
   delay_ms(700);
-  foc_voltage(0.0f, 0.0f, _3PI_2);
-  foc_get_motor_angle();
+  foc_voltage(m, 0.0f, 0.0f, _3PI_2);
+  foc_sense_update(m);
   m->config.param.theta_elec_offset_rad = m->state.theta_elec_rad;
   motor_axis_disarm(m);
+}
+
+static void foc_speed_open_control(motor_handle_t *m, float target_speed)
+{
+  motor_axis_t *axis;
+  const float dt = OPEN_LOOP_TS;
+  const float omega_step = OPEN_LOOP_OMEGA_RAMP_RATE * dt;
+
+  if (m == NULL)
+  {
+    return;
+  }
+
+  axis = motor_axis_from_handle(m);
+  if (axis == NULL)
+  {
+    return;
+  }
+
+  axis->rt.open_loop_omega = ramp_toward(axis->rt.open_loop_omega, target_speed, omega_step);
+  axis->rt.open_loop_uq = OPEN_LOOP_UQ_MAX;
+  axis->rt.open_loop_shaft_angle = angle_normalize(
+      axis->rt.open_loop_shaft_angle + (float)m->config.param.pole_pairs * axis->rt.open_loop_omega * dt);
+  foc_voltage(m, axis->rt.open_loop_uq, 0.0f, axis->rt.open_loop_shaft_angle);
+}
+
+static void foc_speed_closed_control(motor_handle_t *m, float target_speed)
+{
+  float iq_cmd = 0.0f;
+
+  if (m == NULL)
+  {
+    return;
+  }
+
+  (void)foc_pid_calc(&m->velocity_pid,
+                     &m->config.pid.velocity,
+                     target_speed,
+                     m->state.joint.velocity_rad_s,
+                     &iq_cmd);
+  foc_current(m, 0.0f, iq_cmd, m->state.theta_elec_rad, 0.0f);
+}
+
+static void foc_control_run(motor_handle_t *m)
+{
+  if (m == NULL)
+  {
+    return;
+  }
+
+  switch (m->ctrl_mode)
+  {
+    case CTRL_MODE_SPEED:
+      foc_speed_closed_control(m, m->ref.speed_rad_s);
+      break;
+    case CTRL_MODE_SPEED_OPEN_LOOP:
+      foc_speed_open_control(m, m->ref.speed_rad_s);
+      break;
+    default:
+      break;
+  }
+}
+
+void foc_init_axis(motor_axis_t *axis, const motor_config_t *config)
+{
+  motor_config_t local_cfg;
+  motor_handle_t *m;
+
+  if (axis == NULL)
+  {
+    return;
+  }
+
+  m = &axis->handle;
+  memset(m, 0, sizeof(*m));
+  memset(&axis->rt, 0, sizeof(axis->rt));
+  axis->electrical_align_done = false;
+  foc_fsm_init(m);
+
+  if (config != NULL)
+  {
+    m->config = *config;
+  }
+  else
+  {
+    motor_config_set_defaults(&local_cfg);
+    m->config = local_cfg;
+  }
+
+  foc_validate_config(m);
+
+  foc_pid_apply_param(&m->id_pid, 2u);
+  foc_pid_apply_param(&m->iq_pid, 2u);
+  foc_pid_apply_param(&m->velocity_pid, 1u);
+  foc_pid_apply_param(&m->position_pid, 0u);
+  foc_init_filters(m);
+
+  if (!motor_axis_is_present(axis))
+  {
+    m->ctrl_mode = CTRL_MODE_IDLE;
+    return;
+  }
+
+  current_sense_init(m);
+
+  if (m->config.auto_align_electrical)
+  {
+    foc_align_electrical(m);
+    axis->electrical_align_done = true;
+  }
 }
 
 #if defined(__ARMCC_VERSION)
@@ -164,89 +254,19 @@ void foc_control_loop(motor_handle_t *m)
     return;
   }
 
-  foc_get_motor_angle();
-  foc_get_motor_current();
+  {
+    motor_axis_t *axis = motor_axis_from_handle(m);
+    if ((axis != NULL) && !motor_axis_is_present(axis))
+    {
+      return;
+    }
+  }
+
+  foc_sense_update(m);
   foc_fsm_loop(m);
 
   if (m->fsm == STATE_RUNNING)
   {
-    foc_motor_run();
-  }
-}
-
-void foc_torque_open_control(float target_torque)
-{
-  float Ud = 0.0f;
-  float Uq = 0.5f;
-  float ts = 0.001f;
-  motor_handle_t *m = &g_motor;
-
-  m->ref.torque_nm = target_torque;
-  m->ref.speed_rad_s = m->ref.position_rad + 0.5f * ts;
-  foc_voltage(Uq, Ud, m->state.theta_elec_rad);
-}
-
-float uq_now = 0.0f;
-float omega_now = 0.0f;
-float shaft_angle = 0.0f;
-
-void foc_speed_open_control(float target_speed)
-{
-  const float dt = OPEN_LOOP_TS;
-  const float omega_step = OPEN_LOOP_OMEGA_RAMP_RATE * dt;
-  motor_handle_t *m = &g_motor;
-
-  omega_now = ramp_toward(omega_now, target_speed, omega_step);
-  uq_now = OPEN_LOOP_UQ_MAX;
-  shaft_angle = angle_normalize(shaft_angle + m->config.param.pole_pairs * omega_now * dt);
-  foc_voltage(uq_now, 0.0f, shaft_angle);
-}
-
-void foc_position_open_control(float target_position)
-{
-  float Ud = 0.0f;
-  float Uq = 0.5f;
-  motor_handle_t *m = &g_motor;
-
-  foc_voltage(Uq, Ud, target_position * m->config.param.pole_pairs);
-}
-
-void foc_motor_run(void)
-{
-  motor_handle_t *m = &g_motor;
-
-  switch (m->ctrl_mode)
-  {
-    case CTRL_MODE_IDLE:
-      break;
-    case CTRL_MODE_TORQUE:
-      break;
-    case CTRL_MODE_SPEED:
-      break;
-    case CTRL_MODE_POSITION:
-      break;
-    case CTRL_MODE_CSP:
-      break;
-    case CTRL_MODE_CSV:
-      break;
-    case CTRL_MODE_CST:
-      break;
-    case CTRL_MODE_MIT:
-      break;
-    case CTRL_MODE_HOMING:
-      break;
-    case CTRL_MODE_TORQUE_OPEN_LOOP:
-      break;
-    case CTRL_MODE_SPEED_OPEN_LOOP:
-      foc_speed_open_control(m->ref.speed_rad_s);
-      break;
-    case CTRL_MODE_POSITION_OPEN_LOOP:
-      break;
-    case CTRL_MODE_VOLTAGE:
-      break;
-    case CTRL_MODE_RESERVED:
-      break;
-    default:
-      break;
+    foc_control_run(m);
   }
 }

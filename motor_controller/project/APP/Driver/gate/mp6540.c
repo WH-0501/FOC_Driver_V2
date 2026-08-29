@@ -34,6 +34,14 @@ static void mp6540_set_all_phase_en(MP6540_Handle_t *hmp6, bool en)
     mp6540_set_phase_en(hmp6, GATE_DRIVER_PHASE_C, en);
 }
 
+/**
+ * @brief 进入休眠状态
+ *        1. 如果已经进入休眠状态，则返回
+ *        2. 所有相位使能关闭
+ *        3. 设置休眠引脚为低电平
+ *        4. 设置休眠状态为true
+ * @param hmp6 
+ */
 static void mp6540_sleep_enter(MP6540_Handle_t *hmp6)
 {
     if (hmp6->is_sleep)
@@ -46,6 +54,14 @@ static void mp6540_sleep_enter(MP6540_Handle_t *hmp6)
     hmp6->is_sleep = true;
 }
 
+/**
+ * @brief 退出休眠状态
+ *        1. 如果已经退出休眠状态，则返回
+ *        2. 设置休眠引脚为高电平
+ *        3. 延时
+ *        4. 设置休眠状态为false
+ * @param hmp6 
+ */
 static void mp6540_sleep_exit(MP6540_Handle_t *hmp6)
 {
     if (!hmp6->is_sleep)
@@ -58,6 +74,13 @@ static void mp6540_sleep_exit(MP6540_Handle_t *hmp6)
     hmp6->is_sleep = false;
 }
 
+/**
+ * @brief 进入非活动状态
+ *        1. 所有相位使能关闭
+ *        2. 进入休眠状态
+ *        3. 延时
+ * @param ctx 
+ */
 static void mp6540_op_enter_inactive_state(void *ctx)
 {
     MP6540_Handle_t *hmp6 = (MP6540_Handle_t *)ctx;
@@ -67,6 +90,13 @@ static void mp6540_op_enter_inactive_state(void *ctx)
     MP6540_HW_DelayMs(MP6540_CAL_DELAY_MS);
 }
 
+/**
+ * @brief 退出非活动状态
+ *        1. 退出休眠状态
+ *        2. 所有相位使能开启
+ * @param ctx 
+ * @return void 
+ */
 static void mp6540_op_exit_inactive_state(void *ctx)
 {
     MP6540_Handle_t *hmp6 = (MP6540_Handle_t *)ctx;
@@ -115,14 +145,12 @@ void MP6540_Init(MP6540_Handle_t *hmp6, const gate_driver_hw_cfg_t *hw_cfg)
 
 const gate_driver_t *MP6540_AsGateDriver(MP6540_Handle_t *hmp6)
 {
-    static gate_driver_t s_drv;
+    if (hmp6 == NULL)
+    {
+        return NULL;
+    }
 
-    s_drv.ctx = (void *)hmp6;
-    s_drv.ops = &s_mp6540_gate_driver_ops;
-    return &s_drv;
-}
-
-void MP6540_RegisterAsActiveDriver(MP6540_Handle_t *hmp6)
-{
-    gate_driver_set_active(MP6540_AsGateDriver(hmp6));
+    hmp6->gate.ctx = (void *)hmp6;
+    hmp6->gate.ops = &s_mp6540_gate_driver_ops;
+    return &hmp6->gate;
 }

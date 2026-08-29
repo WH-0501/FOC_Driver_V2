@@ -1,6 +1,7 @@
 #include "kth71xx.h"
 #include "wk_spi.h"
 #include "wk_system.h"
+#include <stdbool.h>
 
 
 #define SPI_SOFT_CTRL   1
@@ -36,8 +37,8 @@
 #define MISO_CLR		    	gpio_bits_reset(GPIOB, GPIO_PINS_5)
 #endif
 
-#define CSN_SET		   			gpio_bits_set(GPIOB, GPIO_PINS_6)
-#define CSN_CLR		   			gpio_bits_reset(GPIOB, GPIO_PINS_6)
+#define CSN_SET(cs)     kth71_cs_set((cs), true)
+#define CSN_CLR(cs)     kth71_cs_set((cs), false)
 
 
 /**
@@ -63,7 +64,74 @@ uint8_t CRC8Table[256]={
 };
 
 static unsigned char KTH71_IsCRCOK(unsigned char* pbuf, unsigned char buflen);
-static void KTH71_SPI_TransmitReceive(unsigned char *pTxData, unsigned char *pRxData, unsigned char txLen, unsigned char rxLen);
+static void KTH71_SPI_TransmitReceive(kth71_cs_select_t cs,
+                                      unsigned char *pTxData,
+                                      unsigned char *pRxData,
+                                      unsigned char txLen,
+                                      unsigned char rxLen);
+
+static void kth71_cs_set(kth71_cs_select_t cs, bool selected)
+{
+  switch (cs)
+  {
+    case KTH71_CS_0:
+      if (selected)
+      {
+        gpio_bits_reset(GPIOB, GPIO_PINS_6);
+      }
+      else
+      {
+        gpio_bits_set(GPIOB, GPIO_PINS_6);
+      }
+      break;
+
+    case KTH71_CS_1:
+      if (selected)
+      {
+        gpio_bits_reset(GPIOB, GPIO_PINS_7);
+      }
+      else
+      {
+        gpio_bits_set(GPIOB, GPIO_PINS_7);
+      }
+      break;
+
+    case KTH71_CS_2:
+      if (selected)
+      {
+        gpio_bits_reset(GPIOB, GPIO_PINS_9);
+      }
+      else
+      {
+        gpio_bits_set(GPIOB, GPIO_PINS_9);
+      }
+      break;
+
+    default:
+      break;
+  }
+}
+
+static void kth71_cs_init_all(void)
+{
+  gpio_init_type gpio_init_struct;
+
+  gpio_default_para_init(&gpio_init_struct);
+  gpio_init_struct.gpio_mode = GPIO_MODE_OUTPUT;
+  gpio_init_struct.gpio_pull = GPIO_PULL_NONE;
+
+  gpio_init_struct.gpio_pins = GPIO_PINS_6;
+  gpio_init(GPIOB, &gpio_init_struct);
+  gpio_bits_set(GPIOB, GPIO_PINS_6);
+
+  gpio_init_struct.gpio_pins = GPIO_PINS_7;
+  gpio_init(GPIOB, &gpio_init_struct);
+  gpio_bits_set(GPIOB, GPIO_PINS_7);
+
+  gpio_init_struct.gpio_pins = GPIO_PINS_9;
+  gpio_init(GPIOB, &gpio_init_struct);
+  gpio_bits_set(GPIOB, GPIO_PINS_9);
+}
 void delay_us(unsigned int us) 
 {
     while(us--) 
@@ -124,14 +192,24 @@ void spi_3wire_send_byte(unsigned char data)
   */
 unsigned char KTH71_ReadAngle(unsigned short *pAngle)
 {
-    unsigned char crcflag = 0;
-    unsigned char dataSend = KTH71_READ_ANGLE;
-    unsigned char dataBack[3];
+  return KTH71_ReadAngleCs(KTH71_CS_0, pAngle);
+}
 
-    KTH71_SPI_TransmitReceive(&dataSend, dataBack, 1, 3);
-    crcflag = KTH71_IsCRCOK(dataBack, 3);
-    *pAngle = (dataBack[0] << 8) | dataBack[1];
-    return crcflag;
+unsigned char KTH71_ReadAngleCs(kth71_cs_select_t cs, unsigned short *pAngle)
+{
+  unsigned char crcflag = 0;
+  unsigned char dataSend = KTH71_READ_ANGLE;
+  unsigned char dataBack[3];
+
+  if ((pAngle == NULL) || (cs >= KTH71_CS_COUNT))
+  {
+    return 0u;
+  }
+
+  KTH71_SPI_TransmitReceive(cs, &dataSend, dataBack, 1, 3);
+  crcflag = KTH71_IsCRCOK(dataBack, 3);
+  *pAngle = (dataBack[0] << 8) | dataBack[1];
+  return crcflag;
 }
 
 /**
@@ -147,7 +225,7 @@ unsigned char KTH71_ReadReg(unsigned char addr, unsigned char *pRegValue)
     unsigned char dataSend[2] = {KTH71_READ_REG, addr};
     unsigned char dataBack[2];
 
-    KTH71_SPI_TransmitReceive(dataSend, dataBack, 2, 2);
+    KTH71_SPI_TransmitReceive(KTH71_CS_0, dataSend, dataBack, 2, 2);
     crcflag = KTH71_IsCRCOK(dataBack, 2);
     *pRegValue = dataBack[0];
     return crcflag;
@@ -164,7 +242,7 @@ unsigned char KTH71_WriteReg(unsigned char addr, unsigned char data)
     unsigned char dataSend[3] = {KTH71_WRITE_REG, addr, data};
     unsigned char dataBack = 0;
 
-    KTH71_SPI_TransmitReceive(dataSend, &dataBack, 3, 1);
+    KTH71_SPI_TransmitReceive(KTH71_CS_0, dataSend, &dataBack, 3, 1);
     return dataBack;
 }
 
@@ -177,14 +255,14 @@ void KTH71_UnlockReg(void)
     unsigned char dataSend[4] = {0x20, 0x24, 0x01, 0x01};
 	unsigned char i;
 
-	CSN_CLR;
+	CSN_CLR(KTH71_CS_0);
 
 	for(i=0;i<4;i++)
 	{
         spi_3wire_send_byte(dataSend[i]);	
 	}	
 
-	CSN_SET;
+	CSN_SET(KTH71_CS_0);
 }
 
 /**
@@ -196,14 +274,14 @@ void KTH71_LockReg(void)
     unsigned char dataSend[4] = {0x20, 0x24, 0x12, 0x31};
 	unsigned char i;
 
-	CSN_CLR;
+	CSN_CLR(KTH71_CS_0);
 
 	for(i=0;i<4;i++)
 	{
 		spi_3wire_send_byte(dataSend[i]);
 	}
 
-	CSN_SET;
+	CSN_SET(KTH71_CS_0);
 }
 
 /**
@@ -215,14 +293,14 @@ void KTH71_WriteRegToMTP(void)
     unsigned char dataSend[3] = {0x22, 0x55, 0xAA};
 	unsigned char i;
 
-	CSN_CLR;
+	CSN_CLR(KTH71_CS_0);
 
 	for(i=0;i<3;i++)
 	{
 		spi_3wire_send_byte(dataSend[i]);
 	}
 
-	CSN_SET;
+	CSN_SET(KTH71_CS_0);
 
 	wk_delay_ms(400);
 }
@@ -299,26 +377,30 @@ unsigned char spi_3wire_receive_byte(void)
   * @param  Reception data buffer length.
   * @retval None
   */
-static void KTH71_SPI_TransmitReceive(unsigned char *pTxData, unsigned char *pRxData, unsigned char txLen, unsigned char rxLen)
+static void KTH71_SPI_TransmitReceive(kth71_cs_select_t cs,
+                                      unsigned char *pTxData,
+                                      unsigned char *pRxData,
+                                      unsigned char txLen,
+                                      unsigned char rxLen)
 {
 	unsigned char i;  
     
-	CSN_CLR;
+	CSN_CLR(cs);
 
 	for(i=0;i<txLen;i++)
 	{	 
         
-         spi_3wire_send_byte(*pTxData);
-         pTxData++;
+        spi_3wire_send_byte(*pTxData);
+        pTxData++;
 	}
 
 	for(i=0;i<rxLen;i++)
 	{
 
-        *pRxData	=spi_3wire_receive_byte();
-        pRxData++;
+      *pRxData	=spi_3wire_receive_byte();
+      pRxData++;
 	}  
-	CSN_SET;
+	CSN_SET(cs);
 }
 
 // 第一次使用KTH7111芯片需执行以下代码
@@ -335,7 +417,6 @@ static void SetKTH71(void)
         wk_delay_ms(10);
         KTH71_WriteRegToMTP();
         wk_delay_ms(10);
-
 	}
 	
 }
@@ -359,7 +440,7 @@ void KTH71_Init(void)
 	gpio_init(GPIOB, &gpio_init_struct);
 	gpio_bits_reset(GPIOB, GPIO_PINS_4);
 
-  /* configure the MOSI pin */
+    /* configure the MOSI pin */
 
 		
     gpio_init_struct.gpio_mode = GPIO_MODE_OUTPUT;					//MISO
@@ -369,12 +450,7 @@ void KTH71_Init(void)
     gpio_bits_set(GPIOB, GPIO_PINS_5);
 		
 
-  /* configure the CS pin */
-    gpio_init_struct.gpio_mode = GPIO_MODE_OUTPUT;					//CS
-    gpio_init_struct.gpio_pins = GPIO_PINS_6;
-    gpio_init_struct.gpio_pull = GPIO_PULL_NONE;
-    gpio_init(GPIOB, &gpio_init_struct);
-    gpio_bits_set(GPIOB, GPIO_PINS_6);
+    kth71_cs_init_all();
 #else
     wk_spi2_init();
 #endif

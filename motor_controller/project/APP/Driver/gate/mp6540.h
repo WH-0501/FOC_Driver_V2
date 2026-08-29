@@ -12,10 +12,10 @@ typedef struct
 {
     gate_driver_hw_cfg_t hw;
     bool is_sleep;
+    gate_driver_t gate;
 } MP6540_Handle_t;
 
 void MP6540_Init(MP6540_Handle_t *hmp6, const gate_driver_hw_cfg_t *hw_cfg);
 const gate_driver_t *MP6540_AsGateDriver(MP6540_Handle_t *hmp6);
-void MP6540_RegisterAsActiveDriver(MP6540_Handle_t *hmp6);
 
 #endif /* __MP6540_H__ */
