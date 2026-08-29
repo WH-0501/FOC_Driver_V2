@@ -147,7 +147,14 @@ int main(void)
 
   /* init dma1 channel3 */
   wk_dma1_channel3_init();
-  /* DMA1 channel3 is configured on-demand by logger/streaming sender. */
+  /* config dma channel transfer parameter */
+  /* user need to modify define values DMAx_CHANNELy_XXX_BASE_ADDR 
+     and DMAx_CHANNELy_BUFFER_SIZE in at32xxx_wk_config.h */
+  wk_dma_channel_config(DMA1_CHANNEL3, 
+                        (uint32_t)&USART1->dt, 
+                        DMA1_CHANNEL3_MEMORY_BASE_ADDR, 
+                        DMA1_CHANNEL3_BUFFER_SIZE);
+  dma_channel_enable(DMA1_CHANNEL3, TRUE);
 
   /* add user code begin 2 */
   Logger_Init(LOG_OUTPUT_UART);
@@ -171,7 +178,7 @@ int main(void)
   (void)motor_config_init(&motor_cfg);
 
   // 2. 通信初始化
-
+  // motor_config_reset(&motor_cfg); // 强制恢复出厂设置
   // 3. 电机控制器初始化
   if (mc_init(&motor_cfg) != MC_OK)
   {

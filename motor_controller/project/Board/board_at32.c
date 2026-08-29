@@ -197,6 +197,8 @@ void board_get_vbus_and_temp(motor_handle_t *m)
   s = &m->state;
   s->vbus = (float)s_adc1_raw[0] * _ADC_CONV * GAIN_VBUS;
   // s->board_temp.temp = (float)s_adc1_raw[1] * _ADC_CONV * GAIN_TEMP;
+
+  adc_ordinary_software_trigger_enable(ADC1, TRUE);
 }
 
 void board_current_loop_irq_handler(void *adc_handle)

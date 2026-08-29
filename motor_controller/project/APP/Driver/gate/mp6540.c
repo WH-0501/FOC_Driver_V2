@@ -120,11 +120,21 @@ static void mp6540_op_set_all_phase_en(void *ctx, bool en)
     mp6540_set_all_phase_en((MP6540_Handle_t *)ctx, en);
 }
 
+/**
+ * @brief 读取故障状态
+ *        1. 读取故障引脚电平
+ *        2. 如果故障引脚电平为高电平，则返回 true
+ *        3. 否则返回 false
+ * 
+ * @param ctx: 电机驱动器句柄
+ * @return true: 正常
+ * @return false: 故障
+ */
 static bool mp6540_op_read_fault(void *ctx)
 {
     MP6540_Handle_t *hmp6 = (MP6540_Handle_t *)ctx;
 
-    return MP6540_HW_GPIO_Read(hmp6->hw.port_FAULT, hmp6->hw.pin_FAULT);
+    return !MP6540_HW_GPIO_Read(hmp6->hw.port_FAULT, hmp6->hw.pin_FAULT);
 }
 
 static const gate_driver_ops_t s_mp6540_gate_driver_ops = {

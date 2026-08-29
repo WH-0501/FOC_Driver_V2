@@ -227,6 +227,7 @@
             <Parameters name="Label" value="nSLEEP"/>
         </Signal>
         <Signal SignalName="GPIO_Input" PinName="PB3">
+            <Parameters name="GPIO_PullType_Set" value="GPIO_PULL_UP"/>
             <Parameters name="Label" value="nFAULT"/>
         </Signal>
         <Signal SignalName="GPIO_Output" PinName="PB6">
