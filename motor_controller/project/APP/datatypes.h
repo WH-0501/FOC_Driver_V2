@@ -5,8 +5,7 @@
  * - motor_param_t：铭牌或离线识别得到的电机本体参数，电流环内通常当只读使用
  * - motor_limits_t：母线/电流/电压限幅与保护
  * - motor_motion_cfg_t：机械侧轨线约束（最大角速度/角加速度/jerk/snap），供规划/外环使用
- * - motor_config_t：单轴 param + limits + motion + pid
- * - motor_system_config_t：axis[MOTOR_AXIS_COUNT] 多轴配置（motor_config.h）
+ * - motor_config_t：单轴 param + limits + motion + pid，便于整体加载/落盘
  * - encoder_sample_t：编码器/机械节点位置速度观测量（encoder 模块写入，state 与 observer 共用）
  * - motor_state_t：运行时测量 + 电气观测
  * - motor_reference_t / motor_actuation_t：给定 / PWM 等
@@ -177,14 +176,16 @@ typedef struct
 
 /**
  * 机械位置/速度观测量（shaft / joint 共用）。
- * 定义于控制模型层；encoder 模块产出同类型写入 observer.sample 并发布到 motor_state。
+ * 多圈位置：position_rad = turn_count * 2π + angle_rad * dir - zero_rad。
+ * 大角度场景可用 turn_count（int32）+ angle_rad 重建，避免 float position_rad 大数精度损失。
  */
 typedef struct
 {
-  uint32_t counts;
-  float angle_rad;      ///< 单圈机械角 [0, 2π) [rad]；joint 单编码器推算时可为 0
-  float position_rad;   ///< 多圈机械角 [rad]
-  float velocity_rad_s; ///< 机械角速度 [rad/s]
+  uint32_t counts;        ///< 单圈原始计数（硬件分辨率内）
+  int32_t turn_count;     ///< 累计整圈数（过零检测维护）
+  float angle_rad;        ///< 单圈机械角 [0, 2π) [rad]
+  float position_rad;     ///< 多圈机械角 [rad]
+  float velocity_rad_s;   ///< 机械角速度 [rad/s]
 } encoder_sample_t;
 
 typedef struct

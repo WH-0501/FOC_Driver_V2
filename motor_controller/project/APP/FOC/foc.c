@@ -2,7 +2,7 @@
 #include "foc_sense.h"
 #include "foc_fsm.h"
 #include "current_sense.h"
-#include "motor_axis.h"
+#include "motor.h"
 #include "../config/motor_config.h"
 #include "dwt_profile_delay.h"
 #include <string.h>
@@ -68,7 +68,7 @@ static void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
   m->out.duty_a = CLAMP(m->out.duty_a, 0.0f, 1.0f);
   m->out.duty_b = CLAMP(m->out.duty_b, 0.0f, 1.0f);
   m->out.duty_c = CLAMP(m->out.duty_c, 0.0f, 1.0f);
-  (void)motor_axis_apply_pwm(m, &m->out);
+  (void)motor_apply_pwm(m, &m->out);
 }
 
 static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, float phase_vel)
@@ -107,7 +107,7 @@ static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, f
   result_valid = svpwm(alpha, beta, &m->out.duty_a, &m->out.duty_b, &m->out.duty_c);
   if (result_valid == 0)
   {
-    (void)motor_axis_apply_pwm(m, &m->out);
+    (void)motor_apply_pwm(m, &m->out);
   }
 
   m->state.i_bus = sqrtf(SQ(m->state.i_d) + SQ(m->state.i_q));
@@ -115,25 +115,31 @@ static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, f
 
 static void foc_align_electrical(motor_handle_t *m)
 {
-  motor_axis_t *axis = motor_axis_from_handle(m);
+  motor_runtime_t *rt;
 
-  if ((m == NULL) || (axis == NULL))
+  if (m == NULL)
   {
     return;
   }
 
-  motor_axis_arm(m);
+  rt = motor_runtime(m);
+  if (rt == NULL)
+  {
+    return;
+  }
+
+  motor_arm(m);
   foc_voltage(m, ALIGN_ELECTRICAL_VOLTAGE_Q_V, ALIGN_ELECTRICAL_VOLTAGE_D_V, _3PI_2);
   delay_ms(700);
   foc_voltage(m, 0.0f, 0.0f, _3PI_2);
   foc_sense_update(m);
   m->config.param.theta_elec_offset_rad = m->state.theta_elec_rad;
-  motor_axis_disarm(m);
+  motor_disarm(m);
 }
 
 static void foc_speed_open_control(motor_handle_t *m, float target_speed)
 {
-  motor_axis_t *axis;
+  motor_runtime_t *rt;
   const float dt = OPEN_LOOP_TS;
   const float omega_step = OPEN_LOOP_OMEGA_RAMP_RATE * dt;
 
@@ -142,17 +148,17 @@ static void foc_speed_open_control(motor_handle_t *m, float target_speed)
     return;
   }
 
-  axis = motor_axis_from_handle(m);
-  if (axis == NULL)
+  rt = motor_runtime(m);
+  if (rt == NULL)
   {
     return;
   }
 
-  axis->rt.open_loop_omega = ramp_toward(axis->rt.open_loop_omega, target_speed, omega_step);
-  axis->rt.open_loop_uq = OPEN_LOOP_UQ_MAX;
-  axis->rt.open_loop_shaft_angle = angle_normalize(
-      axis->rt.open_loop_shaft_angle + (float)m->config.param.pole_pairs * axis->rt.open_loop_omega * dt);
-  foc_voltage(m, axis->rt.open_loop_uq, 0.0f, axis->rt.open_loop_shaft_angle);
+  rt->open_loop_omega = ramp_toward(rt->open_loop_omega, target_speed, omega_step);
+  rt->open_loop_uq = OPEN_LOOP_UQ_MAX;
+  rt->open_loop_shaft_angle = angle_normalize(
+      rt->open_loop_shaft_angle + (float)m->config.param.pole_pairs * rt->open_loop_omega * dt);
+  foc_voltage(m, rt->open_loop_uq, 0.0f, rt->open_loop_shaft_angle);
 }
 
 static void foc_speed_closed_control(motor_handle_t *m, float target_speed)
@@ -192,20 +198,25 @@ static void foc_control_run(motor_handle_t *m)
   }
 }
 
-void foc_init_axis(motor_axis_t *axis, const motor_config_t *config)
+void foc_init(motor_handle_t *m, const motor_config_t *config)
 {
   motor_config_t local_cfg;
-  motor_handle_t *m;
+  motor_runtime_t *rt;
 
-  if (axis == NULL)
+  if (m == NULL)
   {
     return;
   }
 
-  m = &axis->handle;
+  rt = motor_runtime(m);
+  if (rt == NULL)
+  {
+    return;
+  }
+
   memset(m, 0, sizeof(*m));
-  memset(&axis->rt, 0, sizeof(axis->rt));
-  axis->electrical_align_done = false;
+  memset(rt, 0, sizeof(*rt));
+  rt->electrical_align_done = false;
   foc_fsm_init(m);
 
   if (config != NULL)
@@ -225,19 +236,13 @@ void foc_init_axis(motor_axis_t *axis, const motor_config_t *config)
   foc_pid_apply_param(&m->velocity_pid, 1u);
   foc_pid_apply_param(&m->position_pid, 0u);
   foc_init_filters(m);
-
-  if (!motor_axis_is_present(axis))
-  {
-    m->ctrl_mode = CTRL_MODE_IDLE;
-    return;
-  }
-
+  
   current_sense_init(m);
 
   if (m->config.auto_align_electrical)
   {
     foc_align_electrical(m);
-    axis->electrical_align_done = true;
+    rt->electrical_align_done = true;
   }
 }
 
@@ -252,14 +257,6 @@ void foc_control_loop(motor_handle_t *m)
   if (m == NULL)
   {
     return;
-  }
-
-  {
-    motor_axis_t *axis = motor_axis_from_handle(m);
-    if ((axis != NULL) && !motor_axis_is_present(axis))
-    {
-      return;
-    }
   }
 
   foc_sense_update(m);

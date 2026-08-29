@@ -1,28 +1,32 @@
 #include <stdio.h>
 #include "foc_fsm.h"
 #include "control_mode.h"
-#include "motor_axis.h"
+#include "motor.h"
 #include "foc_fault.h"
 
 #ifndef FOC_DEFAULT_CTRL_MODE
 #define FOC_DEFAULT_CTRL_MODE CTRL_MODE_SPEED_OPEN_LOOP
 #endif
 
-static void foc_fsm_on_enter(motor_axis_t *axis, fsm_state_t state)
+static void foc_fsm_on_enter(motor_handle_t *m, fsm_state_t state)
 {
-  motor_handle_t *m;
+  motor_runtime_t *rt;
 
-  if (axis == NULL)
+  if (m == NULL)
   {
     return;
   }
 
-  m = &axis->handle;
+  rt = motor_runtime(m);
+  if (rt == NULL)
+  {
+    return;
+  }
 
   switch (state)
   {
     case STATE_IDLE:
-      motor_axis_disarm(m);
+      motor_disarm(m);
       break;
     case STATE_ENCODER_CALIBRATION:
     case STATE_RSLS_CALIBRATION:
@@ -32,7 +36,7 @@ static void foc_fsm_on_enter(motor_axis_t *axis, fsm_state_t state)
       foc_fsm_next_state(m, (fsm_state_t)(state + 1));
       break;
     case STATE_ELECTRICAL_ALIGNMENT:
-      if (axis->electrical_align_done || !m->config.auto_align_electrical)
+      if (rt->electrical_align_done || !m->config.auto_align_electrical)
       {
         foc_fsm_next_state(m, STATE_ANTICOGGING);
       }
@@ -46,16 +50,12 @@ static void foc_fsm_on_enter(motor_axis_t *axis, fsm_state_t state)
   }
 }
 
-static void foc_fsm_on_run(motor_axis_t *axis, fsm_state_t state)
+static void foc_fsm_on_run(motor_handle_t *m, fsm_state_t state)
 {
-  motor_handle_t *m;
-
-  if (axis == NULL)
+  if (m == NULL)
   {
     return;
   }
-
-  m = &axis->handle;
 
   switch (state)
   {
@@ -73,7 +73,7 @@ static void foc_fsm_on_run(motor_axis_t *axis, fsm_state_t state)
       {
         break;
       }
-      motor_axis_sync_power(m);
+      motor_sync_power(m);
       if (m->ctrl_mode == CTRL_MODE_IDLE)
       {
         foc_fsm_next_state(m, STATE_IDLE);
@@ -88,27 +88,27 @@ static void foc_fsm_on_run(motor_axis_t *axis, fsm_state_t state)
 
 void foc_fsm_init(motor_handle_t *m)
 {
-  motor_axis_t *axis;
+  motor_runtime_t *rt;
 
   if (m == NULL)
   {
     return;
   }
 
-  axis = motor_axis_from_handle(m);
-  if (axis == NULL)
+  rt = motor_runtime(m);
+  if (rt == NULL)
   {
     return;
   }
 
-  axis->fsm_enter_pending = 0u;
+  rt->fsm_enter_pending = 0u;
   m->ctrl_mode = FOC_DEFAULT_CTRL_MODE;
   m->fsm = STATE_IDLE;
 }
 
 void foc_fsm_next_state(motor_handle_t *m, fsm_state_t next_state)
 {
-  motor_axis_t *axis;
+  motor_runtime_t *rt;
 
   if ((m == NULL) || (next_state >= STATE_MAX))
   {
@@ -121,10 +121,10 @@ void foc_fsm_next_state(motor_handle_t *m, fsm_state_t next_state)
   }
 
   m->fsm = next_state;
-  axis = motor_axis_from_handle(m);
-  if (axis != NULL)
+  rt = motor_runtime(m);
+  if (rt != NULL)
   {
-    axis->fsm_enter_pending = 1u;
+    rt->fsm_enter_pending = 1u;
   }
 }
 
@@ -160,8 +160,6 @@ void foc_fsm_request_running(motor_handle_t *m)
     return;
   }
 
-  /* 零漂/电角对齐已在 foc_init 完成；运行时 enable 直达 RUNNING。
-   * 编码器/惯量等标定状态由未来独立 API 进入，不复用每次 enable。 */
   foc_fsm_next_state(m, STATE_RUNNING);
 }
 
@@ -195,6 +193,14 @@ void foc_fsm_request_calibration(motor_handle_t *m, fsm_state_t entry_state)
   foc_fsm_next_state(m, entry_state);
 }
 
+/**
+ * @brief 故障锁定：停机并进入故障状态
+ * 
+ * 1. 停机
+ * 2. 进入故障状态
+ * 
+ * @param m: 电机句柄
+ */
 void foc_on_fault_latched(motor_handle_t *m)
 {
   if (m == NULL)
@@ -207,30 +213,30 @@ void foc_on_fault_latched(motor_handle_t *m)
     return;
   }
 
-  motor_axis_shutdown(m);
+  motor_shutdown(m);
   foc_fsm_next_state(m, STATE_FAULT);
 }
 
 void foc_fsm_loop(motor_handle_t *m)
 {
-  motor_axis_t *axis;
+  motor_runtime_t *rt;
 
   if (m == NULL)
   {
     return;
   }
 
-  axis = motor_axis_from_handle(m);
-  if (axis == NULL)
+  rt = motor_runtime(m);
+  if (rt == NULL)
   {
     return;
   }
 
-  while (axis->fsm_enter_pending)
+  while (rt->fsm_enter_pending)
   {
-    axis->fsm_enter_pending = 0u;
-    foc_fsm_on_enter(axis, m->fsm);
+    rt->fsm_enter_pending = 0u;
+    foc_fsm_on_enter(m, m->fsm);
   }
 
-  foc_fsm_on_run(axis, m->fsm);
+  foc_fsm_on_run(m, m->fsm);
 }

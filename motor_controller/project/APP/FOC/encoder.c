@@ -1,10 +1,127 @@
 #include "encoder.h"
+#include "board.h"
 #include "common.h"
 #include "foc_filter.h"
 #include "foc_math.h"
 #include "math_compat.h"
 #include "encoder/kth71xx.h"
 #include <stddef.h>
+
+/*
+ * 编码器绑定（单编/双编）：
+ * - 单编：JOINT = ENCODER_DEV_NONE，joint 由 shaft/gear_ratio 推算
+ * - 双编：SHAFT 用 KTH71_CS_0，JOINT 用 KTH71_CS_1
+ */
+static encoder_unit_t s_encoders[ENCODER_ROLE_COUNT] = {
+  [ENCODER_ROLE_SHAFT] = {
+    .bind = { .dev = ENCODER_DEV_KTH71, .kth71_cs = KTH71_CS_0 },
+  },
+  [ENCODER_ROLE_JOINT] = {
+    .bind = { .dev = ENCODER_DEV_NONE },
+  },
+};
+
+static bool encoder_joint_enabled(void)
+{
+  return s_encoders[ENCODER_ROLE_JOINT].bind.dev != ENCODER_DEV_NONE;
+}
+
+static void encoder_publish_state(motor_handle_t *m)
+{
+  const encoder_unit_t *shaft = &s_encoders[ENCODER_ROLE_SHAFT];
+  const encoder_unit_t *joint = &s_encoders[ENCODER_ROLE_JOINT];
+  float pole_pairs;
+  float shaft_dir;
+  float gear_ratio;
+  bool shaft_ok;
+  bool joint_ok;
+
+  if (m == NULL)
+  {
+    return;
+  }
+
+  shaft_ok = shaft->bind.dev != ENCODER_DEV_NONE;
+  joint_ok = encoder_joint_enabled();
+
+  pole_pairs = (m->config.param.pole_pairs > 0u) ? (float)m->config.param.pole_pairs : 1.0f;
+  shaft_dir = (m->config.param.direction == -1) ? -1.0f : 1.0f;
+  gear_ratio = (m->config.param.gear_ratio > 0.0f) ? m->config.param.gear_ratio : 1.0f;
+
+  if (shaft_ok)
+  {
+    m->state.shaft = shaft->observer.sample;
+    m->state.theta_elec_rad = angle_normalize(
+        (shaft->observer.sample.angle_rad * pole_pairs * shaft_dir) -
+        m->config.param.theta_elec_offset_rad);
+  }
+
+  if (joint_ok)
+  {
+    m->state.joint = joint->observer.sample;
+  }
+  else if (shaft_ok)
+  {
+    float joint_pos = shaft->observer.sample.position_rad / gear_ratio;
+    int32_t joint_turns = (int32_t)floorf(joint_pos / _2PI);
+    float joint_angle = joint_pos - (float)joint_turns * _2PI;
+
+    m->state.joint.counts = 0u;
+    m->state.joint.turn_count = joint_turns;
+    m->state.joint.angle_rad = joint_angle;
+    m->state.joint.position_rad = joint_pos;
+    m->state.joint.velocity_rad_s = shaft->observer.sample.velocity_rad_s / gear_ratio;
+  }
+}
+
+void encoder_init(void)
+{
+  uint8_t i;
+
+  for (i = 0u; i < ENCODER_ROLE_COUNT; i++)
+  {
+    encoder_observer_init(&s_encoders[i].observer);
+
+    if (s_encoders[i].bind.dev != ENCODER_DEV_NONE)
+    {
+      encoder_dev_init_once(s_encoders[i].bind.dev);
+    }
+  }
+}
+
+void encoder_update(motor_handle_t *m)
+{
+  uint8_t i;
+  uint32_t now_us;
+  float default_zero;
+  int8_t default_dir;
+
+  if (m == NULL)
+  {
+    return;
+  }
+
+  if (s_encoders[ENCODER_ROLE_SHAFT].bind.dev == ENCODER_DEV_NONE)
+  {
+    return;
+  }
+
+  now_us = board_time_us();
+  default_zero = m->config.param.theta_offset_rad;
+  default_dir = m->config.param.direction;
+
+  for (i = 0u; i < ENCODER_ROLE_COUNT; i++)
+  {
+    (void)encoder_observer_update(&s_encoders[i].observer,
+                                  &s_encoders[i].bind,
+                                  (encoder_role_t)i,
+                                  default_zero,
+                                  default_dir,
+                                  now_us);
+  }
+
+  encoder_publish_state(m);
+}
 
 static uint32_t time_us_delta(uint32_t prev, uint32_t now)
 {
@@ -69,16 +186,28 @@ void encoder_observer_init(encoder_observer_t *obs)
   }
 
   obs->sample.counts = 0u;
+  obs->sample.turn_count = 0;
   obs->sample.angle_rad = 0.0f;
   obs->sample.position_rad = 0.0f;
   obs->sample.velocity_rad_s = 0.0f;
-  obs->turn_count = 0;
   obs->prev_angle_rad = 0.0f;
   obs->prev_time_us = 0u;
   obs->first_sample = 1u;
   lpf1_init(&obs->velocity_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
 }
 
+/**
+ * @brief 解析编码器零位角. 
+ * 
+ *  当 bind.zero_rad 不为 0 时，使用 bind.zero_rad；
+ *  当 role 为 ENCODER_ROLE_SHAFT 时，使用 default_zero_rad；
+ *  否则返回 0.0f
+ * 
+ * @param bind: 编码器绑定
+ * @param role: 编码器角色
+ * @param default_zero_rad: 默认零位角
+ * @return float: 零位角
+ */
 static float encoder_resolve_zero_rad(const encoder_bind_t *bind,
                                       encoder_role_t role,
                                       float default_zero_rad)
@@ -138,7 +267,7 @@ bool encoder_observer_update(encoder_observer_t *obs,
     return false;
   }
 
-  counts = encoder_raw_to_counts(raw_u16);
+  counts = encoder_raw_to_counts(raw_u16); // 13bit 有效分辨率
   angle = (float)counts * RAW_ANGLE_U16_TO_RAD;
 
   dir = encoder_resolve_dir(bind, default_dir);
@@ -147,12 +276,13 @@ bool encoder_observer_update(encoder_observer_t *obs,
   diff_angle = angle - obs->prev_angle_rad;
   if (fabsf(diff_angle) > DIFF_ANGLE_WRAP_THRESH_RAD)
   {
-    obs->turn_count += (diff_angle > 0.0f) ? -1 : 1;
+    obs->sample.turn_count += (diff_angle > 0.0f) ? -1 : 1;
   }
 
   obs->sample.counts = (uint32_t)counts;
   obs->sample.angle_rad = angle;
-  obs->sample.position_rad = (float)obs->turn_count * _2PI + angle * dir - zero_rad;
+  obs->sample.position_rad =
+      (float)obs->sample.turn_count * _2PI + angle * dir - zero_rad;
 
   delta_angle = angle - obs->prev_angle_rad;
   if (delta_angle > _PI)

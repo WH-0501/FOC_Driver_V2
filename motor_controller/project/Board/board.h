@@ -34,7 +34,7 @@ void board_deinit(void);
 void board_current_loop_start(void);
 void board_current_loop_stop(void);
 
-int board_get_gate_hw(uint8_t axis_id, gate_hw_binding_t *hw);
+int board_get_gate_hw(gate_hw_binding_t *hw);
 
 void board_register_current_loop_callback(board_current_loop_cb_t cb);
 void board_invoke_current_loop(void);
@@ -44,19 +44,18 @@ void board_get_phase_current(motor_handle_t *m);
 void board_current_loop_irq_handler(void *adc_handle);
 #define CURRENT_LOOP_IRQ_HANDLER board_current_loop_irq_handler
 
-/** 自由运行微秒计数器快照（用于速度估算等）；须 board_init 后有效 */
 uint32_t board_time_us(void);
 
 error_t current_hw_init(void);
 error_t current_hw_deinit(void);
 
-error_t pwm_hw_init(uint8_t axis_id);
-error_t pwm_hw_start(uint8_t axis_id);
-error_t pwm_hw_stop(uint8_t axis_id);
-error_t pwm_hw_lowside_brake_on(uint8_t axis_id);
-error_t pwm_hw_lowside_brake_off(uint8_t axis_id);
+error_t pwm_hw_init(void);
+error_t pwm_hw_start(void);
+error_t pwm_hw_stop(void);
+error_t pwm_hw_lowside_brake_on(void);
+error_t pwm_hw_lowside_brake_off(void);
 
-error_t set_pwm(uint8_t axis_id, motor_actuation_t *actuation);
+error_t set_pwm(motor_actuation_t *actuation);
 
 typedef struct
 {

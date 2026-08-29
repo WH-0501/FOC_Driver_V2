@@ -8,7 +8,6 @@
 #include "at32m412_416_wk_config.h"
 #include "at32m412_416_adc.h"
 #include "at32m412_416_tmr.h"
-#include "motor_axis.h"
 #include "wk_dma.h"
 #include "wk_usart.h"
 #include <string.h>
@@ -25,6 +24,9 @@ uint16_t pwm_compare_top = 0;
 #define BOARD_UART_RAW_TX_BUF_SIZE 256u
 #endif
 
+#define _ADC_CONV       (0.000805608f)
+#define GAIN_VBUS       (11.0f)
+
 static uint8_t s_board_uart_dma_inited;
 static volatile uint8_t s_board_uart_stream_mode;
 static uint8_t s_board_uart_raw_buf[BOARD_UART_RAW_TX_BUF_SIZE];
@@ -32,6 +34,8 @@ static volatile uint8_t s_board_uart_busy;
 static volatile uint16_t s_board_uart_tx_len;
 static volatile uint32_t s_board_uart_dropped_messages;
 static volatile uint32_t s_board_uart_dropped_bytes;
+
+volatile uint16_t s_adc1_raw[2] = {0};
 
 static uint16_t pwm_get_compare_top(void)
 {
@@ -45,13 +49,8 @@ void board_init(void)
 
 void board_deinit(void)
 {
-  uint8_t i;
-
   (void)current_hw_deinit();
-  for (i = 0u; i < MOTOR_AXIS_COUNT; i++)
-  {
-    (void)pwm_hw_stop(i);
-  }
+  (void)pwm_hw_stop();
 }
 
 uint32_t board_time_us(void)
@@ -59,35 +58,24 @@ uint32_t board_time_us(void)
   return (uint32_t)BOARD_TIME_US_HANDLE->cval;
 }
 
-static int board_pwm_axis_supported(uint8_t axis_id)
-{
-  return motor_axis_is_present_id(axis_id) ? 0 : -1;
-}
-
-int board_get_gate_hw(uint8_t axis_id, gate_hw_binding_t *hw)
+int board_get_gate_hw(gate_hw_binding_t *hw)
 {
   if (hw == NULL)
   {
     return -1;
   }
 
-  if (axis_id == 0u)
-  {
-    hw->port_nSLEEP = nSLEEP_GPIO_PORT;
-    hw->pin_nSLEEP = nSLEEP_PIN;
-    hw->port_ENA = ENA_GPIO_PORT;
-    hw->pin_ENA = ENA_PIN;
-    hw->port_ENB = ENB_GPIO_PORT;
-    hw->pin_ENB = ENB_PIN;
-    hw->port_ENC = ENC_GPIO_PORT;
-    hw->pin_ENC = ENC_PIN;
-    hw->port_FAULT = nFAULT_GPIO_PORT;
-    hw->pin_FAULT = nFAULT_PIN;
-    return 0;
-  }
-
-  /* 轴 1+：占位或未接线，返回失败；启用时在 motor_axis 表设 hw_present 并在此补充引脚 */
-  return -1;
+  hw->port_nSLEEP = nSLEEP_GPIO_PORT;
+  hw->pin_nSLEEP = nSLEEP_PIN;
+  hw->port_ENA = ENA_GPIO_PORT;
+  hw->pin_ENA = ENA_PIN;
+  hw->port_ENB = ENB_GPIO_PORT;
+  hw->pin_ENB = ENB_PIN;
+  hw->port_ENC = ENC_GPIO_PORT;
+  hw->pin_ENC = ENC_PIN;
+  hw->port_FAULT = nFAULT_GPIO_PORT;
+  hw->pin_FAULT = nFAULT_PIN;
+  return 0;
 }
 
 error_t current_hw_init(void)
@@ -102,7 +90,7 @@ error_t current_hw_deinit(void)
   return ERR_NONE;
 }
 
-error_t pwm_hw_init(uint8_t axis_id)
+error_t pwm_hw_init(void)
 {
   motor_actuation_t actuation = {
     .duty_a = 0.0f,
@@ -110,70 +98,45 @@ error_t pwm_hw_init(uint8_t axis_id)
     .duty_c = 0.0f,
   };
 
-  if (board_pwm_axis_supported(axis_id) != 0)
-  {
-    return ERR_FAIL;
-  }
-
   if (pwm_compare_top == 0U)
   {
     pwm_compare_top = pwm_get_compare_top();
   }
 
-  set_pwm(axis_id, &actuation);
+  set_pwm(&actuation);
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, FALSE);
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, FALSE);
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, FALSE);
   return ERR_NONE;
 }
 
-error_t pwm_hw_start(uint8_t axis_id)
+error_t pwm_hw_start(void)
 {
-  if (board_pwm_axis_supported(axis_id) != 0)
-  {
-    return ERR_FAIL;
-  }
-
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, TRUE);
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, TRUE);
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, TRUE);
   return ERR_NONE;
 }
 
-error_t pwm_hw_lowside_brake_off(uint8_t axis_id)
+error_t pwm_hw_lowside_brake_off(void)
 {
-  if (board_pwm_axis_supported(axis_id) != 0)
-  {
-    return ERR_FAIL;
-  }
-
   tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, 0U);
   tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, 0U);
   tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, 0U);
   return ERR_NONE;
 }
 
-error_t pwm_hw_stop(uint8_t axis_id)
+error_t pwm_hw_stop(void)
 {
-  if (board_pwm_axis_supported(axis_id) != 0)
-  {
-    return ERR_FAIL;
-  }
-
-  (void)pwm_hw_lowside_brake_off(axis_id);
+  (void)pwm_hw_lowside_brake_off();
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, FALSE);
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, FALSE);
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, FALSE);
   return ERR_NONE;
 }
 
-error_t pwm_hw_lowside_brake_on(uint8_t axis_id)
+error_t pwm_hw_lowside_brake_on(void)
 {
-  if (board_pwm_axis_supported(axis_id) != 0)
-  {
-    return ERR_FAIL;
-  }
-
   if (pwm_compare_top == 0U)
   {
     pwm_compare_top = pwm_get_compare_top();
@@ -185,9 +148,9 @@ error_t pwm_hw_lowside_brake_on(uint8_t axis_id)
   return ERR_NONE;
 }
 
-error_t set_pwm(uint8_t axis_id, motor_actuation_t *actuation)
+error_t set_pwm(motor_actuation_t *actuation)
 {
-  if ((actuation == NULL) || (board_pwm_axis_supported(axis_id) != 0))
+  if (actuation == NULL)
   {
     return ERR_FAIL;
   }
@@ -220,6 +183,20 @@ void board_get_phase_current(motor_handle_t *m)
   s->phase_current.adc_raw[0] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_2);
   s->phase_current.adc_raw[1] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_3);
   s->phase_current.adc_raw[2] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_4);
+}
+
+void board_get_vbus_and_temp(motor_handle_t *m)
+{
+  motor_state_t *s;
+
+  if (m == NULL)
+  {
+    return;
+  }
+
+  s = &m->state;
+  s->vbus = (float)s_adc1_raw[0] * _ADC_CONV * GAIN_VBUS;
+  // s->board_temp.temp = (float)s_adc1_raw[1] * _ADC_CONV * GAIN_TEMP;
 }
 
 void board_current_loop_irq_handler(void *adc_handle)

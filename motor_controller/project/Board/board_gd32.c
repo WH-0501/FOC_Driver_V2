@@ -5,7 +5,6 @@
  * 预驱引脚通过 BOARD_GATE_* 宏配置（默认同 STM32 模板引脚）。
  */
 #include "board.h"
-#include "motor_axis.h"
 
 #ifndef BOARD_GATE_NSLEEP_PORT
 #define BOARD_GATE_NSLEEP_PORT GPIOA
@@ -42,13 +41,8 @@ void board_init(void)
 
 void board_deinit(void)
 {
-  uint8_t i;
-
   (void)current_hw_deinit();
-  for (i = 0u; i < MOTOR_AXIS_COUNT; i++)
-  {
-    (void)pwm_hw_stop(i);
-  }
+  (void)pwm_hw_stop();
 }
 
 uint32_t board_time_us(void)
@@ -56,34 +50,24 @@ uint32_t board_time_us(void)
   return timer_counter_read(GD32_TIME_US_TIMER);
 }
 
-static int board_pwm_axis_supported(uint8_t axis_id)
-{
-  return motor_axis_is_present_id(axis_id) ? 0 : -1;
-}
-
-int board_get_gate_hw(uint8_t axis_id, gate_hw_binding_t *hw)
+int board_get_gate_hw(gate_hw_binding_t *hw)
 {
   if (hw == NULL)
   {
     return -1;
   }
 
-  if (axis_id == 0u)
-  {
-    hw->port_nSLEEP = BOARD_GATE_NSLEEP_PORT;
-    hw->pin_nSLEEP = BOARD_GATE_NSLEEP_PIN;
-    hw->port_ENA = BOARD_GATE_ENA_PORT;
-    hw->pin_ENA = BOARD_GATE_ENA_PIN;
-    hw->port_ENB = BOARD_GATE_ENB_PORT;
-    hw->pin_ENB = BOARD_GATE_ENB_PIN;
-    hw->port_ENC = BOARD_GATE_ENC_PORT;
-    hw->pin_ENC = BOARD_GATE_ENC_PIN;
-    hw->port_FAULT = BOARD_GATE_FAULT_PORT;
-    hw->pin_FAULT = BOARD_GATE_FAULT_PIN;
-    return 0;
-  }
-
-  return -1;
+  hw->port_nSLEEP = BOARD_GATE_NSLEEP_PORT;
+  hw->pin_nSLEEP = BOARD_GATE_NSLEEP_PIN;
+  hw->port_ENA = BOARD_GATE_ENA_PORT;
+  hw->pin_ENA = BOARD_GATE_ENA_PIN;
+  hw->port_ENB = BOARD_GATE_ENB_PORT;
+  hw->pin_ENB = BOARD_GATE_ENB_PIN;
+  hw->port_ENC = BOARD_GATE_ENC_PORT;
+  hw->pin_ENC = BOARD_GATE_ENC_PIN;
+  hw->port_FAULT = BOARD_GATE_FAULT_PORT;
+  hw->pin_FAULT = BOARD_GATE_FAULT_PIN;
+  return 0;
 }
 
 error_t current_hw_init(void)
@@ -97,39 +81,34 @@ error_t current_hw_deinit(void)
   return ERR_NONE;
 }
 
-error_t pwm_hw_init(uint8_t axis_id)
+error_t pwm_hw_init(void)
 {
-  (void)axis_id;
   return ERR_NONE;
 }
 
-error_t pwm_hw_start(uint8_t axis_id)
+error_t pwm_hw_start(void)
 {
-  (void)axis_id;
   return ERR_NONE;
 }
 
-error_t pwm_hw_lowside_brake_off(uint8_t axis_id)
+error_t pwm_hw_lowside_brake_off(void)
 {
-  (void)axis_id;
   return ERR_NONE;
 }
 
-error_t pwm_hw_stop(uint8_t axis_id)
+error_t pwm_hw_stop(void)
 {
-  (void)pwm_hw_lowside_brake_off(axis_id);
+  (void)pwm_hw_lowside_brake_off();
   return ERR_NONE;
 }
 
-error_t pwm_hw_lowside_brake_on(uint8_t axis_id)
+error_t pwm_hw_lowside_brake_on(void)
 {
-  (void)axis_id;
   return ERR_NONE;
 }
 
-error_t set_pwm(uint8_t axis_id, motor_actuation_t *actuation)
+error_t set_pwm(motor_actuation_t *actuation)
 {
-  (void)axis_id;
   (void)actuation;
   return ERR_NONE;
 }

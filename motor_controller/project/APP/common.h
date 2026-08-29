@@ -27,7 +27,7 @@
 
 
 
-/* 16 位角度原始值 [0,65535] -> 弧度，满量程对齐 2π（与 KTH71 定义为 uint16 满刻度时一致） */
+/* 角度原始值 -> 弧度，满量程对齐 2π（与 KTH71 定义为 uint16 满刻度时一致） */
 #define RAW_ANGLE_U16_TO_RAD            (_2PI * (1.0f / ENCODER_COUNTS_PER_REV)) // 13bit 有效分辨率
 #define DIFF_ANGLE_WRAP_THRESH_RAD      (0.8f * _2PI) // 超过此值视作跨一圈折返用于圈数校正
 

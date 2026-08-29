@@ -1,12 +1,15 @@
 #ifndef __ENCODER_H__
 #define __ENCODER_H__
 
+#include "datatypes.h"
 #include "encoder_types.h"
 
 /**
- * 编码器观测算法：SPI 读角后的 unwrap、速度估计、滤波。
- * 不持有 motor_axis_t；多路调用与 state 发布由 motor_axis.c 负责。
+ * 编码器模块：单/双路绑定、观测算法、发布 motor_state 机械观测量。
  */
+
+void encoder_init(void);
+void encoder_update(motor_handle_t *m);
 
 void encoder_dev_init_once(encoder_dev_t dev);
 void encoder_observer_init(encoder_observer_t *obs);

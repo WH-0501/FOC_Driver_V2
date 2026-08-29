@@ -559,9 +559,9 @@
               <FilePath>..\APP\FOC\encoder.c</FilePath>
             </File>
             <File>
-              <FileName>motor_axis.c</FileName>
+              <FileName>motor.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\APP\FOC\motor_axis.c</FilePath>
+              <FilePath>..\APP\motor.c</FilePath>
             </File>
             <File>
               <FileName>foc.c</FileName>

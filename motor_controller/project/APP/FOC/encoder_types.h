@@ -38,7 +38,6 @@ typedef struct
 typedef struct
 {
   encoder_sample_t sample;
-  int32_t turn_count;
   float prev_angle_rad;
   uint32_t prev_time_us;
   uint8_t first_sample;

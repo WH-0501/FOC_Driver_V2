@@ -8,7 +8,6 @@
  */
 #include "board.h"
 #include "main.h"
-#include "motor_axis.h"
 
 #ifndef BOARD_GATE_NSLEEP_PORT
 #define BOARD_GATE_NSLEEP_PORT GPIOA
@@ -56,13 +55,8 @@ void board_init(void)
 
 void board_deinit(void)
 {
-  uint8_t i;
-
   (void)current_hw_deinit();
-  for (i = 0u; i < MOTOR_AXIS_COUNT; i++)
-  {
-    (void)pwm_hw_stop(i);
-  }
+  (void)pwm_hw_stop();
 }
 
 uint32_t board_time_us(void)
@@ -70,34 +64,24 @@ uint32_t board_time_us(void)
   return (uint32_t)__HAL_TIM_GET_COUNTER(BOARD_TIME_US_HANDLE);
 }
 
-static int board_pwm_axis_supported(uint8_t axis_id)
-{
-  return motor_axis_is_present_id(axis_id) ? 0 : -1;
-}
-
-int board_get_gate_hw(uint8_t axis_id, gate_hw_binding_t *hw)
+int board_get_gate_hw(gate_hw_binding_t *hw)
 {
   if (hw == NULL)
   {
     return -1;
   }
 
-  if (axis_id == 0u)
-  {
-    hw->port_nSLEEP = BOARD_GATE_NSLEEP_PORT;
-    hw->pin_nSLEEP = BOARD_GATE_NSLEEP_PIN;
-    hw->port_ENA = BOARD_GATE_ENA_PORT;
-    hw->pin_ENA = BOARD_GATE_ENA_PIN;
-    hw->port_ENB = BOARD_GATE_ENB_PORT;
-    hw->pin_ENB = BOARD_GATE_ENB_PIN;
-    hw->port_ENC = BOARD_GATE_ENC_PORT;
-    hw->pin_ENC = BOARD_GATE_ENC_PIN;
-    hw->port_FAULT = BOARD_GATE_FAULT_PORT;
-    hw->pin_FAULT = BOARD_GATE_FAULT_PIN;
-    return 0;
-  }
-
-  return -1;
+  hw->port_nSLEEP = BOARD_GATE_NSLEEP_PORT;
+  hw->pin_nSLEEP = BOARD_GATE_NSLEEP_PIN;
+  hw->port_ENA = BOARD_GATE_ENA_PORT;
+  hw->pin_ENA = BOARD_GATE_ENA_PIN;
+  hw->port_ENB = BOARD_GATE_ENB_PORT;
+  hw->pin_ENB = BOARD_GATE_ENB_PIN;
+  hw->port_ENC = BOARD_GATE_ENC_PORT;
+  hw->pin_ENC = BOARD_GATE_ENC_PIN;
+  hw->port_FAULT = BOARD_GATE_FAULT_PORT;
+  hw->pin_FAULT = BOARD_GATE_FAULT_PIN;
+  return 0;
 }
 
 error_t current_hw_init(void)
@@ -122,13 +106,8 @@ error_t current_hw_deinit(void)
   return ERR_NONE;
 }
 
-error_t pwm_hw_init(uint8_t axis_id)
+error_t pwm_hw_init(void)
 {
-  if (board_pwm_axis_supported(axis_id) != 0)
-  {
-    return ERR_FAIL;
-  }
-
   if (pwm_compare_top == 0U)
   {
     pwm_compare_top = pwm_get_compare_top();
@@ -140,13 +119,8 @@ error_t pwm_hw_init(uint8_t axis_id)
   return ERR_NONE;
 }
 
-error_t pwm_hw_start(uint8_t axis_id)
+error_t pwm_hw_start(void)
 {
-  if (board_pwm_axis_supported(axis_id) != 0)
-  {
-    return ERR_FAIL;
-  }
-
   if (HAL_TIM_PWM_Start(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL) != HAL_OK)
   {
     return ERR_FAIL;
@@ -162,27 +136,17 @@ error_t pwm_hw_start(uint8_t axis_id)
   return ERR_NONE;
 }
 
-error_t pwm_hw_lowside_brake_off(uint8_t axis_id)
+error_t pwm_hw_lowside_brake_off(void)
 {
-  if (board_pwm_axis_supported(axis_id) != 0)
-  {
-    return ERR_FAIL;
-  }
-
   __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, 0U);
   __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, 0U);
   __HAL_TIM_SET_COMPARE(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, 0U);
   return ERR_NONE;
 }
 
-error_t pwm_hw_stop(uint8_t axis_id)
+error_t pwm_hw_stop(void)
 {
-  if (board_pwm_axis_supported(axis_id) != 0)
-  {
-    return ERR_FAIL;
-  }
-
-  (void)pwm_hw_lowside_brake_off(axis_id);
+  (void)pwm_hw_lowside_brake_off();
 
   if (HAL_TIM_PWM_Stop(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL) != HAL_OK)
   {
@@ -199,13 +163,8 @@ error_t pwm_hw_stop(uint8_t axis_id)
   return ERR_NONE;
 }
 
-error_t pwm_hw_lowside_brake_on(uint8_t axis_id)
+error_t pwm_hw_lowside_brake_on(void)
 {
-  if (board_pwm_axis_supported(axis_id) != 0)
-  {
-    return ERR_FAIL;
-  }
-
   if (pwm_compare_top == 0U)
   {
     pwm_compare_top = pwm_get_compare_top();
@@ -217,9 +176,9 @@ error_t pwm_hw_lowside_brake_on(uint8_t axis_id)
   return ERR_NONE;
 }
 
-error_t set_pwm(uint8_t axis_id, motor_actuation_t *actuation)
+error_t set_pwm(motor_actuation_t *actuation)
 {
-  if ((actuation == NULL) || (board_pwm_axis_supported(axis_id) != 0))
+  if (actuation == NULL)
   {
     return ERR_FAIL;
   }

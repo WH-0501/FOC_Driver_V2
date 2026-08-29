@@ -6,12 +6,11 @@
 typedef struct
 {
   bool armed;
-  uint8_t axis_id;
   MP6540_Handle_t mp6540;
   const gate_driver_t *gate;
 } motor_driver_t;
 
-error_t motor_driver_init(motor_driver_t *drv, uint8_t axis_id);
+error_t motor_driver_init(motor_driver_t *drv);
 const gate_driver_t *motor_driver_get_gate(const motor_driver_t *drv);
 
 void motor_driver_arm(motor_driver_t *drv);

@@ -2,7 +2,7 @@
 #include "foc_fault.h"
 #include "foc_fsm.h"
 #include "math_compat.h"
-#include "motor_axis.h"
+#include "motor.h"
 #include "gate/gate_driver.h"
 
 void motor_fault_raise(motor_handle_t *m, fault_t bits)
@@ -64,6 +64,8 @@ void motor_fault_protect(motor_handle_t *m)
   float i_abs_max;
   float a0, a1, a2, mx, mn, i_avg, imb;
 
+  board_get_vbus_and_temp(m);
+
   const gate_driver_t *gate;
 
   if (m == NULL)
@@ -76,14 +78,7 @@ void motor_fault_protect(motor_handle_t *m)
 
   m->fault.status &= ~FAULT_POLL_MASK;
 
-  gate = NULL;
-  {
-    motor_axis_t *axis = motor_axis_from_handle(m);
-    if (axis != NULL)
-    {
-      gate = motor_driver_get_gate(&axis->driver);
-    }
-  }
+  gate = motor_gate(m);
 
   if ((gate != NULL) && gate_driver_read_fault(gate))
   {

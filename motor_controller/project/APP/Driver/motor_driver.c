@@ -1,7 +1,7 @@
 #include "motor_driver.h"
 #include "board.h"
 
-static error_t motor_driver_bind_gate(motor_driver_t *drv, uint8_t axis_id)
+static error_t motor_driver_bind_gate(motor_driver_t *drv)
 {
   gate_driver_init_t cfg;
 
@@ -11,7 +11,7 @@ static error_t motor_driver_bind_gate(motor_driver_t *drv, uint8_t axis_id)
   }
 
   cfg.type = GATE_DRIVER_TYPE_MP6540;
-  if (board_get_gate_hw(axis_id, &cfg.hw) != 0)
+  if (board_get_gate_hw(&cfg.hw) != 0)
   {
     drv->gate = NULL;
     return ERR_FAIL;
@@ -27,7 +27,7 @@ static error_t motor_driver_bind_gate(motor_driver_t *drv, uint8_t axis_id)
   return ERR_NONE;
 }
 
-error_t motor_driver_init(motor_driver_t *drv, uint8_t axis_id)
+error_t motor_driver_init(motor_driver_t *drv)
 {
   if (drv == NULL)
   {
@@ -35,10 +35,9 @@ error_t motor_driver_init(motor_driver_t *drv, uint8_t axis_id)
   }
 
   drv->armed = false;
-  drv->axis_id = axis_id;
   drv->gate = NULL;
 
-  if (motor_driver_bind_gate(drv, axis_id) != ERR_NONE)
+  if (motor_driver_bind_gate(drv) != ERR_NONE)
   {
     return ERR_FAIL;
   }
@@ -64,13 +63,23 @@ void motor_driver_arm(motor_driver_t *drv)
     return;
   }
 
-  (void)pwm_hw_init(drv->axis_id);
+  (void)pwm_hw_init();
   gate_driver_exit_sleep(drv->gate);
   gate_driver_set_all_phase_en(drv->gate, true);
-  (void)pwm_hw_start(drv->axis_id);
+  (void)pwm_hw_start();
   drv->armed = true;
 }
 
+/**
+ * @brief 关闭电机驱动器 （停机）
+ * 
+ * 1. 停止 PWM 输出
+ * 2. 退出睡眠模式
+ * 3. 设置所有相位使能为 false
+ * 4. 设置电机驱动器状态为未使能
+ * 
+ * @param drv: 电机驱动器
+ */
 void motor_driver_disarm(motor_driver_t *drv)
 {
   if ((drv == NULL) || (drv->gate == NULL))
@@ -78,7 +87,7 @@ void motor_driver_disarm(motor_driver_t *drv)
     return;
   }
 
-  (void)pwm_hw_stop(drv->axis_id);
+  (void)pwm_hw_stop();
   gate_driver_exit_sleep(drv->gate);
   gate_driver_set_all_phase_en(drv->gate, false);
   drv->armed = false;
@@ -91,7 +100,7 @@ void motor_driver_shutdown(motor_driver_t *drv)
     return;
   }
 
-  (void)pwm_hw_stop(drv->axis_id);
+  (void)pwm_hw_stop();
   gate_driver_enter_inactive_state(drv->gate);
   drv->armed = false;
 }
@@ -113,11 +122,11 @@ void motor_driver_prepare_dc_offset_cal(motor_driver_t *drv)
     return;
   }
 
-  (void)pwm_hw_init(drv->axis_id);
+  (void)pwm_hw_init();
   gate_driver_exit_sleep(drv->gate);
   gate_driver_set_all_phase_en(drv->gate, true);
-  (void)pwm_hw_lowside_brake_on(drv->axis_id);
-  (void)pwm_hw_start(drv->axis_id);
+  (void)pwm_hw_lowside_brake_on();
+  (void)pwm_hw_start();
   drv->armed = false;
 }
 
@@ -133,5 +142,5 @@ error_t motor_driver_set_pwm(motor_driver_t *drv, const motor_actuation_t *actua
     return ERR_FAIL;
   }
 
-  return set_pwm(drv->axis_id, (motor_actuation_t *)actuation);
+  return set_pwm((motor_actuation_t *)actuation);
 }

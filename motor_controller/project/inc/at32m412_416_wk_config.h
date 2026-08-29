@@ -43,7 +43,7 @@ extern "C" {
 
 /* exported types -------------------------------------------------------------*/
 /* add user code begin exported types */
-
+extern volatile uint16_t s_adc1_raw[2];
 /* add user code end exported types */
 
 /* exported constants --------------------------------------------------------*/
@@ -58,8 +58,8 @@ extern "C" {
 
 /* add user code begin dma define */
 /* user can only modify the dma define value */
-#define DMA1_CHANNEL1_BUFFER_SIZE   0
-#define DMA1_CHANNEL1_MEMORY_BASE_ADDR   0
+#define DMA1_CHANNEL1_BUFFER_SIZE   2
+#define DMA1_CHANNEL1_MEMORY_BASE_ADDR   (uint32_t)&s_adc1_raw
 //#define DMA1_CHANNEL1_PERIPHERAL_BASE_ADDR  0
 
 //#define DMA1_CHANNEL2_BUFFER_SIZE   0

@@ -1,5 +1,5 @@
 #include "Debug.h"
-#include "motor_axis.h"
+#include "motor.h"
 #include "../../Board/board.h"
 
 unsigned char UartTemp[28];
@@ -20,31 +20,23 @@ void VoFaDisUart(void)
         return;
     }
 
-    motor_axis_t *axis = motor_axis_get(0u);
+    motor_handle_t *m = motor_get_handler();
 
-    if (axis == NULL)
+    if (m == NULL)
     {
         return;
     }
 
-    // motor_phase_current_t phase_current = axis->handle.state.phase_current;
-    // float ia = 0.0f, ib = 0.0f, ic = 0.0f, i_sum = 0.0f;
-    // __disable_irq();
-	// {
-	// 	ia = phase_current.ampere[0];
-	// 	ib = phase_current.ampere[1];
-	// 	ic = phase_current.ampere[2];
-	// }
-	// __enable_irq();
-    // i_sum = ia + ib + ic;
-
     __disable_irq();
-    motor_state_t state = axis->handle.state;
-    Send.Data[0].FloatData = state.joint.position_rad;
-    Send.Data[1].FloatData = state.theta_elec_rad;
-    Send.Data[2].FloatData = state.shaft.position_rad;
-    Send.Data[3].FloatData = state.joint.velocity_rad_s;
-    // Send.Data[4].FloatData = state.angle_raw / 1000.0f;
+    motor_state_t state = m->state;
+    Send.Data[0].FloatData = state.theta_elec_rad;
+    Send.Data[1].FloatData = state.shaft.angle_rad;
+    Send.Data[2].FloatData = state.joint.position_rad;
+    Send.Data[3].FloatData = (float)m->fsm;
+    Send.Data[4].FloatData = (float)m->fault.status;
+    // Send.Data[4].FloatData = state.phase_current.ampere[0];
+    // Send.Data[5].FloatData = state.phase_current.ampere[1];
+    // Send.Data[6].FloatData = state.phase_current.ampere[2];
     __enable_irq();
 
     UartTemp[0] = Send.Data[0].ByteData[0]; //The first data

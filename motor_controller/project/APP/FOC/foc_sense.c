@@ -1,5 +1,5 @@
 #include "foc_sense.h"
-#include "motor_axis.h"
+#include "encoder.h"
 #include "current_sense.h"
 #include "foc_filter.h"
 #include "foc_math.h"
@@ -7,7 +7,6 @@
 
 void foc_sense_update(motor_handle_t *m)
 {
-  motor_axis_t *axis;
   float id = 0.0f;
   float iq = 0.0f;
   float i_mod;
@@ -17,14 +16,11 @@ void foc_sense_update(motor_handle_t *m)
     return;
   }
 
-  axis = motor_axis_from_handle(m);
-  if ((axis == NULL) || !motor_axis_is_present(axis))
-  {
-    return;
-  }
-
-  motor_axis_update_encoders(axis);
+  // 1. 更新编码器
+  encoder_update(m);
+  // 2. 获取相电流
   board_get_phase_current(m);
+  // 3. 处理电流采样
   current_sense_process_sample(m);
 
   clarke_transform(m->state.phase_current.ampere[0],

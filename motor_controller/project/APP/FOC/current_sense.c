@@ -1,10 +1,10 @@
 #include "current_sense.h"
 #include "board.h"
-#include "motor_axis.h"
+#include "motor.h"
 
 static void current_sense_offset_cal_step(motor_handle_t *m)
 {
-  motor_axis_t *axis;
+  motor_runtime_t *rt;
   uint32_t i;
 
   if (m == NULL)
@@ -12,50 +12,50 @@ static void current_sense_offset_cal_step(motor_handle_t *m)
     return;
   }
 
-  axis = motor_axis_from_handle(m);
-  if (axis == NULL)
+  rt = motor_runtime(m);
+  if (rt == NULL)
   {
     return;
   }
 
   if (m->current_offset_cal_done)
   {
-    axis->rt.offset_active = 0u;
+    rt->offset_active = 0u;
     return;
   }
 
-  if ((m->current_offset_cal_pending == 0u) && (axis->rt.offset_active == 0u))
+  if ((m->current_offset_cal_pending == 0u) && (rt->offset_active == 0u))
   {
     return;
   }
 
-  if (axis->rt.offset_active == 0u)
+  if (rt->offset_active == 0u)
   {
-    axis->rt.offset_active = 1u;
-    axis->rt.offset_cnt = 0U;
-    axis->rt.offset_sum[0] = 0U;
-    axis->rt.offset_sum[1] = 0U;
-    axis->rt.offset_sum[2] = 0U;
+    rt->offset_active = 1u;
+    rt->offset_cnt = 0U;
+    rt->offset_sum[0] = 0U;
+    rt->offset_sum[1] = 0U;
+    rt->offset_sum[2] = 0U;
     m->current_offset_cal_pending = false;
     m->current_offset_calibrating = true;
   }
 
   for (i = 0U; i < 3U; i++)
   {
-    axis->rt.offset_sum[i] += (uint32_t)m->state.phase_current.adc_raw[i];
+    rt->offset_sum[i] += (uint32_t)m->state.phase_current.adc_raw[i];
   }
-  axis->rt.offset_cnt++;
+  rt->offset_cnt++;
 
-  if (axis->rt.offset_cnt >= CURRENT_OFFSET_CALIBRATION_TIMES_SHIFT)
+  if (rt->offset_cnt >= CURRENT_OFFSET_CALIBRATION_TIMES_SHIFT)
   {
     for (i = 0U; i < 3U; i++)
     {
       m->state.phase_current.adc_offset[i] =
-          (uint16_t)(axis->rt.offset_sum[i] >> CURRENT_OFFSET_CALIBRATION_TIME);
+          (uint16_t)(rt->offset_sum[i] >> CURRENT_OFFSET_CALIBRATION_TIME);
     }
     m->current_offset_calibrating = false;
     m->current_offset_cal_done = true;
-    axis->rt.offset_active = 0u;
+    rt->offset_active = 0u;
   }
 }
 
@@ -99,7 +99,7 @@ static void current_sense_run_offset_cal_blocking(motor_handle_t *m)
     return;
   }
 
-  motor_axis_enter_dc_cal_hw(m);
+  motor_enter_dc_cal_hw(m);
 
   m->current_offset_cal_pending = true;
   m->current_offset_calibrating = false;
@@ -111,7 +111,7 @@ static void current_sense_run_offset_cal_blocking(motor_handle_t *m)
     current_sense_process_sample(m);
   }
 
-  motor_axis_disarm(m);
+  motor_disarm(m);
 }
 
 void current_sense_init(motor_handle_t *m)

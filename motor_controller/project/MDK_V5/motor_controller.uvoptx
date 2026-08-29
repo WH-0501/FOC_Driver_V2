@@ -623,8 +623,8 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\APP\FOC\motor_axis.c</PathWithFileName>
-      <FilenameWithoutPath>motor_axis.c</FilenameWithoutPath>
+      <PathWithFileName>..\APP\motor.c</PathWithFileName>
+      <FilenameWithoutPath>motor.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
     </File>

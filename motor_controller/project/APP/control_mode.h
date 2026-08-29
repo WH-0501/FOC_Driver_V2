@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include "datatypes.h"
 
-/** 控制模式是否需要输出 PWM（FSM / motor_axis 共用，单点定义）。 */
+/** 控制模式是否需要输出 PWM（FSM / motor 共用，单点定义）。 */
 static inline bool control_mode_needs_pwm(control_mode_t mode)
 {
   switch (mode)
