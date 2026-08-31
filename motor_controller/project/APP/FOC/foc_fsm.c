@@ -73,7 +73,7 @@ static void foc_fsm_on_run(motor_handle_t *m, fsm_state_t state)
       {
         break;
       }
-      motor_sync_power(m);
+      motor_sync_arm_with_mode(m);
       if (m->ctrl_mode == CTRL_MODE_IDLE)
       {
         foc_fsm_next_state(m, STATE_IDLE);

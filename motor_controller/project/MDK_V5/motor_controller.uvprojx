@@ -17,7 +17,7 @@
           <Device>AT32M416KBU7-4</Device>
           <Vendor>ArteryTek</Vendor>
           <PackID>ArteryTek.AT32M412_416_DFP.2.0.5</PackID>
-          <Cpu>IRAM(0x20000000,0x4000) IROM(0x08000000,0x20000) CPUTYPE("Cortex-M4") FPU2 CLOCK(12000000) ELITTLE</Cpu>
+          <Cpu>IRAM(0x20000000,0x4000) IROM(0x08001000,0x1F000) CPUTYPE("Cortex-M4") FPU2 CLOCK(12000000) ELITTLE</Cpu>
           <FlashUtilSpec></FlashUtilSpec>
           <StartupFile></StartupFile>
           <FlashDriverDll>UL2CM3(-S0 -C0 -P0 -FD20000000 -FC1000 -FN1 -FF0AT32M416_128 -FS08000000 -FL00020000 -FP0($$Device:AT32M416KBU7-4$Flash\AT32M416_128.FLM))</FlashDriverDll>
@@ -250,8 +250,8 @@
               </IRAM>
               <IROM>
                 <Type>1</Type>
-                <StartAddress>0x8000000</StartAddress>
-                <Size>0x20000</Size>
+                <StartAddress>0x8001000</StartAddress>
+                <Size>0x1f000</Size>
               </IROM>
               <XRAM>
                 <Type>0</Type>
@@ -275,7 +275,7 @@
               </OCR_RVCT3>
               <OCR_RVCT4>
                 <Type>1</Type>
-                <StartAddress>0x8000000</StartAddress>
+                <StartAddress>0x8001000</StartAddress>
                 <Size>0x20000</Size>
               </OCR_RVCT4>
               <OCR_RVCT5>
@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>AT32M416KBU7_4, USE_STDPERIPH_DRIVER, PLATFORM_AT32</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\libraries\drivers\inc;..\..\libraries\cmsis\cm4\core_support;..\..\libraries\cmsis\cm4\device_support;..\inc;..\APP;..\APP\config;..\APP\Driver;..\APP\FOC;..\APP\logger;..\Board</IncludePath>
+              <IncludePath>..\..\libraries\drivers\inc;..\..\libraries\cmsis\cm4\core_support;..\..\libraries\cmsis\cm4\device_support;..\inc;..\APP;..\APP\config;..\APP\Driver;..\APP\FOC;..\APP\logger;..\APP\comm;..\APP\comm\transport;..\APP\comm\protocol\custom;..\APP\comm\protocol\canopen;..\Board</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -366,11 +366,11 @@
             <Rwpi>0</Rwpi>
             <noStLib>0</noStLib>
             <RepFail>1</RepFail>
-            <useFile>0</useFile>
-            <TextAddressRange>0x08000000</TextAddressRange>
+            <useFile>1</useFile>
+            <TextAddressRange>0x08001000</TextAddressRange>
             <DataAddressRange>0x20000000</DataAddressRange>
             <pXoBase></pXoBase>
-            <ScatterFile></ScatterFile>
+            <ScatterFile>.\objects\motor_controller.sct</ScatterFile>
             <IncludeLibs></IncludeLibs>
             <IncludeLibsPath></IncludeLibsPath>
             <Misc></Misc>
@@ -667,6 +667,51 @@
               <FileName>Debug.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\logger\Debug.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Comm</GroupName>
+          <Files>
+            <File>
+              <FileName>comm.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\comm\comm.c</FilePath>
+            </File>
+            <File>
+              <FileName>comm_frame_queue.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\comm\comm_frame_queue.c</FilePath>
+            </File>
+            <File>
+              <FileName>can_port_at32.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\comm\transport\can_port_at32.c</FilePath>
+            </File>
+            <File>
+              <FileName>can_fd_custom.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\comm\protocol\custom\can_fd_custom.c</FilePath>
+            </File>
+            <File>
+              <FileName>can_fd_custom_codec.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\comm\protocol\custom\can_fd_custom_codec.c</FilePath>
+            </File>
+            <File>
+              <FileName>can_fd_custom_iap.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\comm\protocol\custom\can_fd_custom_iap.c</FilePath>
+            </File>
+            <File>
+              <FileName>iap_upgrade.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\comm\protocol\custom\iap_upgrade.c</FilePath>
+            </File>
+            <File>
+              <FileName>canopen.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\comm\protocol\canopen\canopen.c</FilePath>
             </File>
           </Files>
         </Group>

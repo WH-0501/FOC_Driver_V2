@@ -45,6 +45,7 @@
 #include "storage/flash.h"
 #include "motor_config.h"
 #include "motor_config_storage_ops.h"
+#include "comm/comm.h"
 /* add user code end private includes */
 
 /* private typedef -----------------------------------------------------------*/
@@ -57,7 +58,7 @@
 /* Current image is linked at 0x08000000 (see .map), so VTOR offset must be 0.
  * If using a bootloader offset (e.g. 0x1000), linker/scatter must also relocate
  * the whole image and vector table to the same flash base. */
-#define APP_VECTOR_TABLE_OFFSET 0x0000 // 0x1000 for bootloader
+#define APP_VECTOR_TABLE_OFFSET 0x1000 // 0x1000 for bootloader
 /* add user code end private define */
 
 /* private macro -------------------------------------------------------------*/
@@ -177,15 +178,22 @@ int main(void)
   motor_config_t motor_cfg;
   (void)motor_config_init(&motor_cfg);
 
-  // 2. 通信初始化
-  // motor_config_reset(&motor_cfg); // 强制恢复出厂设置
-  // 3. 电机控制器初始化
+  // 2. 电机控制器初始化
   if (mc_init(&motor_cfg) != MC_OK)
   {
     while (1)
     {
       /* TODO: 上报 gate driver 初始化失败 */
     }
+  }
+
+  // 3. 通信初始化（在 mc_init 之后，协议可安全调用 mc_interface）
+  {
+    comm_config_t comm_cfg = {
+      .protocol = COMM_PROTOCOL_CAN_FD_CUSTOM,
+      .node_id = motor_cfg.comm.can_id,
+    };
+    (void)comm_init(&comm_cfg);
   }
 
   LOG_INFO("Motor controller initialized");
@@ -195,6 +203,7 @@ int main(void)
   {
     /* add user code begin 3 */
     mc_poll();
+    comm_poll();
     VoFaDisUart();
     /* add user code end 3 */
   }

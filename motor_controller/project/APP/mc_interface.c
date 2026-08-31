@@ -265,3 +265,39 @@ int mc_try_recover_from_fault(void)
   foc_fsm_next_state(m, STATE_IDLE);
   return MC_OK;
 }
+
+int mc_set_joint_origin(void)
+{
+  motor_handle_t *m = motor_get_handler();
+
+  if (mc_is_enabled())
+  {
+    return MC_ERR_STATE;
+  }
+
+  m->config.param.theta_offset_rad += m->state.shaft.position_rad;
+  return MC_OK;
+}
+
+int mc_align_electrical(void)
+{
+  motor_handle_t *m = motor_get_handler();
+
+  if (mc_is_enabled())
+  {
+    (void)mc_disable();
+  }
+
+  if (motor_fault_is_latched(m) || (m->fsm == STATE_FAULT))
+  {
+    return MC_ERR_FAULT;
+  }
+
+  if (m->fsm != STATE_IDLE)
+  {
+    return MC_ERR_STATE;
+  }
+
+  foc_align_electrical(m);
+  return MC_OK;
+}

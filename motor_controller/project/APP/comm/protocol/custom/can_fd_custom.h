@@ -1,0 +1,67 @@
+#ifndef __CAN_FD_CUSTOM_H__
+#define __CAN_FD_CUSTOM_H__
+
+/**
+ * 自定义 CAN-FD 协议常量，与 motor_controller_gui/protocol/constants.py 对齐。
+ */
+
+#include <stdint.h>
+#include "comm_protocol.h"
+
+#define CAN_FD_BROADCAST_ID     0x00u
+#define CAN_FD_IAP_ID           0x7FFu
+
+#define CAN_FD_PID_FORMAT       4096.0f
+#define CAN_FD_POS_SCALE        128.0f
+
+#define CAN_FD_REPORT_HZ_DEFAULT  1000u ///< 默认上报频率 1000Hz
+#define CAN_FD_REPORT_HZ_MAX      1000u ///< 最大上报频率 1000Hz
+
+typedef enum
+{
+  CAN_FD_CMD_SYNC = 0x00,
+  CAN_FD_CMD_TAR_POS = 0x01,
+  CAN_FD_CMD_TAR_VEL = 0x02,
+  CAN_FD_CMD_TAR_CURR = 0x03,
+  CAN_FD_CMD_TAR_POS_VEL = 0x12,
+  CAN_FD_CMD_TAR_POS_CURR = 0x13,
+  CAN_FD_CMD_TAR_VEL_CURR = 0x23,
+  CAN_FD_CMD_TAR_POS_VEL_CURR = 0x30,
+
+  CAN_FD_CMD_ENABLE = 0x40,
+  CAN_FD_CMD_CONTROL_MODE = 0x41,
+  CAN_FD_CMD_SET_POS_PID = 0x42,
+  CAN_FD_CMD_SET_VEL_PID = 0x43,
+  CAN_FD_CMD_SET_CUR_PID = 0x44,
+  CAN_FD_CMD_SET_STIFF_DAMP = 0x45,
+  CAN_FD_CMD_SET_PROTECT = 0x46,
+  CAN_FD_CMD_GET_POS_PID = 0x47,
+  CAN_FD_CMD_GET_VEL_PID = 0x48,
+  CAN_FD_CMD_GET_CUR_PID = 0x49,
+  CAN_FD_CMD_GET_STIFF_DAMP = 0x4A,
+  CAN_FD_CMD_GET_PROTECT = 0x4B,
+  CAN_FD_CMD_SET_NODE_ID = 0x4C,
+  CAN_FD_CMD_SAVE_PARAMS = 0x4D,
+  CAN_FD_CMD_RESET_TO_FACTORY = 0x4E,
+  CAN_FD_CMD_SET_ORIGIN = 0x50,
+  CAN_FD_CMD_GET_MOTOR_TYPE = 0x52,
+  CAN_FD_CMD_SET_REPORT_RATE = 0x7F,
+  CAN_FD_CMD_ALIGN_ELECTRIC_ANGLE = 0xAB,
+  CAN_FD_CMD_MCU_TEMP_CALIB = 0xAC,
+
+  CAN_FD_CMD_IAP_ENTER = 0xF8,
+  CAN_FD_CMD_IAP_START = 0xF9,
+  CAN_FD_CMD_IAP_DATA = 0xFA,
+  CAN_FD_CMD_IAP_END = 0xFB,
+  CAN_FD_CMD_IAP_STATUS = 0xFC,
+  CAN_FD_CMD_IAP_FW_VERSION = 0xFD,
+  CAN_FD_CMD_IAP_VERIFY = 0xFE,
+  CAN_FD_CMD_IAP_RESET = 0xFF,
+
+  CAN_FD_CMD_PERIOD_REPORT = 0x00,
+} can_fd_cmd_t;
+
+/** 获取自定义 CAN-FD 协议插件（绑定 AT32 CAN 传输层）。 */
+const comm_protocol_ops_t *can_fd_custom_protocol_ops(void);
+
+#endif /* __CAN_FD_CUSTOM_H__ */

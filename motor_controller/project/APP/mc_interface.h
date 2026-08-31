@@ -57,4 +57,10 @@ mc_calibration_type_t mc_get_calibration_type(void);
 
 int mc_try_recover_from_fault(void);
 
+/** 失能状态下将当前轴端位置设为零点（更新 theta_offset_rad）。 */
+int mc_set_joint_origin(void);
+
+/** 失能状态下执行电角对齐。 */
+int mc_align_electrical(void);
+
 #endif /* __MC_INTERFACE_H__ */

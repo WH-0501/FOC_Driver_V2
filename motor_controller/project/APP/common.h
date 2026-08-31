@@ -64,8 +64,8 @@
 /* 机械 100RPM → 机械角速度 [rad/s] */
 #define OL_OMEGA_100RPM_MECH   RPM_TO_RAD_PER_SEC(100.0f)
 
-#define DEF_UVLO_VOLTAGE (23.8f)
-#define DEF_OVP_VOLTAGE (24.9f)
+#define DEF_UVLO_VOLTAGE (9.0f)
+#define DEF_OVP_VOLTAGE (27.0f)
 #define DEF_OCP_CURRENT (1.0f)
 #define DEF_TEMP_LIMIT (100.0f)
 #define DEF_SW_OCP (1.2f)

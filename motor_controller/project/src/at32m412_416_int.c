@@ -30,6 +30,7 @@
 /* private includes ----------------------------------------------------------*/
 /* add user code begin private includes */
 #include "board.h"
+#include "comm/comm.h"
 /* add user code end private includes */
 
 /* private typedef -----------------------------------------------------------*/
@@ -283,6 +284,7 @@ void CAN1_RX_IRQHandler(void)
     /* clear flag and receive buffer release */
     can_flag_clear(CAN1, CAN_RIF_FLAG);
     can_rxbuf_read(CAN1, &can_rxbuf_struct);
+    comm_can1_rx_isr(&can_rxbuf_struct);
     /* add user code end CAN1_CAN_RIF_FLAG */
   }
 

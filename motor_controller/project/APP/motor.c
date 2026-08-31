@@ -88,7 +88,18 @@ bool motor_is_armed(const motor_handle_t *m)
   return motor_driver_is_armed(&s_motor_driver);
 }
 
-void motor_sync_power(motor_handle_t *m)
+/**
+ * @brief 同步电机驱动器使能：根据控制模式决定是否使能电机驱动器
+ * 
+ * @param m: 电机句柄
+ * 
+ * 1. 如果电机处于故障状态，则不进行同步
+ * 2. 如果控制模式需要 PWM 输出，则使能电机驱动器
+ * 3. 如果控制模式不需要 PWM 输出，则关闭电机驱动器
+ * 
+ * @return void
+ */
+void motor_sync_arm_with_mode(motor_handle_t *m)
 {
   if (m == NULL)
   {

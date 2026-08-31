@@ -11,4 +11,7 @@ void foc_init(motor_handle_t *m, const motor_config_t *config);
 
 void foc_control_loop(motor_handle_t *m);
 
+/** 失能状态下执行电角对齐，结果写入 config.param.theta_elec_offset_rad。 */
+void foc_align_electrical(motor_handle_t *m);
+
 #endif /* __FOC_H__ */

@@ -76,6 +76,7 @@ void motor_fault_protect(motor_handle_t *m)
   L = &m->config.limits;
   S = &m->state;
 
+  // 先清除POLL_MASK掩码位，再进行故障检测
   m->fault.status &= ~FAULT_POLL_MASK;
 
   gate = motor_gate(m);

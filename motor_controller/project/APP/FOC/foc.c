@@ -113,7 +113,7 @@ static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, f
   m->state.i_bus = sqrtf(SQ(m->state.i_d) + SQ(m->state.i_q));
 }
 
-static void foc_align_electrical(motor_handle_t *m)
+void foc_align_electrical(motor_handle_t *m)
 {
   motor_runtime_t *rt;
 

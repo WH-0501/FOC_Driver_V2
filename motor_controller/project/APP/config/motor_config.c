@@ -1,9 +1,12 @@
 #include "motor_config.h"
 #include "common.h"
+#include <stddef.h>
 #include <string.h>
 
 #define MOTOR_CONFIG_BLOB_MAGIC   (0x4D434647u) /* 'MCFG' */
-#define MOTOR_CONFIG_BLOB_VERSION (1u)
+#define MOTOR_CONFIG_BLOB_VERSION (2u)
+#define MOTOR_CONFIG_BLOB_VERSION_V1 (1u)
+#define MOTOR_CONFIG_V1_PAYLOAD_LEN ((uint16_t)offsetof(motor_config_t, mit))
 
 typedef struct
 {
@@ -73,6 +76,16 @@ static bool motor_config_blob_parse(const motor_config_blob_t *blob, motor_confi
 
   if (blob->header.version != MOTOR_CONFIG_BLOB_VERSION)
   {
+    if ((blob->header.version == MOTOR_CONFIG_BLOB_VERSION_V1) &&
+        (blob->header.payload_len == MOTOR_CONFIG_V1_PAYLOAD_LEN))
+    {
+      memset(config, 0, sizeof(*config));
+      memcpy(config, blob->payload, (size_t)MOTOR_CONFIG_V1_PAYLOAD_LEN);
+      config->mit.stiffness = 0.0f;
+      config->mit.damping = 0.0f;
+      return true;
+    }
+
     return false;
   }
   if (blob->header.payload_len != (uint16_t)sizeof(motor_config_t))
@@ -169,6 +182,8 @@ void motor_config_set_defaults(motor_config_t *config)
 
   config->comm.can_id = 0x01u;
   config->auto_align_electrical = false;
+  config->mit.stiffness = 0.0f;
+  config->mit.damping = 0.0f;
 }
 
 bool motor_config_init(motor_config_t *config)

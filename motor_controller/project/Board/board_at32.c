@@ -194,11 +194,14 @@ void board_get_vbus_and_temp(motor_handle_t *m)
     return;
   }
 
+  adc_ordinary_software_trigger_enable(ADC1, TRUE);
+  // while(adc_flag_get(ADC1, ADC_OCCE_FLAG) == RESET);
+
   s = &m->state;
   s->vbus = (float)s_adc1_raw[0] * _ADC_CONV * GAIN_VBUS;
   // s->board_temp.temp = (float)s_adc1_raw[1] * _ADC_CONV * GAIN_TEMP;
 
-  adc_ordinary_software_trigger_enable(ADC1, TRUE);
+  // adc_flag_clear(ADC1, ADC_OCCE_FLAG);
 }
 
 void board_current_loop_irq_handler(void *adc_handle)

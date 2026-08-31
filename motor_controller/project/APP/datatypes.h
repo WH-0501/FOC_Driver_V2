@@ -146,6 +146,13 @@ typedef struct
   float max_snap_rad_s4;   ///< 最大 snap（角加速度对时间的导数）[rad/s⁴]，不用则 0
 } motor_motion_cfg_t;
 
+/** MIT 模式阻抗参数（CAN 0x45 刚度/阻尼，Q12 标度）。 */
+typedef struct
+{
+  float stiffness; ///< 刚度 kp [N·m/rad] 或等价标度
+  float damping;   ///< 阻尼 kd [N·m·s/rad]
+} motor_mit_config_t;
+
 /** 上电加载的静态配置：本体参数 + 电气限幅 + 运动轨线约束 */
 typedef struct
 {
@@ -155,6 +162,7 @@ typedef struct
   motor_pid_config_t pid;      ///< 各控制环 PID 配置参数
   motor_comm_config_t comm;    ///< 通信配置
   bool auto_align_electrical;  ///< 上电是否自动执行电角对齐
+  motor_mit_config_t mit;      ///< MIT 刚度/阻尼
 } motor_config_t;
 
 typedef struct

@@ -31,7 +31,7 @@ void motor_arm(motor_handle_t *m);
 void motor_disarm(motor_handle_t *m);
 void motor_shutdown(motor_handle_t *m);
 bool motor_is_armed(const motor_handle_t *m);
-void motor_sync_power(motor_handle_t *m);
+void motor_sync_arm_with_mode(motor_handle_t *m);
 void motor_enter_dc_cal_hw(motor_handle_t *m);
 error_t motor_apply_pwm(motor_handle_t *m, const motor_actuation_t *actuation);
 

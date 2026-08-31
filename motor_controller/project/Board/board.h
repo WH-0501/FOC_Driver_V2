@@ -41,6 +41,9 @@ void board_invoke_current_loop(void);
 
 void board_get_phase_current(motor_handle_t *m);
 
+/** 慢速更新母线电压（及板温 ADC，若已配置）。 */
+void board_get_vbus_and_temp(motor_handle_t *m);
+
 void board_current_loop_irq_handler(void *adc_handle);
 #define CURRENT_LOOP_IRQ_HANDLER board_current_loop_irq_handler
 
