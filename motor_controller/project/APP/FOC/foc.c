@@ -52,24 +52,42 @@ static void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
 {
   float Ualpha, Ubeta;
   float Ua, Ub, Uc;
-  float vbus = m->config.limits.vbus_nominal;
-  float Uq_max;
+  // float vbus = m->config.limits.vbus_nominal;
+  float vbus;
+  // float Uq_max;
+  float u_lim;
 
+  vbus = m->state.vbus_filtered;
+  if (vbus <= 0.0f)
+  {
+    vbus = m->config.limits.vbus_nominal;
+  }
   if (vbus <= 0.0f)
   {
     vbus = BUS_VOLTAGE;
   }
 
-  Uq_max = sqrtf(vbus * vbus - Ud * Ud);
-  Uq = CLAMP(Uq, -Uq_max, Uq_max);
+  u_lim = 0.5f * vbus;
+  Uq = CLAMP(Uq, -u_lim, u_lim);
+  Ud = CLAMP(Ud, -u_lim, u_lim);
+  // Uq_max = sqrtf(vbus * vbus - Ud * Ud);
+  // Uq = CLAMP(Uq, -Uq_max, Uq_max);
 
   inv_park_transform(Ud, Uq, angle_el, &Ualpha, &Ubeta);
-  inv_clarke_transform(Ualpha, Ubeta, &Ua, &Ub, &Uc);
+  // inv_clarke_transform(Ualpha, Ubeta, &Ua, &Ub, &Uc);
 
-  svm(Ua, Ub, Uc, &m->out.duty_a, &m->out.duty_b, &m->out.duty_c);
-  m->out.duty_a = CLAMP(m->out.duty_a, 0.0f, 1.0f);
-  m->out.duty_b = CLAMP(m->out.duty_b, 0.0f, 1.0f);
-  m->out.duty_c = CLAMP(m->out.duty_c, 0.0f, 1.0f);
+  // svm(Ua, Ub, Uc, &m->out.duty_a, &m->out.duty_b, &m->out.duty_c);
+  // m->out.duty_a = CLAMP(m->out.duty_a, 0.0f, 1.0f);
+  // m->out.duty_b = CLAMP(m->out.duty_b, 0.0f, 1.0f);
+  // m->out.duty_c = CLAMP(m->out.duty_c, 0.0f, 1.0f);
+  
+  /* SPWM：中点偏置 + 归一化占空比，与 dex-con SetPhaseVoltage 一致 */
+  Ua = Ualpha + 0.5f * vbus;
+  Ub = (SQRT_3 * Ubeta - Ualpha) * 0.5f + 0.5f * vbus;
+  Uc = -(Ualpha + SQRT_3 * Ubeta) * 0.5f + 0.5f * vbus;
+  m->out.duty_a = CLAMP(Ua / vbus, 0.0f, 1.0f);
+  m->out.duty_b = CLAMP(Ub / vbus, 0.0f, 1.0f);
+  m->out.duty_c = CLAMP(Uc / vbus, 0.0f, 1.0f);
   (void)motor_apply_pwm(m, &m->out);
 }
 

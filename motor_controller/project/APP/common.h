@@ -29,6 +29,7 @@
 #define MAX_ACC_RAD_S2 (100.0f) ///< 最大加速度 [rad/s²]
 #define MAX_JERK_RAD_S3 (1000.0f) ///< 最大加加速度 [rad/s³]
 
+#define CPU_CLOCK_HZ (180000000.0f) ///< 180MHz
 
 
 /* 角度原始值 -> 弧度，满量程对齐 2π（与 KTH71 定义为 uint16 满刻度时一致） */
@@ -40,32 +41,34 @@
 #define ALIGN_ELECTRICAL_VOLTAGE_D_V   (0.0f)
 #define ALIGN_ELECTRICAL_VOLTAGE_Q_V   (2.0f)
 
-
-
-/* 外环相对电流环分频；PID_POS.dt / PID_VEL.dt 应对应该实际周期（约 电流周期×本系数）*/
-#define FOC_OUTER_LOOP_DIV   15u
-#define FOC_PWM_HZ           30000u
-#define FOC_PWM_PERIOD_TS    (1.0f / (float)FOC_PWM_HZ)
-#define OPEN_LOOP_TS         ((float)FOC_OUTER_LOOP_DIV / (float)FOC_PWM_HZ)
-
 #define OPEN_LOOP_UQ_RAMP_RATE      20.0f
 #define OPEN_LOOP_OMEGA_RAMP_RATE   20.0f
 #define OPEN_LOOP_UQ_MAX            2.0f
 /** 速度低于此阈值时不输出 Uq，避免零速堵转发热 [rad/s] */
 #define OPEN_LOOP_OMEGA_EPS_RAD_S   (0.05f)
 
+#define FOC_TMR1_CLK_HZ (180000000.0f)  
+#define FOC_TMR1_DIV_REG (1u)
+#define FOC_TMR1_PERIOD  (2249u)
+#define FOC_PWM_HZ (FOC_TMR1_CLK_HZ / (2u *  (FOC_TMR1_DIV_REG + 1u) * (FOC_TMR1_PERIOD + 1u)))
+#define FOC_PWM_PERIOD_TS    (1.0f / (float)FOC_PWM_HZ)
 /**
  * @brief 电流环与测量链路的采样率/滤波配置
+ *        1. FOC_CURRENT_LOOP_FS_HZ: 电流环采样率
+ *        2. FOC_MEAS_LPF_FC_HZ: 电流环滤波器截止频率
+ *        3. FOC_CURRENT_MEAS_PERIOD: 电流环周期
  */
 #ifndef FOC_CURRENT_LOOP_FS_HZ
-#define FOC_CURRENT_LOOP_FS_HZ (20000.0f)
+#define FOC_CURRENT_LOOP_FS_HZ (FOC_PWM_HZ)
 #endif
 #ifndef FOC_MEAS_LPF_FC_HZ
-#define FOC_MEAS_LPF_FC_HZ (2000.0f)
+#define FOC_MEAS_LPF_FC_HZ (FOC_CURRENT_LOOP_FS_HZ / 10u)
 #endif
 #ifndef FOC_CURRENT_MEAS_PERIOD
 #define FOC_CURRENT_MEAS_PERIOD (float)(1.0f / (float)FOC_CURRENT_LOOP_FS_HZ)
 #endif
+/* 开环周期 */
+#define OPEN_LOOP_TS         FOC_CURRENT_MEAS_PERIOD
 
 /** 
  * @brief 母线电压采样率 [Hz]（慢路径，与电流环解耦）
