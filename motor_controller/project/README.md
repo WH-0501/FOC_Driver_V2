@@ -76,3 +76,17 @@ V_{\text{SOx}} = V_{\text{REF}} + \frac{(R_{\text{REF}} \times I_{\text{LOAD}})}
 $$
 例如：
 $$V_{\text{SOA}} = 1.65 + \frac{(3300Ω \times I_{\text{LOAD}})}{9200}$$
+
+
+# 测试指令
+```shell
+# 1. 使能
+00 40 01
+# 2. 掉使能
+00 40 00
+
+# 3. 设置电机1目标速度 500RPM(01 F4)
+00 02 01 01 F4
+
+00 02 01 00 64 # 100RPM
+```

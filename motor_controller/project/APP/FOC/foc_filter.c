@@ -41,6 +41,15 @@ bool lpf1_reset(lpf1_t *lpf, float initial_value)
     return false;
 } 
 
+/**
+ * @brief 更新低通滤波器输出
+ *        1. 计算滤波器输出
+ *        2. 更新滤波器输入
+ * 注意: 要满足 fc < fs/2 的条件（奈奎斯特准则）, 否则离散近似无意义
+ * @param lpf 低通滤波器句柄
+ * @param input 输入信号
+ * @return float 输出信号
+ */
 float lpf1_update(lpf1_t *lpf, float input)
 {
     if (lpf != NULL)

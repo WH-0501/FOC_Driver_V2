@@ -3,6 +3,7 @@
 #include "can_fd_custom_codec.h"
 #include "iap_upgrade.h"
 #include "mc_interface.h"
+#include "comm_transport.h"
 #include <string.h>
 
 static bool (*s_send_fn)(const comm_frame_t *frame);
@@ -11,6 +12,7 @@ static bool can_fd_iap_send(uint32_t id, uint8_t cmd, const uint8_t *payload, ui
                             uint8_t *tx_cnt)
 {
   comm_frame_t frame;
+  uint8_t buf[COMM_FRAME_MAX_LEN];
   uint8_t total_len;
   uint8_t padded_len;
   uint8_t i;
@@ -22,23 +24,25 @@ static bool can_fd_iap_send(uint32_t id, uint8_t cmd, const uint8_t *payload, ui
 
   total_len = (uint8_t)(2u + payload_len);
   padded_len = can_fd_codec_pad_canfd_len(total_len);
-  if (padded_len > sizeof(frame.data))
+  if (padded_len > COMM_FRAME_MAX_LEN)
   {
     return false;
   }
 
-  frame.id = id;
-  frame.len = padded_len;
-  frame.data[0] = (*tx_cnt)++;
-  frame.data[1] = cmd;
+  buf[0] = (*tx_cnt)++;
+  buf[1] = cmd;
   for (i = 0u; i < payload_len; ++i)
   {
-    frame.data[2u + i] = payload[i];
+    buf[2u + i] = payload[i];
   }
   for (i = total_len; i < padded_len; ++i)
   {
-    frame.data[i] = 0u;
+    buf[i] = 0u;
   }
+
+  frame.id = id;
+  frame.len = padded_len;
+  frame.data = buf;
 
   return s_send_fn(&frame);
 }

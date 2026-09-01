@@ -2,6 +2,7 @@
 #include "foc.h"
 #include "foc_fsm.h"
 #include "foc_fault.h"
+#include "foc_sense.h"
 #include "board.h"
 #include "motor.h"
 #include "control_mode.h"
@@ -62,7 +63,10 @@ mc_error_t mc_init(const motor_config_t *config)
 
 void mc_poll(void)
 {
-  motor_fault_protect(motor_get_handler());
+  motor_handle_t *m = motor_get_handler();
+
+  foc_sense_poll_vbus(m);
+  motor_fault_protect(m);
 }
 
 void mc_current_loop_isr(void)

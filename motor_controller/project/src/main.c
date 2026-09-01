@@ -159,7 +159,7 @@ int main(void)
 
   /* add user code begin 2 */
   Logger_Init(LOG_OUTPUT_UART);
-  LOG_INFO("Logger initialized");
+  // LOG_INFO("Logger initialized");
   dwt_init();
 
   motor_cfg_storage_adapter_t motor_cfg_adapter = {
@@ -175,10 +175,11 @@ int main(void)
                                                    &motor_cfg_adapter);
 
   // 1. 读取电机配置
-  motor_config_t motor_cfg;
+  static motor_config_t motor_cfg;
   (void)motor_config_init(&motor_cfg);
 
   // 2. 电机控制器初始化
+  motor_config_set_defaults(&motor_cfg); // 强制更新参数,避免改动不生效
   if (mc_init(&motor_cfg) != MC_OK)
   {
     while (1)
@@ -192,18 +193,19 @@ int main(void)
     comm_config_t comm_cfg = {
       .protocol = COMM_PROTOCOL_CAN_FD_CUSTOM,
       .node_id = motor_cfg.comm.can_id,
+      .rx_queue_depth = COMM_RX_QUEUE_DEPTH_DEFAULT,
     };
     (void)comm_init(&comm_cfg);
   }
 
-  LOG_INFO("Motor controller initialized");
+  // LOG_INFO("Motor controller initialized");
   /* add user code end 2 */
 
   while(1)
   {
     /* add user code begin 3 */
-    mc_poll();
     comm_poll();
+    mc_poll();
     VoFaDisUart();
     /* add user code end 3 */
   }

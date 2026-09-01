@@ -5,6 +5,8 @@
 #include "motor.h"
 #include "../config/motor_config.h"
 #include "dwt_profile_delay.h"
+#include "common.h"
+#include "math_compat.h"
 #include <string.h>
 
 static void foc_pid_apply_param(pid_state_t *pid, uint8_t mode)
@@ -34,7 +36,7 @@ static void foc_validate_config(motor_handle_t *m)
 
 static void foc_init_filters(motor_handle_t *m)
 {
-  lpf1_init(&m->vbus_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
+  lpf1_init(&m->vbus_lpf, FOC_VBUS_LPF_FC_HZ, FOC_VBUS_SAMPLE_FS_HZ);
   lpf1_init(&m->v_a_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
   lpf1_init(&m->v_b_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
   lpf1_init(&m->v_c_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
@@ -155,6 +157,15 @@ static void foc_speed_open_control(motor_handle_t *m, float target_speed)
   }
 
   rt->open_loop_omega = ramp_toward(rt->open_loop_omega, target_speed, omega_step);
+
+  if ((fabsf(target_speed) < OPEN_LOOP_OMEGA_EPS_RAD_S) &&
+      (fabsf(rt->open_loop_omega) < OPEN_LOOP_OMEGA_EPS_RAD_S))
+  {
+    rt->open_loop_uq = 0.0f;
+    foc_voltage(m, 0.0f, 0.0f, rt->open_loop_shaft_angle);
+    return;
+  }
+
   rt->open_loop_uq = OPEN_LOOP_UQ_MAX;
   rt->open_loop_shaft_angle = angle_normalize(
       rt->open_loop_shaft_angle + (float)m->config.param.pole_pairs * rt->open_loop_omega * dt);
@@ -259,6 +270,7 @@ void foc_control_loop(motor_handle_t *m)
     return;
   }
 
+  // foc_sense_poll_vbus(m);
   foc_sense_update(m);
   foc_fsm_loop(m);
 

@@ -29,14 +29,15 @@ void VoFaDisUart(void)
 
     __disable_irq();
     motor_state_t state = m->state;
-    Send.Data[0].FloatData = state.theta_elec_rad;
-    Send.Data[1].FloatData = state.shaft.angle_rad;
-    Send.Data[2].FloatData = state.joint.position_rad;
+    // Send.Data[0].FloatData = state.theta_elec_rad;
+    // Send.Data[1].FloatData = state.shaft.angle_rad;
+    // Send.Data[2].FloatData = state.joint.position_rad;
+    Send.Data[0].FloatData = m->ref.speed_rad_s;
+    Send.Data[1].FloatData = (float)m->ctrl_mode;
+    Send.Data[2].FloatData = state.board_temp.value;
     Send.Data[3].FloatData = (float)m->fsm;
-    Send.Data[4].FloatData = (float)m->fault.status;
-    // Send.Data[4].FloatData = state.phase_current.ampere[0];
-    // Send.Data[5].FloatData = state.phase_current.ampere[1];
-    // Send.Data[6].FloatData = state.phase_current.ampere[2];
+    Send.Data[4].FloatData = (float)m->fault.latched;
+    Send.Data[5].FloatData = state.vbus_filtered;
     __enable_irq();
 
     UartTemp[0] = Send.Data[0].ByteData[0]; //The first data

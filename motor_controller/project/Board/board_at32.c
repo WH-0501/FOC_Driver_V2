@@ -24,8 +24,22 @@ uint16_t pwm_compare_top = 0;
 #define BOARD_UART_RAW_TX_BUF_SIZE 256u
 #endif
 
-#define _ADC_CONV       (0.000805608f)
-#define GAIN_VBUS       (11.0f)
+/**
+ * @brief 母线电压采样电路
+ * VIN+ ──[R13 100K]──┬──[R17 100R]──→ Vbus (→ ADC)
+ *                    │
+ *                   [R14 10K]
+ *                    │
+ *                   PGND
+ * 电阻分压 + 限流电阻(R17), 将母线电压衰减到 MCU ADC 可测范围(0~3.3V)
+ * Vbus = (VIN * R14) / (R13 + R14) ≈ 0.0909 x VIN
+ * Vadc = (ADC_value / 4095) * 3.3V = ADC_value * 3.3 / 4095
+ * (注意: 工程上除以 4096 便于移位运算，除以 4095 是理论满量程，差别极微)
+ */
+#define _ADC_CONV       (0.000805608f) // 3.3/4095
+#define VOLTAGE_DIVIDER_RATIO (11) // 电压衰减比(分压比)
+#define _ADC_TEMP_SLOPE (-0.0042f)
+
 
 static uint8_t s_board_uart_dma_inited;
 static volatile uint8_t s_board_uart_stream_mode;
@@ -179,7 +193,7 @@ void board_get_phase_current(motor_handle_t *m)
   }
 
   s = &m->state;
-  s->board_temp.adc_raw = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_1);
+  s->motor_temp.adc_raw = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_1);
   s->phase_current.adc_raw[0] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_2);
   s->phase_current.adc_raw[1] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_3);
   s->phase_current.adc_raw[2] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_4);
@@ -194,14 +208,17 @@ void board_get_vbus_and_temp(motor_handle_t *m)
     return;
   }
 
-  adc_ordinary_software_trigger_enable(ADC1, TRUE);
+  // adc_ordinary_software_trigger_enable(ADC1, TRUE);
   // while(adc_flag_get(ADC1, ADC_OCCE_FLAG) == RESET);
 
   s = &m->state;
-  s->vbus = (float)s_adc1_raw[0] * _ADC_CONV * GAIN_VBUS;
-  // s->board_temp.temp = (float)s_adc1_raw[1] * _ADC_CONV * GAIN_TEMP;
+  s->vbus = (float)s_adc1_raw[0] * _ADC_CONV * VOLTAGE_DIVIDER_RATIO;
+  s->board_temp.adc_raw = s_adc1_raw[1];
+  s->board_temp.value = 
+    ((float)(m->config.temp_adc - s->board_temp.adc_raw) * _ADC_CONV) / _ADC_TEMP_SLOPE + m->config.temp;
 
   // adc_flag_clear(ADC1, ADC_OCCE_FLAG);
+  adc_ordinary_software_trigger_enable(ADC1, TRUE);
 }
 
 void board_current_loop_irq_handler(void *adc_handle)

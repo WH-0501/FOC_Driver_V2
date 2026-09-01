@@ -61,10 +61,9 @@ void motor_fault_protect(motor_handle_t *m)
 {
   const motor_limits_t *L;
   motor_state_t *S;
+  float vbus_mon;
   float i_abs_max;
   float a0, a1, a2, mx, mn, i_avg, imb;
-
-  board_get_vbus_and_temp(m);
 
   const gate_driver_t *gate;
 
@@ -76,6 +75,13 @@ void motor_fault_protect(motor_handle_t *m)
   L = &m->config.limits;
   S = &m->state;
 
+  vbus_mon = S->vbus_filtered;
+  if (vbus_mon <= 0.f)
+  {
+    board_get_vbus_and_temp(m);
+    vbus_mon = S->vbus;
+  }
+
   // 先清除POLL_MASK掩码位，再进行故障检测
   m->fault.status &= ~FAULT_POLL_MASK;
 
@@ -86,12 +92,12 @@ void motor_fault_protect(motor_handle_t *m)
     motor_fault_raise(m, FAULT_GATE_DRIVER);
   }
 
-  if (L->vbus_uv_threshold > 0.f && S->vbus > 0.f && S->vbus < L->vbus_uv_threshold)
+  if (L->vbus_uv_threshold > 0.f && vbus_mon > 0.f && vbus_mon < L->vbus_uv_threshold)
   {
     motor_fault_raise(m, FAULT_BUS_UV);
   }
 
-  if (L->vbus_ov_threshold > 0.f && S->vbus > L->vbus_ov_threshold)
+  if (L->vbus_ov_threshold > 0.f && vbus_mon > L->vbus_ov_threshold)
   {
     motor_fault_raise(m, FAULT_BUS_OV);
   }
@@ -106,7 +112,7 @@ void motor_fault_protect(motor_handle_t *m)
     }
   }
 
-  if (L->temp_limit > 0.f && S->temperature > L->temp_limit)
+  if (L->temp_limit > 0.f && S->board_temp.value > L->temp_limit)
   {
     motor_fault_raise(m, FAULT_OVERTEMP_MOTOR);
   }

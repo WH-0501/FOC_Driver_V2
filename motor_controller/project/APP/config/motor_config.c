@@ -147,6 +147,7 @@ void motor_config_set_defaults(motor_config_t *config)
   config->limits.iq_limit = DEF_OCP_CURRENT;
   config->limits.vd_limit = BUS_VOLTAGE * 0.5f;
   config->limits.vq_limit = BUS_VOLTAGE * 0.5f;
+  config->limits.temp_limit = DEF_TEMP_LIMIT;
 
   config->motion.max_speed_rad_s = MAX_VELOCITY_RAD_S;
   config->motion.max_accel_rad_s2 = MAX_ACC_RAD_S2;
@@ -181,9 +182,12 @@ void motor_config_set_defaults(motor_config_t *config)
   config->pid.position.d_filter = DEF_POS_D_FILTER;
 
   config->comm.can_id = 0x01u;
-  config->auto_align_electrical = false;
   config->mit.stiffness = 0.0f;
   config->mit.damping = 0.0f;
+
+  config->temp = DEFAULT_TEMP;
+  config->temp_adc = DEFAULT_TEMP_ADC;
+  config->auto_align_electrical = false;
 }
 
 bool motor_config_init(motor_config_t *config)

@@ -679,11 +679,6 @@
               <FilePath>..\APP\comm\comm.c</FilePath>
             </File>
             <File>
-              <FileName>comm_frame_queue.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\APP\comm\comm_frame_queue.c</FilePath>
-            </File>
-            <File>
               <FileName>can_port_at32.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\comm\transport\can_port_at32.c</FilePath>

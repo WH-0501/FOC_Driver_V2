@@ -69,7 +69,7 @@ int16_t can_fd_codec_rad_to_pos_q7_deg(float rad)
 
 float can_fd_codec_vel_q7_rpm_to_rad_s(int16_t raw)
 {
-  return RPM_TO_RAD_PER_SEC((float)raw / CAN_FD_POS_SCALE);
+  return RPM_TO_RAD_PER_SEC((float)raw /*/ CAN_FD_POS_SCALE*/);
 }
 
 int16_t can_fd_codec_rad_s_to_vel_q7_rpm(float rad_s)

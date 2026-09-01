@@ -27,6 +27,14 @@ static void mp6540_set_phase_en(MP6540_Handle_t *hmp6, gate_driver_phase_t phase
     MP6540_HW_GPIO_Set(port, pin, en);
 }
 
+/**
+ * @brief 设置所有相位使能状态
+ *        1. 设置相位A使能状态
+ *        2. 设置相位B使能状态
+ *        3. 设置相位C使能状态
+ * @param hmp6 
+ * @param en 使能状态
+ */
 static void mp6540_set_all_phase_en(MP6540_Handle_t *hmp6, bool en)
 {
     mp6540_set_phase_en(hmp6, GATE_DRIVER_PHASE_A, en);
@@ -146,6 +154,13 @@ static const gate_driver_ops_t s_mp6540_gate_driver_ops = {
     .read_fault = mp6540_op_read_fault,
 };
 
+/**
+ * @brief 初始化 MP6540 电机驱动器
+ *        1. 设置硬件配置
+ *        2. 设置休眠状态
+ * @param hmp6 电机驱动器句柄
+ * @param hw_cfg 硬件配置
+ */
 void MP6540_Init(MP6540_Handle_t *hmp6, const gate_driver_hw_cfg_t *hw_cfg)
 {
     hmp6->hw = *hw_cfg;

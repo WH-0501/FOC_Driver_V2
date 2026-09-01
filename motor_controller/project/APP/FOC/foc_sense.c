@@ -4,6 +4,35 @@
 #include "foc_filter.h"
 #include "foc_math.h"
 #include "board.h"
+#include "common.h"
+
+void foc_sense_poll_vbus(motor_handle_t *m)
+{
+  static uint32_t s_last_us;
+  static uint8_t s_vbus_lpf_seeded;
+
+  uint32_t now;
+
+  if (m == NULL)
+  {
+    return;
+  }
+
+  now = board_time_us();
+  if ((now - s_last_us) < FOC_VBUS_POLL_MIN_INTERVAL_US)
+  {
+    return;
+  }
+  s_last_us = now;
+
+  board_get_vbus_and_temp(m);
+  if (s_vbus_lpf_seeded == 0u)
+  {
+    lpf1_reset(&m->vbus_lpf, m->state.vbus);
+    s_vbus_lpf_seeded = 1u;
+  }
+  m->state.vbus_filtered = lpf1_update(&m->vbus_lpf, m->state.vbus);
+}
 
 void foc_sense_update(motor_handle_t *m)
 {
@@ -16,11 +45,8 @@ void foc_sense_update(motor_handle_t *m)
     return;
   }
 
-  // 1. 更新编码器
   encoder_update(m);
-  // 2. 获取相电流
   board_get_phase_current(m);
-  // 3. 处理电流采样
   current_sense_process_sample(m);
 
   clarke_transform(m->state.phase_current.ampere[0],

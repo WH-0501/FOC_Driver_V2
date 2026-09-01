@@ -12,7 +12,6 @@ struct comm_protocol_ops
   const char *name;
   bool (*init)(uint16_t node_id);
   void (*deinit)(void);
-  /** 收到一帧（已由传输层解包为 comm_frame_t）。 */
   void (*on_rx)(const comm_frame_t *frame);
   /** 主循环周期任务：周期上报、通讯看门狗等。 */
   void (*poll)(void);

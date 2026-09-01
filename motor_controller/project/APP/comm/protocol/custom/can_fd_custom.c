@@ -1,4 +1,5 @@
 #include "can_fd_custom.h"
+#include "comm.h"
 #include "can_fd_custom_codec.h"
 #include "can_fd_custom_iap.h"
 #include "mc_interface.h"
@@ -14,7 +15,19 @@ static uint32_t s_last_report_us;
 static uint8_t s_tx_cnt;
 static uint32_t s_report_interval_us = 1000u;
 static float s_mcu_temp_cal_c;
+static motor_handle_t *s_motor;
+static uint8_t s_tx_buf[COMM_FRAME_MAX_LEN];
 
+/**
+ * @brief 发送 CAN-FD 帧
+ * 
+ * @param id CAN-FD ID
+ * @param cmd 命令
+ * @param payload 有效数据
+ * @param payload_len 有效数据长度
+ * @return true 成功
+ * @return false 失败
+ */
 static bool can_fd_custom_send_frame(uint32_t id, uint8_t cmd, const uint8_t *payload, uint8_t payload_len)
 {
   comm_frame_t frame;
@@ -29,27 +42,36 @@ static bool can_fd_custom_send_frame(uint32_t id, uint8_t cmd, const uint8_t *pa
 
   total_len = (uint8_t)(2u + payload_len);
   padded_len = can_fd_codec_pad_canfd_len(total_len);
-  if (padded_len > sizeof(frame.data))
+  if (padded_len > COMM_FRAME_MAX_LEN)
   {
     return false;
   }
 
-  frame.id = id;
-  frame.len = padded_len;
-  frame.data[0] = s_tx_cnt++;
-  frame.data[1] = cmd;
+  s_tx_buf[0] = s_tx_cnt++;
+  s_tx_buf[1] = cmd;
   for (i = 0u; i < payload_len; ++i)
   {
-    frame.data[2u + i] = payload[i];
+    s_tx_buf[2u + i] = payload[i];
   }
   for (i = total_len; i < padded_len; ++i)
   {
-    frame.data[i] = 0u;
+    s_tx_buf[i] = 0u;
   }
+
+  frame.id = id;
+  frame.len = padded_len;
+  frame.data = s_tx_buf;
 
   return s_send(&frame);
 }
 
+/**
+ * @brief 发送应答帧
+ * 
+ * @param cmd 命令
+ * @param payload 有效数据
+ * @param payload_len 有效数据长度
+ */
 static void can_fd_custom_reply(uint8_t cmd, const uint8_t *payload, uint8_t payload_len)
 {
   (void)can_fd_custom_send_frame(s_node_id, cmd, payload, payload_len);
@@ -241,12 +263,17 @@ static void can_fd_custom_reply_pid(uint8_t reply_cmd, const pid_param_t *pid)
 
 static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, uint8_t payload_len)
 {
-  motor_handle_t *m = motor_get_handler();
+  motor_handle_t *m = s_motor;
   uint8_t reply_payload[6];
   uint16_t hz;
   int16_t temp_cal_raw;
   uint8_t node_id_be[2];
   int result;
+
+  if (m == NULL)
+  {
+    return;
+  }
 
   if (can_fd_iap_is_active() && (cmd < CAN_FD_CMD_IAP_ENTER))
   {
@@ -401,6 +428,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         {
           m->config.comm.can_id = new_id;
           s_node_id = new_id;
+          (void)comm_set_node_id_filter(new_id);
           can_fd_codec_write_u16_be(node_id_be, new_id);
           can_fd_custom_reply(CAN_FD_CMD_SET_NODE_ID, node_id_be, 2u);
         }
@@ -425,6 +453,12 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         }
         can_fd_custom_reply(CAN_FD_CMD_RESET_TO_FACTORY, reply_payload, 1u);
       }
+      break;
+
+    case CAN_FD_CMD_CLEAR_FAULT:
+      result = mc_try_recover_from_fault();
+      reply_payload[0] = (result == MC_OK) ? 1u : 0u;
+      can_fd_custom_reply(CAN_FD_CMD_CLEAR_FAULT, reply_payload, 1u);
       break;
 
     case CAN_FD_CMD_SET_ORIGIN:
@@ -489,8 +523,6 @@ static void can_fd_custom_period_report(void)
   uint8_t vbus_u8;
   fault_t fault_bits;
 
-  board_get_vbus_and_temp(m);
-
   pos_raw = can_fd_codec_rad_to_pos_q7_deg(s->joint.position_rad);
   vel_raw = can_fd_codec_rad_s_to_vel_q7_rpm(s->joint.velocity_rad_s);
   iq_ma = (int16_t)(s->i_q * 1000.0f);
@@ -508,20 +540,7 @@ static void can_fd_custom_period_report(void)
   }
   error = can_fd_codec_fault_to_error(fault_bits);
 
-  temp_c = s->temperature;
-  if (temp_c == 0.0f)
-  {
-    temp_c = s->board_temp.value;
-  }
-  temp_c += s_mcu_temp_cal_c;
-  if (temp_c < 0.0f)
-  {
-    temp_c = 0.0f;
-  }
-  if (temp_c > 255.0f)
-  {
-    temp_c = 255.0f;
-  }
+  temp_c = s->board_temp.value;
   temp_u8 = (uint8_t)(temp_c + 0.5f);
 
   if (s->vbus < 0.0f)
@@ -551,6 +570,7 @@ static void can_fd_custom_period_report(void)
 static bool can_fd_custom_init(uint16_t node_id)
 {
   s_node_id = node_id;
+  s_motor = motor_get_handler();
   s_last_report_us = board_time_us();
   s_tx_cnt = 0u;
   s_report_interval_us = 1000000u / (uint32_t)CAN_FD_REPORT_HZ_DEFAULT;

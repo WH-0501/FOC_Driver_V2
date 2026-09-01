@@ -9,6 +9,10 @@
 #define BUS_VOLTAGE     (24.0f) ///< 母线电压
 #define POLE_PAIRS      (5) ///< 极对数
 #define GEAR_RATIO      (50) ///< 电机到关节减速比（直驱填 1.0）
+
+#define DEFAULT_TEMP    (25.0f) ///< 默认温度 [℃]
+#define DEFAULT_TEMP_ADC (1588) ///< 默认温度 ADC 值
+
 /* 滤波参数 0x88(默认),有效分辨率 13bit */
 #define ENCODER_COUNTS_PER_REV (8192) ///< 机械旋转一圈编码器计数（分辨率定义依传感器）
 #define ENCODER_COUNTS_PER_REV_MASK (0x1FFF) ///< 13bit 有效分辨率掩码
@@ -46,7 +50,9 @@
 
 #define OPEN_LOOP_UQ_RAMP_RATE      20.0f
 #define OPEN_LOOP_OMEGA_RAMP_RATE   20.0f
-#define OPEN_LOOP_UQ_MAX            0.2f
+#define OPEN_LOOP_UQ_MAX            2.0f
+/** 速度低于此阈值时不输出 Uq，避免零速堵转发热 [rad/s] */
+#define OPEN_LOOP_OMEGA_EPS_RAD_S   (0.05f)
 
 /**
  * @brief 电流环与测量链路的采样率/滤波配置
@@ -61,13 +67,30 @@
 #define FOC_CURRENT_MEAS_PERIOD (float)(1.0f / (float)FOC_CURRENT_LOOP_FS_HZ)
 #endif
 
+/** 
+ * @brief 母线电压采样率 [Hz]（慢路径，与电流环解耦）
+ * 1. 母线电压 LPF 截止 [Hz]（须 < FOC_VBUS_SAMPLE_FS_HZ/2，否则 lpf1_init 失败）
+ * 2. 母线电压滤波只是让电压波形看起来更平滑，真正决定 SVPWM 精度的是母线电容
+ * 3. 可以考虑直接降低采样频次达到一样的效果（如降低到 100Hz）
+ * 4. 或者使用多次采样平均值作为母线电压值（如 4 次采样平均）
+ */
+#ifndef FOC_VBUS_SAMPLE_FS_HZ
+#define FOC_VBUS_SAMPLE_FS_HZ (100.0f)  ///< fs
+#endif
+#ifndef FOC_VBUS_LPF_FC_HZ
+#define FOC_VBUS_LPF_FC_HZ (10.0f)  ///< fc
+#endif
+#ifndef FOC_VBUS_POLL_MIN_INTERVAL_US
+#define FOC_VBUS_POLL_MIN_INTERVAL_US ((uint32_t)(1000000.0f / FOC_VBUS_SAMPLE_FS_HZ))
+#endif
+
 /* 机械 100RPM → 机械角速度 [rad/s] */
 #define OL_OMEGA_100RPM_MECH   RPM_TO_RAD_PER_SEC(100.0f)
 
 #define DEF_UVLO_VOLTAGE (9.0f)
-#define DEF_OVP_VOLTAGE (27.0f)
+#define DEF_OVP_VOLTAGE (28.0f)
 #define DEF_OCP_CURRENT (1.0f)
-#define DEF_TEMP_LIMIT (100.0f)
+#define DEF_TEMP_LIMIT (85.0f)
 #define DEF_SW_OCP (1.2f)
 #define DEF_SW_OCP_HOLD_MS (1000.0f)
 #define DEF_PHASE_DIAG_I_AVG_MIN_A (0.0f)

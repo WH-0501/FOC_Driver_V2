@@ -1,6 +1,14 @@
 #include "motor_driver.h"
 #include "board.h"
 
+/**
+ * @brief 绑定电机驱动器
+ *        1. 获取硬件配置
+ *        2. 初始化电机驱动器(进入休眠状态)
+ *        3. 绑定电机驱动器
+ * @param drv 电机驱动器
+ * @return error_t 错误码
+ */
 static error_t motor_driver_bind_gate(motor_driver_t *drv)
 {
   gate_driver_init_t cfg;

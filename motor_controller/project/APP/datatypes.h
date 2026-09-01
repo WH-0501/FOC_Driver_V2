@@ -161,8 +161,10 @@ typedef struct
   motor_motion_cfg_t motion;   ///< 机械运动轨迹约束
   motor_pid_config_t pid;      ///< 各控制环 PID 配置参数
   motor_comm_config_t comm;    ///< 通信配置
-  bool auto_align_electrical;  ///< 上电是否自动执行电角对齐
   motor_mit_config_t mit;      ///< MIT 刚度/阻尼
+  uint16_t temp;               ///< 电机温度 [℃]
+  uint16_t temp_adc;           ///< 电机温度 ADC 值
+  bool auto_align_electrical;  ///< 上电是否自动执行电角对齐
 } motor_config_t;
 
 typedef struct
@@ -198,8 +200,8 @@ typedef struct
 
 typedef struct
 {
-  float vbus;           ///< 当前母线电压测量 [V]
-  float vbus_filtered;  ///< 当前母线电压滤波值 [V]
+  float vbus;           ///< 母线电压瞬时采样 [V]（board 写入）
+  float vbus_filtered;  ///< 母线电压 LPF [V]（foc_sense_poll_vbus 更新）
 
   float v_a; ///< a 相电压（重构或测量）[V]
   float v_b; ///< b 相电压 [V]
@@ -223,10 +225,9 @@ typedef struct
   float sin_elec;       ///< sin(θ_e)，可与 θ 同步更新减少三角运算
   float cos_elec;       ///< cos(θ_e)
 
-  float temperature;        ///< 电机或关键温区温度（物理量与标定一致，如 ℃）
-
   motor_phase_current_t phase_current;  ///< 三相电流采样与标定结果
   temperature_t board_temp;             ///< 板载/驱动端温度采样
+  temperature_t motor_temp;             ///< 电机温度采样
 } motor_state_t;
 
 typedef struct

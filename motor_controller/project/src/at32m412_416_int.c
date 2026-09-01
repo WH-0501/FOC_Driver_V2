@@ -272,8 +272,6 @@ void ADC1_2_IRQHandler(void)
   */
 void CAN1_RX_IRQHandler(void)
 {
-  can_rxbuf_type can_rxbuf_struct;
-
   /* add user code begin CAN1_RX_IRQ 0 */
 
   /* add user code end CAN1_RX_IRQ 0 */
@@ -281,10 +279,9 @@ void CAN1_RX_IRQHandler(void)
   if(can_interrupt_flag_get(CAN1, CAN_RIF_FLAG) != RESET)
   {
     /* add user code begin CAN1_CAN_RIF_FLAG */
+    comm_can_rx_isr();
     /* clear flag and receive buffer release */
     can_flag_clear(CAN1, CAN_RIF_FLAG);
-    can_rxbuf_read(CAN1, &can_rxbuf_struct);
-    comm_can1_rx_isr(&can_rxbuf_struct);
     /* add user code end CAN1_CAN_RIF_FLAG */
   }
 

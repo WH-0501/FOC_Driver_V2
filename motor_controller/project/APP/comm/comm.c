@@ -32,6 +32,11 @@ static bool comm_rx_dispatch(const comm_frame_t *frame, void *user)
   return true;
 }
 
+static const comm_transport_ops_t *comm_select_transport_ops(void)
+{
+  return can_port_at32_ops();
+}
+
 static const comm_protocol_ops_t *comm_select_protocol_ops(comm_protocol_type_t type)
 {
   switch (type)
@@ -47,6 +52,7 @@ static const comm_protocol_ops_t *comm_select_protocol_ops(comm_protocol_type_t 
 
 bool comm_init(const comm_config_t *cfg)
 {
+  comm_config_t resolved;
   uint16_t node_id;
 
   if (cfg == NULL)
@@ -54,22 +60,25 @@ bool comm_init(const comm_config_t *cfg)
     return false;
   }
 
-  s_transport = can_port_at32_ops();
-  s_protocol = comm_select_protocol_ops(cfg->protocol);
-  if (s_protocol == NULL)
+  resolved = *cfg;
+
+  s_transport = comm_select_transport_ops();
+  s_protocol = comm_select_protocol_ops(resolved.protocol);
+  if ((s_transport == NULL) || (s_protocol == NULL))
   {
     return false;
   }
 
-  if ((s_transport->init != NULL) && !s_transport->init(NULL))
-  {
-    return false;
-  }
-
-  node_id = cfg->node_id;
+  node_id = resolved.node_id;
   if (node_id == 0u)
   {
     node_id = motor_get_handler()->config.comm.can_id;
+  }
+  resolved.node_id = node_id;
+
+  if ((s_transport->init != NULL) && !s_transport->init((void *)&resolved))
+  {
+    return false;
   }
 
   if ((s_protocol->init != NULL) && !s_protocol->init(node_id))
@@ -82,8 +91,18 @@ bool comm_init(const comm_config_t *cfg)
     s_protocol->bind_transport(comm_send_wrapper);
   }
 
-  s_active_protocol = cfg->protocol;
+  s_active_protocol = resolved.protocol;
   return true;
+}
+
+bool comm_set_node_id_filter(uint16_t node_id)
+{
+  if ((s_transport == NULL) || (s_transport->set_rx_filter == NULL))
+  {
+    return false;
+  }
+
+  return s_transport->set_rx_filter(NULL, node_id);
 }
 
 void comm_deinit(void)
@@ -116,9 +135,12 @@ void comm_poll(void)
   }
 }
 
-void comm_can1_rx_isr(const can_rxbuf_type *rx)
+void comm_can_rx_isr(void)
 {
-  can_port_at32_rx_push_isr(rx);
+  if ((s_transport != NULL) && (s_transport->rx_isr != NULL))
+  {
+    s_transport->rx_isr();
+  }
 }
 
 comm_protocol_type_t comm_get_active_protocol(void)

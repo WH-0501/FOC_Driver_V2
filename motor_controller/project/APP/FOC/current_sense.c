@@ -88,8 +88,8 @@ static void current_sense_apply_raw_to_physical(motor_handle_t *m)
     }
   }
 
-  state->board_temp.value =
-      (float)state->board_temp.adc_raw * CURRENT_SENSE_ADC_VREF_V / CURRENT_SENSE_ADC_FULL_SCALE;
+  state->motor_temp.value =
+      (float)state->motor_temp.adc_raw * CURRENT_SENSE_ADC_VREF_V / CURRENT_SENSE_ADC_FULL_SCALE;
 }
 
 static void current_sense_run_offset_cal_blocking(motor_handle_t *m)
@@ -114,6 +114,12 @@ static void current_sense_run_offset_cal_blocking(motor_handle_t *m)
   motor_disarm(m);
 }
 
+/**
+ * @brief 运行电流采样偏移校准
+ *        1. 设置电流采样偏移校准状态
+ *        2. 清零电流采样偏移校准值
+ * @param m 电机句柄
+ */
 void current_sense_init(motor_handle_t *m)
 {
   uint32_t i;
