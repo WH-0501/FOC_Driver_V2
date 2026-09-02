@@ -152,5 +152,17 @@ error_t motor_apply_pwm(motor_handle_t *m, const motor_actuation_t *actuation)
     return ERR_FAIL;
   }
 
+  if (actuation->pwm_enable == 0u)
+  {
+    return ERR_FAIL;
+  }
+
+  if (actuation->duty_a < 0.0f || actuation->duty_a > 1.0f ||
+      actuation->duty_b < 0.0f || actuation->duty_b > 1.0f ||
+      actuation->duty_c < 0.0f || actuation->duty_c > 1.0f)
+  {
+    return ERR_FAIL;
+  }
+
   return motor_driver_set_pwm(&s_motor_driver, actuation);
 }

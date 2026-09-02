@@ -33,7 +33,7 @@ void VoFaDisUart(void)
     // Send.Data[1].FloatData = state.shaft.angle_rad;
     // Send.Data[2].FloatData = state.joint.position_rad;
     Send.Data[0].FloatData = m->ref.speed_rad_s;
-    Send.Data[1].FloatData = (float)m->ctrl_mode;
+    Send.Data[1].FloatData = state.shaft.velocity_rad_s; // (float)m->ctrl_mode;
     Send.Data[2].FloatData = state.board_temp.value;
     Send.Data[3].FloatData = (float)m->fsm;
     Send.Data[4].FloatData = (float)m->fault.latched;

@@ -24,12 +24,15 @@
 #define _3PI_2 (4.71238898038f)
 
 /// TODO: sin/cos 查表或 CORDIC 加速（与平台无关，按帧率取舍）
+#define ONE_DIV_2 (0.5f)
 #define SQRT_3 (1.732050807568877f)             /* √3 */
 #define SQRT_3_DIV_2 (0.866025403784438f)       /* √3/2 */
 #define ONE_DIV_SQRT_2 (0.7071067811865475f)    /* 1/√2 */
-#define ONE_DIV_SQRT_3 (0.57735026919f)         /* 1/√3，功率不变 Clarke 常用 */
-#define TWO_BY_SQRT_3 (1.15470053838f)          /* 2/√3 */
-
+#define ONE_DIV_SQRT_3 (0.57735026919f)         /* 1/√3，功率不变 Clarke 常用. = √3/3 */
+#define TWO_DIV_SQRT_3 (1.15470053838f)          /* 2/√3 */
+#define ONE_DIV_3 (0.3333333333333333f)
+#define TWO_DIV_3 (0.6666666666666666f)
+#define THREE_DIV_2 (1.5f)
 /**
  * @brief 角度归一化到 [0, 2PI]
  * 
@@ -45,79 +48,96 @@ APP_STATIC_INLINE float angle_normalize(float angle)
 /**
  * @brief Clarke 变换
  * 将三相电流转换为两相电流
- * @param ia 相电流 A 相电流
- * @param ib 相电流 B 相电流
- * @param ic 相电流 C 相电流
- * @param i_alpha 两相电流 α 轴分量
- * @param i_beta 两相电流 β 轴分量
+ * @param xa A 相电流/电压
+ * @param xb B 相电流/电压
+ * @param xc C 相电流/电压
+ * @param x_alpha 两相电流/电压 α 轴分量
+ * @param x_beta 两相电流/电压 β 轴分量
  */
-APP_STATIC_INLINE void clarke_transform(float ia, float ib, float ic, float *i_alpha, float *i_beta)
+APP_STATIC_INLINE void clarke_transform(float xa, float xb, float xc, float *x_alpha, float *x_beta)
 {
-  *i_alpha = ia;
-  *i_beta = (ib - ic) * ONE_DIV_SQRT_3;
+#if 0
+  /* Full Clarke Transform */
+  *x_alpha = TWO_DIV_3 * xa - ONE_DIV_3 * xb - ONE_DIV_3 * xc;
+  *x_beta = (xb - xc) * ONE_DIV_SQRT_3;
+#else
+  /* Assuming balanced three-phase system (xa + xb + xc = 0) */
+  *x_alpha = xa;
+  *x_beta = (xb - xc) * ONE_DIV_SQRT_3;
+  // 等价于：
+  // *x_beta = ONE_DIV_SQRT_3 * xa + TWO_DIV_SQRT_3 * xb;
+#endif
 }
 
 /**
- * @brief 逆 Clarke 变换. 将两相电流转换为三相电流
+ * @brief 逆 Clarke 变换. 将两相电流/电压转换为三相电流/电压
  * 
- * @param i_alpha 两相电流 α 轴分量
- * @param i_beta 两相电流 β 轴分量
- * @param ia A 相电流
- * @param ib B 相电流
- * @param ic C 相电流
+ * @param x_alpha 两相电流/电压 α 轴分量
+ * @param x_beta 两相电流/电压 β 轴分量
+ * @param xa A 相电流/电压
+ * @param xb B 相电流/电压
+ * @param xc C 相电流/电压
  */
-APP_STATIC_INLINE void inv_clarke_transform(float i_alpha, float i_beta, float *ia, float *ib, float *ic)
+APP_STATIC_INLINE void inv_clarke_transform(float x_alpha, float x_beta, float *xa, float *xb, float *xc)
 {
-  *ia = i_alpha;
-  *ib = i_beta * SQRT_3_DIV_2 + i_alpha * ONE_DIV_SQRT_3;
-  *ic = i_beta * SQRT_3_DIV_2 - i_alpha * ONE_DIV_SQRT_3;
+  *xa = x_alpha;
+  *xb = -ONE_DIV_2 * x_alpha + SQRT_3_DIV_2 * x_beta;
+  *xc = -ONE_DIV_2 * x_alpha - SQRT_3_DIV_2 * x_beta;
 }
 
 /**
  * @brief Park 变换
  * 将两相电流转换为 d、q 轴电流
  * 
- * @param i_alpha 两相电流 α 轴分量
- * @param i_beta 两相电流 β 轴分量
+ * @param x_alpha 两相电流/电压 α 轴分量
+ * @param x_beta 两相电流/电压 β 轴分量
  * @param theta 电角度
- * @param i_d d 轴电流
- * @param i_q q 轴电流
+ * @param x_d d 轴电流/电压
+ * @param x_q q 轴电流/电压
  */
-APP_STATIC_INLINE void park_transform(float i_alpha, float i_beta, float theta, float *i_d, float *i_q)
+APP_STATIC_INLINE void park_transform(float x_alpha, float x_beta, float theta, float *x_d, float *x_q)
 {
   const float c = cosf(theta);
   const float s = sinf(theta);
-  *i_d = i_alpha * c + i_beta * s;
-  *i_q = -i_alpha * s + i_beta * c;
+  *x_d = x_alpha * c + x_beta * s;
+  *x_q = -x_alpha * s + x_beta * c;
 }
 
 /**
  * @brief 逆 Park 变换
  * 将 d、q 轴电流转换为两相电流
  * 
- * @param d d 轴电流
- * @param q q 轴电流
+ * @param x_d d 轴电流/电压
+ * @param x_q q 轴电流/电压
  * @param theta 电角度
- * @param i_alpha 两相电流 α 轴分量
- * @param i_beta 两相电流 β 轴分量
+ * @param x_alpha 两相电流/电压 α 轴分量
+ * @param x_beta 两相电流/电压 β 轴分量
  */
-APP_STATIC_INLINE void inv_park_transform(float d, float q, float theta, float *i_alpha, float *i_beta)
+APP_STATIC_INLINE void inv_park_transform(float x_d, float x_q, float theta, float *x_alpha, float *x_beta)
 {
   const float c = cosf(theta);
   const float s = sinf(theta);
-  *i_alpha = d * c - q * s;
-  *i_beta = d * s + q * c;
+  *x_alpha = x_d * c - x_q * s;
+  *x_beta = x_d * s + x_q * c;
 }
 
 /**
- * @brief SVM 调制
- * 将三相电压转换为三相 PWM 占空比
+ * @brief SVPWM 调制
+ * 将三相电压转换为三相 PWM 占空比. 实际完成:
+ *     Ucom = 0.5f * (Umax + Umin);   // min-max 中点 = SVPWM 的 offset（三次谐波注入）
+ *     svm_a = Ua - Ucom;            // 以 0 为中心的双极性电压（伏特，可正可负）
+ *     svm_b = Ub - Ucom;
+ *     svm_c = Uc - Ucom;
+ * 
+ * 注意：输出的是电压伏特值，而不是 PWM 占空比。需要根据电机参数转换为 PWM 占空比。
+ *      0.5+U/vbus
+ * 
  * @param Ua A 相电压
  * @param Ub B 相电压
  * @param Uc C 相电压
- * @param svm_a A 相 PWM 占空比
- * @param svm_b B 相 PWM 占空比
- * @param svm_c C 相 PWM 占空比
+ * @param svm_a A 相 PWM 电压. 注意: 不是占空比
+ * @param svm_b B 相 PWM 电压. 注意: 不是占空比
+ * @param svm_c C 相 PWM 电压. 注意: 不是占空比
  */
 APP_STATIC_INLINE void svm(float Ua, float Ub, float Uc, float *svm_a, float *svm_b, float *svm_c)
 {
@@ -199,7 +219,7 @@ APP_STATIC_INLINE int svpwm(float alpha, float beta, float *duty_a, float *duty_
     case 1: {
         // Vector on-times
         float t1 = alpha - ONE_DIV_SQRT_3 * beta;
-        float t2 = TWO_BY_SQRT_3 * beta;
+        float t2 = TWO_DIV_SQRT_3 * beta;
 
         // PWM timings
         *duty_a = (1.0f - t1 - t2) * 0.5f;
@@ -222,7 +242,7 @@ APP_STATIC_INLINE int svpwm(float alpha, float beta, float *duty_a, float *duty_
     // sextant v3-v4
     case 3: {
         // Vector on-times
-        float t3 = TWO_BY_SQRT_3 * beta;
+        float t3 = TWO_DIV_SQRT_3 * beta;
         float t4 = -alpha - ONE_DIV_SQRT_3 * beta;
 
         // PWM timings
@@ -235,7 +255,7 @@ APP_STATIC_INLINE int svpwm(float alpha, float beta, float *duty_a, float *duty_
     case 4: {
         // Vector on-times
         float t4 = -alpha + ONE_DIV_SQRT_3 * beta;
-        float t5 = -TWO_BY_SQRT_3 * beta;
+        float t5 = -TWO_DIV_SQRT_3 * beta;
 
         // PWM timings
         *duty_c = (1.0f - t4 - t5) * 0.5f;
@@ -258,7 +278,7 @@ APP_STATIC_INLINE int svpwm(float alpha, float beta, float *duty_a, float *duty_
     // sextant v6-v1
     case 6: {
         // Vector on-times
-        float t6 = -TWO_BY_SQRT_3 * beta;
+        float t6 = -TWO_DIV_SQRT_3 * beta;
         float t1 = alpha + ONE_DIV_SQRT_3 * beta;
 
         // PWM timings

@@ -52,6 +52,7 @@ static void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
 {
   float Ualpha, Ubeta;
   float Ua, Ub, Uc;
+  float svm_a, svm_b, svm_c;
   // float vbus = m->config.limits.vbus_nominal;
   float vbus;
   // float Uq_max;
@@ -67,27 +68,32 @@ static void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
     vbus = BUS_VOLTAGE;
   }
 
-  u_lim = 0.5f * vbus;
-  Uq = CLAMP(Uq, -u_lim, u_lim);
-  Ud = CLAMP(Ud, -u_lim, u_lim);
+  // 限幅方案一
+  // u_lim = 0.5f * vbus;
+  // Uq = CLAMP(Uq, -u_lim, u_lim);
+  // Ud = CLAMP(Ud, -u_lim, u_lim);
   // Uq_max = sqrtf(vbus * vbus - Ud * Ud);
   // Uq = CLAMP(Uq, -Uq_max, Uq_max);
 
   inv_park_transform(Ud, Uq, angle_el, &Ualpha, &Ubeta);
-  // inv_clarke_transform(Ualpha, Ubeta, &Ua, &Ub, &Uc);
 
-  // svm(Ua, Ub, Uc, &m->out.duty_a, &m->out.duty_b, &m->out.duty_c);
-  // m->out.duty_a = CLAMP(m->out.duty_a, 0.0f, 1.0f);
-  // m->out.duty_b = CLAMP(m->out.duty_b, 0.0f, 1.0f);
-  // m->out.duty_c = CLAMP(m->out.duty_c, 0.0f, 1.0f);
-  
-  /* SPWM：中点偏置 + 归一化占空比，与 dex-con SetPhaseVoltage 一致 */
-  Ua = Ualpha + 0.5f * vbus;
-  Ub = (SQRT_3 * Ubeta - Ualpha) * 0.5f + 0.5f * vbus;
-  Uc = -(Ualpha + SQRT_3 * Ubeta) * 0.5f + 0.5f * vbus;
-  m->out.duty_a = CLAMP(Ua / vbus, 0.0f, 1.0f);
-  m->out.duty_b = CLAMP(Ub / vbus, 0.0f, 1.0f);
-  m->out.duty_c = CLAMP(Uc / vbus, 0.0f, 1.0f);
+  // 限幅方案二
+  float Vm, Vmax;
+  Vm = sqrtf(SQ(Ualpha) + SQ(Ubeta));
+  Vmax = vbus * ONE_DIV_SQRT_3;
+  if (Vm > Vmax)
+  {
+    float k = Vmax / Vm;
+    Ualpha *= k;
+    Ubeta *= k;
+  }
+
+  inv_clarke_transform(Ualpha, Ubeta, &Ua, &Ub, &Uc);
+
+  svm(Ua, Ub, Uc, &svm_a, &svm_b, &svm_c);
+  m->out.duty_a = CLAMP(0.5f + svm_a / vbus, 0.0f, 1.0f);
+  m->out.duty_b = CLAMP(0.5f + svm_b / vbus, 0.0f, 1.0f);
+  m->out.duty_c = CLAMP(0.5f + svm_c / vbus, 0.0f, 1.0f);
   (void)motor_apply_pwm(m, &m->out);
 }
 
@@ -180,13 +186,14 @@ static void foc_speed_open_control(motor_handle_t *m, float target_speed)
       (fabsf(rt->open_loop_omega) < OPEN_LOOP_OMEGA_EPS_RAD_S))
   {
     rt->open_loop_uq = 0.0f;
-    foc_voltage(m, 0.0f, 0.0f, rt->open_loop_shaft_angle);
-    return;
+  } 
+  else 
+  {
+    rt->open_loop_uq = OPEN_LOOP_UQ_MAX;
+    rt->open_loop_shaft_angle = angle_normalize(
+        rt->open_loop_shaft_angle + (float)m->config.param.pole_pairs * rt->open_loop_omega * dt);
   }
-
-  rt->open_loop_uq = OPEN_LOOP_UQ_MAX;
-  rt->open_loop_shaft_angle = angle_normalize(
-      rt->open_loop_shaft_angle + (float)m->config.param.pole_pairs * rt->open_loop_omega * dt);
+  
   foc_voltage(m, rt->open_loop_uq, 0.0f, rt->open_loop_shaft_angle);
 }
 
