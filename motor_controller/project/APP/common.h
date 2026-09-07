@@ -43,7 +43,7 @@
 
 #define OPEN_LOOP_UQ_RAMP_RATE      20.0f
 #define OPEN_LOOP_OMEGA_RAMP_RATE   20.0f
-#define OPEN_LOOP_UQ_MAX            2.0f
+#define OPEN_LOOP_UQ_MAX            2.0f // 2.0f
 /** 速度低于此阈值时不输出 Uq，避免零速堵转发热 [rad/s] */
 #define OPEN_LOOP_OMEGA_EPS_RAD_S   (0.05f)
 

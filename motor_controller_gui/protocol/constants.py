@@ -50,11 +50,70 @@ class CMD(IntEnum):
 
 
 class ControlMode(IntEnum):
-    PP = 0
-    CSP = 1
-    CST = 2
-    HM = 3
-    CSV = 4
+    """与固件 datatypes.h control_mode_t 一致。"""
+
+    IDLE = 0
+    TORQUE = 1
+    SPEED = 2
+    POSITION = 3
+    CSP = 4
+    CSV = 5
+    CST = 6
+    MIT = 7
+    HOMING = 8
+    TORQUE_OPEN_LOOP = 9
+    SPEED_OPEN_LOOP = 10
+    POSITION_OPEN_LOOP = 11
+    VOLTAGE = 12
+    RESERVED = 13
+
+
+MODE_NAMES = {
+    ControlMode.IDLE: "空闲 (IDLE)",
+    ControlMode.TORQUE: "转矩 (TORQUE)",
+    ControlMode.SPEED: "速度环 (SPEED)",
+    ControlMode.POSITION: "位置环 (POSITION)",
+    ControlMode.CSP: "周期位置 (CSP)",
+    ControlMode.CSV: "周期速度 (CSV)",
+    ControlMode.CST: "周期转矩 (CST)",
+    ControlMode.MIT: "MIT 阻抗",
+    ControlMode.HOMING: "回零 (HOMING)",
+    ControlMode.TORQUE_OPEN_LOOP: "转矩开环 (TORQUE_OL)",
+    ControlMode.SPEED_OPEN_LOOP: "速度开环 (SPEED_OL)",
+    ControlMode.POSITION_OPEN_LOOP: "位置开环 (POSITION_OL)",
+    ControlMode.VOLTAGE: "电压模式 (VOLTAGE)",
+    ControlMode.RESERVED: "保留 (RESERVED)",
+}
+
+# 控制面板可选模式（不含 RESERVED）
+SELECTABLE_CONTROL_MODES = tuple(m for m in ControlMode if m is not ControlMode.RESERVED)
+
+
+def mode_needs_position(mode: ControlMode) -> bool:
+    return mode in (
+        ControlMode.POSITION,
+        ControlMode.CSP,
+        ControlMode.POSITION_OPEN_LOOP,
+        ControlMode.MIT,
+    )
+
+
+def mode_needs_velocity(mode: ControlMode) -> bool:
+    return mode in (
+        ControlMode.SPEED,
+        ControlMode.CSV,
+        ControlMode.SPEED_OPEN_LOOP,
+        ControlMode.MIT,
+    )
+
+
+def mode_needs_current(mode: ControlMode) -> bool:
+    return mode in (
+        ControlMode.TORQUE,
+        ControlMode.CST,
+        ControlMode.TORQUE_OPEN_LOOP,
+        ControlMode.MIT,
+    )
 
 
 class MotorError(IntEnum):
@@ -67,14 +126,6 @@ class MotorError(IntEnum):
     ENCODER_ERR = 6
     PHASE_LOSS_ERR = 7
 
-
-MODE_NAMES = {
-    ControlMode.PP: "PP(位置)",
-    ControlMode.CSP: "CSP(周期位置)",
-    ControlMode.CST: "CST(周期转矩)",
-    ControlMode.HM: "HM(回零)",
-    ControlMode.CSV: "CSV(周期速度)",
-}
 
 ERROR_NAMES = {
     MotorError.NORMAL: "正常",

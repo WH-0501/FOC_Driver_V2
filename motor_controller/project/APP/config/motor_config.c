@@ -143,6 +143,8 @@ void motor_config_set_defaults(motor_config_t *config)
   config->limits.vbus_nominal = BUS_VOLTAGE;
   config->limits.vbus_uv_threshold = DEF_UVLO_VOLTAGE;
   config->limits.vbus_ov_threshold = DEF_OVP_VOLTAGE;
+  config->limits.sw_ocp = DEF_OCP_CURRENT;
+  config->limits.sw_ocp_hold_ms = DEF_SW_OCP_HOLD_MS;
   config->limits.id_limit = DEF_OCP_CURRENT;
   config->limits.iq_limit = DEF_OCP_CURRENT;
   config->limits.vd_limit = BUS_VOLTAGE * 0.5f;

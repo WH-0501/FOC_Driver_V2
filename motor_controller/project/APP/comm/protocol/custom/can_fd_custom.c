@@ -92,46 +92,22 @@ static bool can_fd_custom_motor_id_match(uint8_t motor_id)
   return (motor_id == (uint8_t)(s_node_id & 0xFFu));
 }
 
-static control_mode_t can_fd_custom_gui_mode_to_ctrl(uint8_t gui_mode)
+static control_mode_t can_fd_custom_wire_mode_to_ctrl(uint8_t wire_mode)
 {
-  switch (gui_mode)
+  if (wire_mode >= (uint8_t)CTRL_MODE_RESERVED)
   {
-    case 0:
-      return CTRL_MODE_POSITION;
-    case 1:
-      return CTRL_MODE_CSP;
-    case 2:
-      return CTRL_MODE_CST;
-    case 3:
-      return CTRL_MODE_HOMING;
-    case 4:
-      return CTRL_MODE_CSV;
-    case 5:
-      return CTRL_MODE_MIT;
-    default:
-      return CTRL_MODE_IDLE;
+    return CTRL_MODE_IDLE;
   }
+  return (control_mode_t)wire_mode;
 }
 
-static uint8_t can_fd_custom_ctrl_to_gui_mode(control_mode_t mode)
+static uint8_t can_fd_custom_ctrl_to_wire_mode(control_mode_t mode)
 {
-  switch (mode)
+  if (mode >= CTRL_MODE_RESERVED)
   {
-    case CTRL_MODE_POSITION:
-      return 0u;
-    case CTRL_MODE_CSP:
-      return 1u;
-    case CTRL_MODE_CST:
-      return 2u;
-    case CTRL_MODE_HOMING:
-      return 3u;
-    case CTRL_MODE_CSV:
-      return 4u;
-    case CTRL_MODE_MIT:
-      return 5u;
-    default:
-      return 0u;
+    return (uint8_t)CTRL_MODE_IDLE;
   }
+  return (uint8_t)mode;
 }
 
 static bool can_fd_custom_is_for_this_node(uint32_t id)
@@ -331,7 +307,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
     case CAN_FD_CMD_CONTROL_MODE:
       if ((payload_len >= 1u) && !mc_is_enabled())
       {
-        mc_set_ctrl_mode(can_fd_custom_gui_mode_to_ctrl(payload[0]));
+        mc_set_ctrl_mode(can_fd_custom_wire_mode_to_ctrl(payload[0]));
       }
       break;
 
@@ -527,7 +503,7 @@ static void can_fd_custom_period_report(void)
   vel_raw = can_fd_codec_rad_s_to_vel_q7_rpm(s->joint.velocity_rad_s);
   iq_ma = (int16_t)(s->i_q * 1000.0f);
 
-  status = (uint8_t)(can_fd_custom_ctrl_to_gui_mode(mc_get_ctrl_mode()) & 0x0Fu);
+  status = (uint8_t)(can_fd_custom_ctrl_to_wire_mode(mc_get_ctrl_mode()) & 0x0Fu);
   if (mc_is_enabled())
   {
     status |= 0x10u;

@@ -7,6 +7,10 @@ from .constants import (
     MODE_NAMES,
     MotorError,
     PID_FORMAT,
+    SELECTABLE_CONTROL_MODES,
+    mode_needs_current,
+    mode_needs_position,
+    mode_needs_velocity,
 )
 from .codec import (
     FrameCounter,
@@ -38,6 +42,10 @@ __all__ = [
     "MODE_NAMES",
     "MotorError",
     "PID_FORMAT",
+    "SELECTABLE_CONTROL_MODES",
+    "mode_needs_current",
+    "mode_needs_position",
+    "mode_needs_velocity",
     "FrameCounter",
     "angle_to_pos_raw",
     "format_bytes_binary",

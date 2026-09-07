@@ -103,6 +103,8 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
   }
 
   // 8. 更新状态
+  pid->target = target;
+  pid->feedback = feedback;
   pid->last_error = error;
   pid->last_output = *output;
 

@@ -88,6 +88,19 @@ static void current_sense_apply_raw_to_physical(motor_handle_t *m)
     }
   }
 
+  /**
+   * 三电阻采样时,基于基尔霍夫定律.使用均值滤波,抑制随机噪声和尖峰脉冲.current_avg
+   * 
+   * 原理: 假设测量误差服从正态分布,那么三相电流的均值就可被视为该时刻的共模误差,
+   *       通过减去均值,能够在满足KCL约束的前提下,可以消除共模误差,提高电流测量的精度.
+   */
+  float current_avg = (state->phase_current.ampere[0] + 
+                       state->phase_current.ampere[1] + 
+                       state->phase_current.ampere[2]) / 3.0f;
+  state->phase_current.ampere[0] -= current_avg;
+  state->phase_current.ampere[1] -= current_avg;
+  state->phase_current.ampere[2] -= current_avg;
+
   state->motor_temp.value =
       (float)state->motor_temp.adc_raw * CURRENT_SENSE_ADC_VREF_V / CURRENT_SENSE_ADC_FULL_SCALE;
 }

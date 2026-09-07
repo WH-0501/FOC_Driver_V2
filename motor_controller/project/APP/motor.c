@@ -124,6 +124,15 @@ void motor_sync_arm_with_mode(motor_handle_t *m)
   }
 }
 
+/**
+ * @brief 准备直流偏移校准硬件，进入直流偏移校准模式
+ * 
+ * @param m: 电机句柄
+ * 
+ * 1. 如果电机句柄为空，则返回
+ * 2. 设置电机输出 PWM 为 0
+ * 3. 准备直流偏移校准硬件，使电机驱动器进入直流偏移校准模式，等待直流偏移校准完成  
+ */
 void motor_enter_dc_cal_hw(motor_handle_t *m)
 {
   if (motor_runtime(m) == NULL)

@@ -111,12 +111,10 @@ static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, f
   (void)foc_pid_calc(&m->iq_pid, &m->config.pid.iq, iq, m->state.i_q, &v_q_ctrl);
 
   {
-    float v_d_norm = 1.5f * m->state.vbus_filtered;
-    float v_q_norm = 1.5f * m->state.vbus_filtered;
-    (void)v_q_norm;
+    float v_scale = 1.5f / m->state.vbus_filtered;
 
-    m->state.v_d = v_d_ctrl * v_d_norm;
-    m->state.v_q = v_q_ctrl * v_d_norm;
+    m->state.v_d = v_d_ctrl * v_scale;
+    m->state.v_q = v_q_ctrl * v_scale;
   }
 
   {
