@@ -137,6 +137,7 @@ static void can_fd_custom_apply_vel(motor_handle_t *m, int16_t vel_raw)
 
 static void can_fd_custom_apply_curr(motor_handle_t *m, int16_t curr_ma)
 {
+  /// TODO: 根据上层传递的参数类型,当前为电流,直接赋值 iq,若为 扭矩值, 则赋值 torque_nm
   m->ref.iq = (float)curr_ma / 1000.0f;
 }
 

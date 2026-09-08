@@ -19,6 +19,8 @@ typedef struct
 
   uint8_t fsm_enter_pending;    ///< FSM 进入等待标志
   bool electrical_align_done;   ///< 电气对齐完成标志
+  float align_theta_before_rad; ///< 对齐前电角（调试用）
+  float align_theta_after_rad;  ///< 对齐电压下采样电角（调试用）
 } motor_runtime_t;
 
 motor_handle_t *motor_get_handler(void);

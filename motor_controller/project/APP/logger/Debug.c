@@ -32,14 +32,13 @@ void VoFaDisUart(void)
     // Send.Data[0].FloatData = state.theta_elec_rad;
     // Send.Data[1].FloatData = state.shaft.angle_rad;
     // Send.Data[2].FloatData = state.joint.position_rad;
-    Send.Data[0].FloatData = state.phase_current.ampere[0];
-    Send.Data[1].FloatData = state.phase_current.ampere[1];
-    Send.Data[2].FloatData = state.phase_current.ampere[2];
-    Send.Data[3].FloatData = state.shaft.velocity_rad_s; // (float)m->ctrl_mode;
-    Send.Data[4].FloatData = state.board_temp.value;
-    Send.Data[5].FloatData = state.vbus_filtered;
-    // Send.Data[6].FloatData = (float)m->fsm;
-    // Send.Data[7].FloatData = (float)m->fault.latched;
+    Send.Data[0].FloatData = state.i_q;
+    Send.Data[1].FloatData = state.i_d;
+    Send.Data[2].FloatData = m->ref.iq;
+    // Send.Data[3].FloatData = state.shaft.velocity_rad_s;
+    Send.Data[3].FloatData = state.v_q;
+    Send.Data[4].FloatData = state.theta_elec_rad;
+    Send.Data[5].FloatData = state.phase_current.ampere[0];
     __enable_irq();
 
     UartTemp[0] = Send.Data[0].ByteData[0]; //The first data

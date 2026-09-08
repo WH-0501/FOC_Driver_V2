@@ -189,7 +189,7 @@ void motor_config_set_defaults(motor_config_t *config)
 
   config->temp = DEFAULT_TEMP;
   config->temp_adc = DEFAULT_TEMP_ADC;
-  config->auto_align_electrical = false;
+  config->auto_align_electrical = true;
 }
 
 bool motor_config_init(motor_config_t *config)

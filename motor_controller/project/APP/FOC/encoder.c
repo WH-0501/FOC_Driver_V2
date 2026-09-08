@@ -51,6 +51,7 @@ static void encoder_publish_state(motor_handle_t *m)
   if (shaft_ok)
   {
     m->state.shaft = shaft->observer.sample;
+    /* FOC 电角只用单圈机械角；position_rad 含机械零偏/圈数，不可直接乘 pole_pairs */
     m->state.theta_elec_rad = angle_normalize(
         (shaft->observer.sample.angle_rad * pole_pairs * shaft_dir) -
         m->config.param.theta_elec_offset_rad);

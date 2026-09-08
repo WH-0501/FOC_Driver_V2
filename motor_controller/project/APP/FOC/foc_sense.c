@@ -58,9 +58,10 @@ void foc_sense_update(motor_handle_t *m)
                  m->state.theta_elec_rad,
                  &id, &iq);
 
-  m->state.i_d = lpf1_update(&m->i_d_lpf, id);
-  m->state.i_q = lpf1_update(&m->i_q_lpf, iq);
+  /* 电流环 PI 用未滤波瞬时值；LPF 仅用于 i_mod 观测/显示 */
+  m->state.i_d = id;
+  m->state.i_q = iq;
 
-  i_mod = sqrtf(SQ(m->state.i_d) + SQ(m->state.i_q)) * 1000.0f;
+  i_mod = sqrtf(SQ(id) + SQ(iq)) * 1000.0f;
   m->state.i_mod = lpf1_update(&m->i_mod_lpf, i_mod);
 }

@@ -1,4 +1,5 @@
 #include "foc_pid.h"
+#include "common.h"
 #include "math_compat.h"
 #include "dwt_profile_delay.h"
 #include <math.h>
@@ -19,7 +20,7 @@ error_t foc_pid_init(pid_state_t *pid, uint8_t mode)
   pid->last_feedback = 0.0f;
   pid->target = 0.0f;
   pid->feedback = 0.0f;
-  pid->dt = 0.5f; // 默认控制周期 0.5ms. 即 20KHz 
+  pid->dt = PID_DT_MAX; // 默认控制周期 0.5ms. 即 20KHz 
   pid->timestamp = dwt_get_ticks_us();
   return ERR_NONE;
 }
@@ -39,13 +40,20 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
     return ERR_NULL;
   }
 
+  if (param->limit <= 0.0f) {
+    return ERR_PARAM;
+  }
+
   // 1. 计算 dt. 当前时间戳 - 上一次时间戳
   uint32_t current_timestamp = dwt_get_ticks_us();
   if (pid->timestamp == 0) {
     pid->timestamp = current_timestamp;
     return ERR_NONE;
   }
-  pid->dt = (current_timestamp - pid->timestamp) * 0.000001f; // us to s
+  pid->dt = (current_timestamp - pid->timestamp) * 1e-6f; // us to s
+  if (pid->dt <= 0.0f || pid->dt > PID_DT_THRESHOLD) {
+    pid->dt = PID_DT_MAX;
+  }
   pid->timestamp = current_timestamp;
 
   // 2. 计算误差
@@ -53,9 +61,19 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
 
   // 3. 计算比例项
   float P = param->kp * error;
+
+  // 4. 微分项 D + 滤波
+  float D = 0.0f;
+  if (param->kd != 0.0f && pid->dt > 0.0f) {
+    float new_derivative = (error - pid->last_error) / pid->dt;
+
+    // 一阶滤波，抑制噪声尖峰
+    pid->d_state += param->d_filter * (new_derivative - pid->d_state);
+    D = param->kd * pid->d_state;
+  }
   
-  // 4. 计算积分项
-  float I = 0.0f;
+  // 5. 计算积分项
+  float I = pid->last_integral;
   if (param->ki != 0.0f && pid->dt > 0.0f) {
     float new_integral = pid->last_integral + error * param->ki * pid->dt;
 
@@ -67,21 +85,11 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
     }
     
     // 积分抗饱和
-    float pre_out = P + new_integral;
+    float pre_out = P + new_integral + D;
     if (fabsf(pre_out) <= param->limit) {
         pid->last_integral = new_integral;
     }
     I = pid->last_integral;
-  }
-
-  // 5. 微分项 D + 滤波
-  float D = 0.0f;
-  if (param->kd != 0.0f && pid->dt > 0.0f) {
-    float new_derivative = (error - pid->last_error) / pid->dt;
-
-    // 一阶滤波，抑制噪声尖峰
-    pid->d_state += param->d_filter * (new_derivative - pid->d_state);
-    D = param->kd * pid->d_state;
   }
 
   // 6. 计算输出 + 限幅
@@ -92,13 +100,19 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
     *output = -param->limit;
   }
 
-  // 7. 输出斜坡
-  if (param->ramp > 0.0f && pid->dt > 0.0f) {
-    float ramp_output = pid->last_output + param->ramp * pid->dt;
-    if (ramp_output > *output) {
-      *output = ramp_output;
-    } else if (ramp_output < *output) {
-      *output = ramp_output;
+  // 7. 输出斜坡（限制相对上一拍的电压变化率）
+  if (param->ramp > 0.0f && pid->dt > 0.0f)
+  {
+    float max_delta = param->ramp * pid->dt;
+    float delta = *output - pid->last_output;
+
+    if (delta > max_delta)
+    {
+      *output = pid->last_output + max_delta;
+    }
+    else if (delta < -max_delta)
+    {
+      *output = pid->last_output - max_delta;
     }
   }
 

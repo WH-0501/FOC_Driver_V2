@@ -85,7 +85,7 @@ int16_t can_fd_codec_rad_s_to_vel_q7_rpm(float rad_s)
     rpm = -32768.0f / CAN_FD_POS_SCALE;
   }
 
-  return (int16_t)(rpm * CAN_FD_POS_SCALE);
+  return (int16_t)(rpm /* * CAN_FD_POS_SCALE */);
 }
 
 void can_fd_codec_pack_pid(float kp, float ki, float kd, uint8_t out[6])

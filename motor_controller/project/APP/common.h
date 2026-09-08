@@ -38,12 +38,13 @@
 
 
 /* 电角度对齐时的电压参数 */
-#define ALIGN_ELECTRICAL_VOLTAGE_D_V   (0.0f)
-#define ALIGN_ELECTRICAL_VOLTAGE_Q_V   (2.0f)
+#define ALIGN_ELECTRICAL_ANGLE_RAD     (_3PI_2)
+#define ALIGN_ELECTRICAL_VOLTAGE_D_V   (4.0f)
+#define ALIGN_ELECTRICAL_VOLTAGE_Q_V   (0.0f)
 
 #define OPEN_LOOP_UQ_RAMP_RATE      20.0f
 #define OPEN_LOOP_OMEGA_RAMP_RATE   20.0f
-#define OPEN_LOOP_UQ_MAX            2.0f // 2.0f
+#define OPEN_LOOP_UQ_MAX            1.0f // 2.0f
 /** 速度低于此阈值时不输出 Uq，避免零速堵转发热 [rad/s] */
 #define OPEN_LOOP_OMEGA_EPS_RAD_S   (0.05f)
 
@@ -119,17 +120,20 @@
 // #define DEF_CUR_RAMP (0.0f)
 // #define DEF_CUR_LIMIT (0.0f)
 // #define DEF_CUR_D_FILTER (0.0f)
-#define DEF_Q_KP (1.8f)
-#define DEF_Q_KI (0.22f)
+#define DEF_Q_KP (1.0f)
+#define DEF_Q_KI (0.05f)
 #define DEF_Q_KD (0.0f)
 #define DEF_Q_RAMP (0.0f)
 #define DEF_Q_LIMIT (0.0f)
 #define DEF_Q_D_FILTER (0.0f)
-#define DEF_D_KP (0.0f)
-#define DEF_D_KI (0.0f)
+#define DEF_D_KP (1.0f)
+#define DEF_D_KI (0.05f)
 #define DEF_D_KD (0.0f)
 #define DEF_D_RAMP (0.0f)
 #define DEF_D_LIMIT (0.0f)
 #define DEF_D_D_FILTER (0.0f)
+
+#define PID_DT_THRESHOLD (0.5f)
+#define PID_DT_MAX (0.001f)
 
 #endif /* __COMMON_H__ */

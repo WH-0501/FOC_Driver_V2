@@ -2,6 +2,7 @@
 #include "foc_sense.h"
 #include "foc_fsm.h"
 #include "current_sense.h"
+#include "foc_pid.h"
 #include "motor.h"
 #include "../config/motor_config.h"
 #include "dwt_profile_delay.h"
@@ -76,6 +77,8 @@ static void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
   // Uq = CLAMP(Uq, -Uq_max, Uq_max);
 
   inv_park_transform(Ud, Uq, angle_el, &Ualpha, &Ubeta);
+  m->inv_park_result.u_alpha = Ualpha;
+  m->inv_park_result.u_beta = Ubeta;
 
   // 限幅方案二
   float Vm, Vmax;
@@ -89,6 +92,9 @@ static void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
   }
 
   inv_clarke_transform(Ualpha, Ubeta, &Ua, &Ub, &Uc);
+  m->inv_clarke_result.u_a = Ua;
+  m->inv_clarke_result.u_b = Ub;
+  m->inv_clarke_result.u_c = Uc;
 
   svm(Ua, Ub, Uc, &svm_a, &svm_b, &svm_c);
   m->out.duty_a = CLAMP(0.5f + svm_a / vbus, 0.0f, 1.0f);
@@ -101,38 +107,15 @@ static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, f
 {
   float v_d_ctrl = 0.0f;
   float v_q_ctrl = 0.0f;
-  float alpha, beta;
-  int result_valid;
 
-  (void)angle_el;
   (void)phase_vel;
 
   (void)foc_pid_calc(&m->id_pid, &m->config.pid.id, id, m->state.i_d, &v_d_ctrl);
   (void)foc_pid_calc(&m->iq_pid, &m->config.pid.iq, iq, m->state.i_q, &v_q_ctrl);
 
-  {
-    float v_scale = 1.5f / m->state.vbus_filtered;
-
-    m->state.v_d = v_d_ctrl * v_scale;
-    m->state.v_q = v_q_ctrl * v_scale;
-  }
-
-  {
-    float factor = 0.9f * SQRT_3_DIV_2 / sqrtf(SQ(m->state.v_d) + SQ(m->state.v_q));
-    if (factor < 1.0f)
-    {
-      m->state.v_d *= factor;
-      m->state.v_q *= factor;
-    }
-  }
-
-  inv_park_transform(m->state.v_d, m->state.v_q, m->state.theta_elec_rad, &alpha, &beta);
-
-  result_valid = svpwm(alpha, beta, &m->out.duty_a, &m->out.duty_b, &m->out.duty_c);
-  if (result_valid == 0)
-  {
-    (void)motor_apply_pwm(m, &m->out);
-  }
+  m->state.v_d = v_d_ctrl;
+  m->state.v_q = v_q_ctrl;
+  foc_voltage(m, v_q_ctrl, v_d_ctrl, angle_el);
 
   m->state.i_bus = sqrtf(SQ(m->state.i_d) + SQ(m->state.i_q));
 }
@@ -140,6 +123,8 @@ static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, f
 void foc_align_electrical(motor_handle_t *m)
 {
   motor_runtime_t *rt;
+  const float align_angle = ALIGN_ELECTRICAL_ANGLE_RAD;
+  float theta_locked;
 
   if (m == NULL)
   {
@@ -152,12 +137,36 @@ void foc_align_electrical(motor_handle_t *m)
     return;
   }
 
-  motor_arm(m);
-  foc_voltage(m, ALIGN_ELECTRICAL_VOLTAGE_Q_V, ALIGN_ELECTRICAL_VOLTAGE_D_V, _3PI_2);
-  delay_ms(700);
-  foc_voltage(m, 0.0f, 0.0f, _3PI_2);
+  /* 对齐前读一次，便于调试对比转子是否被拉动 */
   foc_sense_update(m);
-  m->config.param.theta_elec_offset_rad = m->state.theta_elec_rad;
+  rt->align_theta_before_rad = m->state.theta_elec_rad;
+
+  motor_arm(m);
+  m->out.pwm_enable = 1u;
+  foc_voltage(m, ALIGN_ELECTRICAL_VOLTAGE_Q_V, ALIGN_ELECTRICAL_VOLTAGE_D_V, align_angle);
+  delay_ms(700);
+
+  /*
+   * 必须在对齐电压仍施加时读编码器。
+   * 若先置零电压再读，转子会弹回，offset 对应错误位置 → 扭矩模式 dq 解耦失败。
+   */
+  foc_sense_update(m);
+  theta_locked = m->state.theta_elec_rad;
+  rt->align_theta_after_rad = theta_locked;
+
+  /*
+   * 对齐目标：锁定后 theta_elec == align_angle。
+   * theta_elec = raw_elec - offset  =>  offset += theta_elec - align_angle
+   */
+  m->config.param.theta_elec_offset_rad = angle_normalize(
+      m->config.param.theta_elec_offset_rad + theta_locked - align_angle);
+
+  foc_voltage(m, 0.0f, 0.0f, align_angle);
+  delay_ms(50);
+
+  (void)foc_pid_clear(&m->id_pid);
+  (void)foc_pid_clear(&m->iq_pid);
+  rt->electrical_align_done = true;
   motor_disarm(m);
 }
 
@@ -221,6 +230,18 @@ static void foc_control_run(motor_handle_t *m)
 
   switch (m->ctrl_mode)
   {
+    case CTRL_MODE_TORQUE:
+    {
+      float iq_limit = m->config.limits.iq_limit;
+      float iq_ref = m->ref.iq;
+
+      if (iq_limit > 0.0f)
+      {
+        iq_ref = CLAMP(iq_ref, -iq_limit, iq_limit);
+      }
+      foc_current(m, 0.0f, iq_ref, m->state.theta_elec_rad, 0.0f);
+      break;
+    }
     case CTRL_MODE_SPEED:
       foc_speed_closed_control(m, m->ref.speed_rad_s);
       break;
@@ -270,7 +291,14 @@ void foc_init(motor_handle_t *m, const motor_config_t *config)
   foc_pid_apply_param(&m->velocity_pid, 1u);
   foc_pid_apply_param(&m->position_pid, 0u);
   foc_init_filters(m);
-  
+
+  if (m->config.limits.vbus_nominal > 0.0f)
+  {
+    m->state.vbus = m->config.limits.vbus_nominal;
+    m->state.vbus_filtered = m->config.limits.vbus_nominal;
+    lpf1_reset(&m->vbus_lpf, m->state.vbus);
+  }
+
   current_sense_init(m);
 
   if (m->config.auto_align_electrical)

@@ -2,6 +2,7 @@
 #include "foc.h"
 #include "foc_fsm.h"
 #include "foc_fault.h"
+#include "foc_pid.h"
 #include "foc_sense.h"
 #include "board.h"
 #include "motor.h"
@@ -79,6 +80,13 @@ void mc_set_ctrl_mode(control_mode_t mode)
   motor_handle_t *m = motor_get_handler();
 
   m->ctrl_mode = mode;
+
+  if ((mode == CTRL_MODE_TORQUE) || (mode == CTRL_MODE_SPEED) ||
+      (mode == CTRL_MODE_CST) || (mode == CTRL_MODE_CSV))
+  {
+    (void)foc_pid_clear(&m->id_pid);
+    (void)foc_pid_clear(&m->iq_pid);
+  }
 
   if (mode == CTRL_MODE_IDLE)
   {

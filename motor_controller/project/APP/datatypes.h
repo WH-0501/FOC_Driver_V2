@@ -232,6 +232,19 @@ typedef struct
 
 typedef struct
 {
+  float u_a;     ///< A 相电压 [V]
+  float u_b;     ///< B 相电压 [V]
+  float u_c;     ///< C 相电压 [V]
+} inv_clarke_result_t;
+
+typedef struct
+{
+  float u_alpha; ///< α 轴电压 [V]
+  float u_beta;  ///< β 轴电压 [V]
+} inv_park_result_t;
+
+typedef struct
+{
   motor_config_t config; ///< 静态配置（参数、限幅、运动约束）
   control_mode_t ctrl_mode; ///< 当前控制模式（与 ref 字段含义对应）
   motor_reference_t ref; ///< 各环给定值，即：目标值
@@ -261,6 +274,10 @@ typedef struct
   lpf1_t v_q_lpf;       ///< q 轴电压低通滤波器
 
   fault_report_t fault; ///< 故障码与锁存
+
+  ///< for test
+  inv_clarke_result_t inv_clarke_result;
+  inv_park_result_t inv_park_result;
 } motor_handle_t;
 
 #endif /* __DATATYPES_H__ */

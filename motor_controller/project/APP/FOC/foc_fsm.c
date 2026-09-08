@@ -3,6 +3,7 @@
 #include "control_mode.h"
 #include "motor.h"
 #include "foc_fault.h"
+#include "foc_pid.h"
 
 #ifndef FOC_DEFAULT_CTRL_MODE
 #define FOC_DEFAULT_CTRL_MODE CTRL_MODE_SPEED_OPEN_LOOP
@@ -42,6 +43,8 @@ static void foc_fsm_on_enter(motor_handle_t *m, fsm_state_t state)
       }
       break;
     case STATE_RUNNING:
+      (void)foc_pid_clear(&m->id_pid);
+      (void)foc_pid_clear(&m->iq_pid);
       break;
     case STATE_FAULT:
       break;
