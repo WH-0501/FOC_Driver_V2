@@ -41,6 +41,14 @@
 #define ALIGN_ELECTRICAL_ANGLE_RAD     (_3PI_2)
 #define ALIGN_ELECTRICAL_VOLTAGE_D_V   (4.0f)
 #define ALIGN_ELECTRICAL_VOLTAGE_Q_V   (0.0f)
+#define ALIGN_HOLD_MS                  (700u)
+#define ALIGN_SAMPLE_COUNT             (16u)
+#define ALIGN_SAMPLE_INTERVAL_MS       (5u)
+#define ALIGN_RELOCK_MS                (200u)
+/** 对齐后 +Vq 探针：i_q 为负则翻转 config.param.direction 并重算 offset（SimpleFOC sensor_direction） */
+#define ALIGN_POLARITY_TEST_UQ_V       (1.5f)
+#define ALIGN_POLARITY_TEST_MS         (120u)
+#define ALIGN_POLARITY_IQ_MIN_A        (0.03f)
 
 #define OPEN_LOOP_UQ_RAMP_RATE      20.0f
 #define OPEN_LOOP_OMEGA_RAMP_RATE   20.0f

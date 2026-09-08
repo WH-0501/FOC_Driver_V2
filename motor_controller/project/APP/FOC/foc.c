@@ -1,6 +1,7 @@
 #include "foc.h"
 #include "foc_sense.h"
 #include "foc_fsm.h"
+#include "foc_fault.h"
 #include "current_sense.h"
 #include "foc_pid.h"
 #include "motor.h"
@@ -120,11 +121,114 @@ static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, f
   m->state.i_bus = sqrtf(SQ(m->state.i_d) + SQ(m->state.i_q));
 }
 
+/** 编码器 raw 电角（不含 theta_elec_offset），与 encoder_publish_state 一致 */
+static float foc_align_raw_elec_rad(const motor_handle_t *m, int8_t dir)
+{
+  float pole_pairs;
+  float shaft_dir;
+
+  if (m == NULL)
+  {
+    return 0.0f;
+  }
+
+  pole_pairs = (m->config.param.pole_pairs > 0u) ? (float)m->config.param.pole_pairs : 1.0f;
+  shaft_dir = (dir == -1) ? -1.0f : 1.0f;
+  return m->state.shaft.angle_rad * pole_pairs * shaft_dir;
+}
+
+static void foc_align_set_offset_from_raw(motor_handle_t *m, float raw_elec, float align_angle)
+{
+  if (m == NULL)
+  {
+    return;
+  }
+
+  /* theta_elec = normalize(raw - offset)；锁定时应等于 align_angle */
+  m->config.param.theta_elec_offset_rad = angle_normalize(raw_elec - align_angle);
+}
+
+static void foc_align_hold_voltage(motor_handle_t *m, float ud, float uq, float angle_el, uint32_t hold_ms)
+{
+  uint32_t elapsed = 0u;
+
+  if (m == NULL)
+  {
+    return;
+  }
+
+  while (elapsed < hold_ms)
+  {
+    foc_voltage(m, uq, ud, angle_el);
+    delay_ms(ALIGN_SAMPLE_INTERVAL_MS);
+    elapsed += ALIGN_SAMPLE_INTERVAL_MS;
+  }
+}
+
+static float foc_align_sample_raw_elec(motor_handle_t *m,
+                                       int8_t dir,
+                                       float ud,
+                                       float uq,
+                                       float angle_el,
+                                       uint8_t count)
+{
+  float sum = 0.0f;
+  uint8_t i;
+
+  if ((m == NULL) || (count == 0u))
+  {
+    return 0.0f;
+  }
+
+  for (i = 0u; i < count; i++)
+  {
+    foc_voltage(m, uq, ud, angle_el);
+    foc_sense_update(m);
+    sum += foc_align_raw_elec_rad(m, dir);
+    delay_ms(ALIGN_SAMPLE_INTERVAL_MS);
+  }
+
+  return sum / (float)count;
+}
+
+static float foc_align_probe_iq(motor_handle_t *m, float uq, float angle_el, uint16_t hold_ms)
+{
+  if (m == NULL)
+  {
+    return 0.0f;
+  }
+
+  foc_voltage(m, uq, 0.0f, angle_el);
+  delay_ms(hold_ms);
+  foc_sense_update(m);
+  return m->state.i_q;
+}
+
+static void foc_align_apply_direction_flip(motor_handle_t *m)
+{
+  if (m == NULL)
+  {
+    return;
+  }
+
+  if (m->config.param.direction == -1)
+  {
+    m->config.param.direction = 1;
+  }
+  else
+  {
+    m->config.param.direction = -1;
+  }
+}
+
 void foc_align_electrical(motor_handle_t *m)
 {
   motor_runtime_t *rt;
   const float align_angle = ALIGN_ELECTRICAL_ANGLE_RAD;
-  float theta_locked;
+  const float ud = ALIGN_ELECTRICAL_VOLTAGE_D_V;
+  float raw_locked;
+  float iq_probe;
+  int8_t dir;
 
   if (m == NULL)
   {
@@ -137,36 +241,72 @@ void foc_align_electrical(motor_handle_t *m)
     return;
   }
 
-  /* 对齐前读一次，便于调试对比转子是否被拉动 */
+  dir = m->config.param.direction;
+  rt->align_direction_flipped = false;
+  rt->align_ok = false;
+
   foc_sense_update(m);
   rt->align_theta_before_rad = m->state.theta_elec_rad;
 
   motor_arm(m);
   m->out.pwm_enable = 1u;
-  foc_voltage(m, ALIGN_ELECTRICAL_VOLTAGE_Q_V, ALIGN_ELECTRICAL_VOLTAGE_D_V, align_angle);
-  delay_ms(700);
 
-  /*
-   * 必须在对齐电压仍施加时读编码器。
-   * 若先置零电压再读，转子会弹回，offset 对应错误位置 → 扭矩模式 dq 解耦失败。
-   */
+  /* 1) SimpleFOC/ODrive 式 d 轴锁定：固定 open-loop 电角下施加 Ud */
+  foc_align_hold_voltage(m, ud, ALIGN_ELECTRICAL_VOLTAGE_Q_V, align_angle, ALIGN_HOLD_MS);
+
+  /* 2) 加压期间多次采样 raw 电角，写 offset（禁止用含旧 offset 的 theta_elec 累加） */
+  raw_locked = foc_align_sample_raw_elec(m,
+                                       dir,
+                                       ud,
+                                       ALIGN_ELECTRICAL_VOLTAGE_Q_V,
+                                       align_angle,
+                                       (uint8_t)ALIGN_SAMPLE_COUNT);
+  rt->align_raw_elec_rad = raw_locked;
+  foc_align_set_offset_from_raw(m, raw_locked, align_angle);
   foc_sense_update(m);
-  theta_locked = m->state.theta_elec_rad;
-  rt->align_theta_after_rad = theta_locked;
+  rt->align_theta_after_rad = m->state.theta_elec_rad;
 
-  /*
-   * 对齐目标：锁定后 theta_elec == align_angle。
-   * theta_elec = raw_elec - offset  =>  offset += theta_elec - align_angle
-   */
-  m->config.param.theta_elec_offset_rad = angle_normalize(
-      m->config.param.theta_elec_offset_rad + theta_locked - align_angle);
+  /* 3) +Vq 极性探针：正 Vq 应产生正 i_q（仍保持 d 轴锁定角 align_angle 作 Park 角） */
+  iq_probe = foc_align_probe_iq(m, ALIGN_POLARITY_TEST_UQ_V, align_angle, ALIGN_POLARITY_TEST_MS);
+
+  if (fabsf(iq_probe) >= ALIGN_POLARITY_IQ_MIN_A && iq_probe < 0.0f)
+  {
+    /* 4) 翻转 encoder direction 并在同一锁定位置重算 offset（而非 offset+=π） */
+    foc_align_apply_direction_flip(m);
+    dir = m->config.param.direction;
+    rt->align_direction_flipped = true;
+
+    foc_align_hold_voltage(m, ud, 0.0f, align_angle, ALIGN_RELOCK_MS);
+    raw_locked = foc_align_sample_raw_elec(m, dir, ud, 0.0f, align_angle, (uint8_t)ALIGN_SAMPLE_COUNT);
+    rt->align_raw_elec_rad = raw_locked;
+    foc_align_set_offset_from_raw(m, raw_locked, align_angle);
+    foc_sense_update(m);
+    rt->align_theta_after_rad = m->state.theta_elec_rad;
+
+    iq_probe = foc_align_probe_iq(m, ALIGN_POLARITY_TEST_UQ_V, align_angle, ALIGN_POLARITY_TEST_MS);
+  }
+
+  rt->align_polarity_test_iq = iq_probe;
+  if (fabsf(iq_probe) >= ALIGN_POLARITY_IQ_MIN_A && iq_probe > 0.0f)
+  {
+    rt->align_ok = true;
+  }
+  else if (fabsf(iq_probe) < ALIGN_POLARITY_IQ_MIN_A)
+  {
+    /* 电流过小：仍视为 offset 步骤完成，但极性未验证 */
+    rt->align_ok = true;
+  }
 
   foc_voltage(m, 0.0f, 0.0f, align_angle);
   delay_ms(50);
 
   (void)foc_pid_clear(&m->id_pid);
   (void)foc_pid_clear(&m->iq_pid);
-  rt->electrical_align_done = true;
+  rt->electrical_align_done = rt->align_ok;
+  if (!rt->align_ok)
+  {
+    motor_fault_raise(m, FAULT_ALIGN_FAILED);
+  }
   motor_disarm(m);
 }
 
@@ -304,7 +444,6 @@ void foc_init(motor_handle_t *m, const motor_config_t *config)
   if (m->config.auto_align_electrical)
   {
     foc_align_electrical(m);
-    rt->electrical_align_done = true;
   }
 }
 

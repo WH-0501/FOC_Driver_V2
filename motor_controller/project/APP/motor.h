@@ -20,7 +20,11 @@ typedef struct
   uint8_t fsm_enter_pending;    ///< FSM 进入等待标志
   bool electrical_align_done;   ///< 电气对齐完成标志
   float align_theta_before_rad; ///< 对齐前电角（调试用）
-  float align_theta_after_rad;  ///< 对齐电压下采样电角（调试用）
+  float align_theta_after_rad;  ///< 对齐锁定后电角（调试用，应≈align_angle）
+  float align_raw_elec_rad;     ///< 锁定瞬间 raw 电角（未减 offset）
+  float align_polarity_test_iq; ///< 方向校准后的 +Vq 探针 i_q [A]
+  bool align_direction_flipped; ///< 是否翻转了 param.direction
+  bool align_ok;                ///< 对齐+极性校验是否通过
 } motor_runtime_t;
 
 motor_handle_t *motor_get_handler(void);
