@@ -45,7 +45,7 @@
 #define ALIGN_SAMPLE_COUNT             (16u)
 #define ALIGN_SAMPLE_INTERVAL_MS       (5u)
 #define ALIGN_RELOCK_MS                (200u)
-/** 对齐后 +Vq 探针：i_q 为负则翻转 config.param.direction 并重算 offset（SimpleFOC sensor_direction） */
+/** 对齐后 +Vq 探针：i_q 为负则翻转 config.param.direction 并重算 offset */
 #define ALIGN_POLARITY_TEST_UQ_V       (1.5f)
 #define ALIGN_POLARITY_TEST_MS         (120u)
 #define ALIGN_POLARITY_IQ_MIN_A        (0.03f)

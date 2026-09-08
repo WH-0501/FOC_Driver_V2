@@ -251,10 +251,10 @@ void foc_align_electrical(motor_handle_t *m)
   motor_arm(m);
   m->out.pwm_enable = 1u;
 
-  /* 1) SimpleFOC/ODrive 式 d 轴锁定：固定 open-loop 电角下施加 Ud */
+  /* 1) d 轴锁定：固定 open-loop 电角下施加 Ud */
   foc_align_hold_voltage(m, ud, ALIGN_ELECTRICAL_VOLTAGE_Q_V, align_angle, ALIGN_HOLD_MS);
 
-  /* 2) 加压期间多次采样 raw 电角，写 offset（禁止用含旧 offset 的 theta_elec 累加） */
+  /* 2) 加压期间多次采样 raw 电角，写 offset */
   raw_locked = foc_align_sample_raw_elec(m,
                                        dir,
                                        ud,
