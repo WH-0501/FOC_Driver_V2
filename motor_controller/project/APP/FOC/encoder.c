@@ -45,7 +45,7 @@ static void encoder_publish_state(motor_handle_t *m)
   joint_ok = encoder_joint_enabled();
 
   pole_pairs = (m->config.param.pole_pairs > 0u) ? (float)m->config.param.pole_pairs : 1.0f;
-  shaft_dir = (m->config.param.direction == -1) ? -1.0f : 1.0f;
+  shaft_dir = (m->config.param.direction == DIR_CCW) ? -1.0f : 1.0f;
   gear_ratio = (m->config.param.gear_ratio > 0.0f) ? m->config.param.gear_ratio : 1.0f;
 
   if (shaft_ok)

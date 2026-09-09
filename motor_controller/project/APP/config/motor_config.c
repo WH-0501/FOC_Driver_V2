@@ -134,7 +134,7 @@ void motor_config_set_defaults(motor_config_t *config)
   memset(config, 0, sizeof(*config));
 
   config->param.pole_pairs = POLE_PAIRS;
-  config->param.direction = 1;
+  config->param.direction = DIR_UNKNOWN;
   config->param.gear_ratio = GEAR_RATIO;
   config->param.encoder_counts_per_rev = ENCODER_COUNTS_PER_REV;
   config->param.theta_elec_offset_rad = THETA_ELEC_OFFSET_RAD;

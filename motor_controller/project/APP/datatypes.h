@@ -27,6 +27,13 @@
 #define CURRENT_OFFSET_CALIBRATION_TIME         16     ///< 电流零漂平均：以 2 的幂次采样次数的指数部分
 #define CURRENT_OFFSET_CALIBRATION_TIMES_SHIFT  (1u << CURRENT_OFFSET_CALIBRATION_TIME) ///< 零漂累计次数 2^n
 
+typedef enum
+{
+  DIR_CW = 1,
+  DIR_CCW = -1,
+  DIR_UNKNOWN = 0,
+} direction_t;
+
 /** 运行时故障寄存器：status 可表达当前条件，latched 需显式清除才可 Recovery */
 typedef struct
 {

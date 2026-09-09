@@ -39,7 +39,7 @@
 
 /* 电角度对齐时的电压参数 */
 #define ALIGN_ELECTRICAL_ANGLE_RAD     (_3PI_2)
-#define ALIGN_ELECTRICAL_VOLTAGE_D_V   (4.0f)
+#define ALIGN_ELECTRICAL_VOLTAGE_D_V   (5.0f)
 #define ALIGN_ELECTRICAL_VOLTAGE_Q_V   (0.0f)
 #define ALIGN_HOLD_MS                  (700u)
 #define ALIGN_SAMPLE_COUNT             (16u)
@@ -49,6 +49,16 @@
 #define ALIGN_POLARITY_TEST_UQ_V       (1.5f)
 #define ALIGN_POLARITY_TEST_MS         (120u)
 #define ALIGN_POLARITY_IQ_MIN_A        (0.03f)
+
+/* 转子吸合验证：反相点二次锁定位移容差（rad，默认≈20° 电角度） */
+#ifndef ALIGN_ROTOR_ENGAGE_TOL_RAD
+#define ALIGN_ROTOR_ENGAGE_TOL_RAD (0.35f)
+#endif
+
+/* 锁定采样分散度上限（rad，默认≈5° 电角度）：超过视为未吸合到位/振荡 */
+#ifndef ALIGN_ROTOR_SPREAD_MAX_RAD
+#define ALIGN_ROTOR_SPREAD_MAX_RAD (0.09f)
+#endif
 
 #define OPEN_LOOP_UQ_RAMP_RATE      20.0f
 #define OPEN_LOOP_OMEGA_RAMP_RATE   20.0f

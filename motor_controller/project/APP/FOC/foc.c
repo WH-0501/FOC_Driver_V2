@@ -26,9 +26,9 @@ static void foc_validate_config(motor_handle_t *m)
   {
     m->config.param.pole_pairs = 1u;
   }
-  if ((m->config.param.direction != 1) && (m->config.param.direction != -1))
+  if ((m->config.param.direction != DIR_CW) && (m->config.param.direction != DIR_CCW))
   {
-    m->config.param.direction = 1;
+    m->config.param.direction = DIR_CW;
   }
   if (m->config.param.gear_ratio <= 0.0f)
   {
@@ -58,7 +58,7 @@ static void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
   // float vbus = m->config.limits.vbus_nominal;
   float vbus;
   // float Uq_max;
-  float u_lim;
+  // float u_lim;
 
   vbus = m->state.vbus_filtered;
   if (vbus <= 0.0f)
@@ -127,22 +127,16 @@ static float foc_align_raw_elec_rad(const motor_handle_t *m, int8_t dir)
   float pole_pairs;
   float shaft_dir;
 
-  if (m == NULL)
-  {
-    return 0.0f;
-  }
+  if (m == NULL) return 0.0f;
 
   pole_pairs = (m->config.param.pole_pairs > 0u) ? (float)m->config.param.pole_pairs : 1.0f;
-  shaft_dir = (dir == -1) ? -1.0f : 1.0f;
+  shaft_dir = (dir == DIR_CCW) ? -1.0f : 1.0f;
   return m->state.shaft.angle_rad * pole_pairs * shaft_dir;
 }
 
 static void foc_align_set_offset_from_raw(motor_handle_t *m, float raw_elec, float align_angle)
 {
-  if (m == NULL)
-  {
-    return;
-  }
+  if (m == NULL) return;
 
   /* theta_elec = normalize(raw - offset)；锁定时应等于 align_angle */
   m->config.param.theta_elec_offset_rad = angle_normalize(raw_elec - align_angle);
@@ -152,10 +146,7 @@ static void foc_align_hold_voltage(motor_handle_t *m, float ud, float uq, float 
 {
   uint32_t elapsed = 0u;
 
-  if (m == NULL)
-  {
-    return;
-  }
+  if (m == NULL) return;
 
   while (elapsed < hold_ms)
   {
@@ -170,22 +161,31 @@ static float foc_align_sample_raw_elec(motor_handle_t *m,
                                        float ud,
                                        float uq,
                                        float angle_el,
-                                       uint8_t count)
+                                       uint8_t count,
+                                       float *spread_out)
 {
   float sum = 0.0f;
-  uint8_t i;
+  float raw, raw_min = 1e9f, raw_max = -1e9f;
 
-  if ((m == NULL) || (count == 0u))
-  {
-    return 0.0f;
-  }
+  if ((m == NULL) || (count == 0u)) return 0.0f;
+  if (spread_out != NULL) { *spread_out = 0.0f; }
 
-  for (i = 0u; i < count; i++)
+  for (uint8_t i = 0u; i < count; i++)
   {
     foc_voltage(m, uq, ud, angle_el);
     foc_sense_update(m);
-    sum += foc_align_raw_elec_rad(m, dir);
+    raw = foc_align_raw_elec_rad(m, dir);
+    sum += raw;
+    if (raw < raw_min) raw_min = raw;
+    if (raw > raw_max) raw_max = raw;
     delay_ms(ALIGN_SAMPLE_INTERVAL_MS);
+  }
+
+  if (spread_out != NULL) 
+  {
+    float range = raw_max - raw_min;
+    if (range > _PI) { range = _2PI - range; } 
+    *spread_out = range; 
   }
 
   return sum / (float)count;
@@ -193,10 +193,7 @@ static float foc_align_sample_raw_elec(motor_handle_t *m,
 
 static float foc_align_probe_iq(motor_handle_t *m, float uq, float angle_el, uint16_t hold_ms)
 {
-  if (m == NULL)
-  {
-    return 0.0f;
-  }
+  if (m == NULL) return 0.0f;
 
   foc_voltage(m, uq, 0.0f, angle_el);
   delay_ms(hold_ms);
@@ -204,30 +201,81 @@ static float foc_align_probe_iq(motor_handle_t *m, float uq, float angle_el, uin
   return m->state.i_q;
 }
 
-static void foc_align_apply_direction_flip(motor_handle_t *m)
+/* 转子吸合验证：在 align_angle 的反相点（±π）二次锁定，
+ * 确认转子确实跟随磁场转动了约 π 电角度且稳定到位。
+ *  - 堵转/负载大于吸合力：转子停在初次锁定点，位移≈0 → 失败；
+ *  - 振荡/爬行未稳定：二次采样分散度超限 → 失败；
+ *  - 注意：±π 在 mod 2π 下不可分辨方向，N/S 极性交由 +Vq 探针负责。
+ * 返回 1=吸合验证通过，0=失败；raw_engage_out/spread_out 为诊断输出（失败时仍有效）。 */
+ static uint8_t foc_align_check_rotor_engaged(motor_handle_t *m,
+                                              int8_t dir,
+                                              float ud,
+                                              float align_angle,
+                                              float raw_locked,
+                                              uint8_t count,
+                                              float *raw_engage_out,
+                                              float *spread_out)
 {
+  const float engage_angle = angle_normalize(align_angle + _PI);
+  float raw_engage;
+  float spread;
+  float delta;
+
+  if (raw_engage_out != NULL)
+  {
+    *raw_engage_out = 0.0f;
+  }
+  if (spread_out != NULL)
+  {
+    *spread_out = 0.0f;
+  }
   if (m == NULL)
   {
-    return;
+    return 0u;
   }
 
-  if (m->config.param.direction == -1)
+  /* 反相点二次锁定（u_q 置零，沿用翻转路径的 ALIGN_RELOCK_MS 沉降时间） */
+  foc_align_hold_voltage(m, ud, 0.0f, engage_angle, ALIGN_RELOCK_MS);
+
+  /* 采样二次锁定位置与分散度 */
+  raw_engage = foc_align_sample_raw_elec(m, dir, ud, 0.0f, engage_angle, count, &spread);
+
+  /* 输出诊断（无论成败） */
+  if (raw_engage_out != NULL)
   {
-    m->config.param.direction = 1;
+    *raw_engage_out = raw_engage;
   }
-  else
+  if (spread_out != NULL)
   {
-    m->config.param.direction = -1;
+    *spread_out = spread;
   }
+
+  /* 位移检查：圆上距离应 ≈ π（堵转 ≈ 0） */
+  delta = fabsf(angle_normalize(raw_engage - raw_locked));
+  if (delta < _PI - ALIGN_ROTOR_ENGAGE_TOL_RAD)
+  {
+    return 0u;
+  }
+
+  /* 稳定检查：二次锁定采样分散度过大 → 未吸合到位/振荡 */
+  if (spread > ALIGN_ROTOR_SPREAD_MAX_RAD)
+  {
+    return 0u;
+  }
+
+  return 1u;
 }
+
 
 void foc_align_electrical(motor_handle_t *m)
 {
   motor_runtime_t *rt;
   const float align_angle = ALIGN_ELECTRICAL_ANGLE_RAD;
   const float ud = ALIGN_ELECTRICAL_VOLTAGE_D_V;
-  float raw_locked;
-  float iq_probe;
+  float raw_locked = 0.0f;
+  float raw_engage_out = 0.0f;
+  float spread_out = 0.0f;
+  float iq_probe = 0.0f;
   int8_t dir;
 
   if (m == NULL)
@@ -244,12 +292,19 @@ void foc_align_electrical(motor_handle_t *m)
   dir = m->config.param.direction;
   rt->align_direction_flipped = false;
   rt->align_ok = false;
+  rt->align_engaged = false;
 
   foc_sense_update(m);
   rt->align_theta_before_rad = m->state.theta_elec_rad;
 
   motor_arm(m);
   m->out.pwm_enable = 1u;
+
+  /** 
+   * 在执行 D 轴锁定时，强制转子物理位置停在 align_angle 位置，此时 theta_elec 必须等于 align_angle.
+   * 
+   * 重复调用 foc_voltage 锁定原因是：PWM输出就会消失，转子失去锁定力，可能会因外界扰动或自身磁阻而轻微偏移
+   */
 
   /* 1) d 轴锁定：固定 open-loop 电角下施加 Ud */
   foc_align_hold_voltage(m, ud, ALIGN_ELECTRICAL_VOLTAGE_Q_V, align_angle, ALIGN_HOLD_MS);
@@ -260,8 +315,16 @@ void foc_align_electrical(motor_handle_t *m)
                                        ud,
                                        ALIGN_ELECTRICAL_VOLTAGE_Q_V,
                                        align_angle,
-                                       (uint8_t)ALIGN_SAMPLE_COUNT);
-  rt->align_raw_elec_rad = raw_locked;
+                                       (uint8_t)ALIGN_SAMPLE_COUNT,
+                                       &spread_out);
+  /* 锁定稳定检查: 采样分散度过大,转子吸合不到位/振荡，offset不可信 */
+  if (spread_out > ALIGN_ROTOR_SPREAD_MAX_RAD)
+  {
+    motor_fault_raise(m, FAULT_ALIGN_FAILED);
+    // foc_align_finish(m, rt, align_angle);
+    return;
+  }
+  rt->align_raw_elec_rad = raw_locked; // 采样均值
   foc_align_set_offset_from_raw(m, raw_locked, align_angle);
   foc_sense_update(m);
   rt->align_theta_after_rad = m->state.theta_elec_rad;
@@ -272,18 +335,44 @@ void foc_align_electrical(motor_handle_t *m)
   if (fabsf(iq_probe) >= ALIGN_POLARITY_IQ_MIN_A && iq_probe < 0.0f)
   {
     /* 4) 翻转 encoder direction 并在同一锁定位置重算 offset（而非 offset+=π） */
-    foc_align_apply_direction_flip(m);
+    if (m->config.param.direction == DIR_CCW)
+    {
+      m->config.param.direction = DIR_CW;
+    }
+    else
+    {
+      m->config.param.direction = DIR_CCW;
+    }
     dir = m->config.param.direction;
     rt->align_direction_flipped = true;
 
     foc_align_hold_voltage(m, ud, 0.0f, align_angle, ALIGN_RELOCK_MS);
-    raw_locked = foc_align_sample_raw_elec(m, dir, ud, 0.0f, align_angle, (uint8_t)ALIGN_SAMPLE_COUNT);
+    raw_locked = foc_align_sample_raw_elec(m, dir, ud, 0.0f, align_angle, 
+                  (uint8_t)ALIGN_SAMPLE_COUNT, &spread_out);
     rt->align_raw_elec_rad = raw_locked;
+    if (spread_out > ALIGN_ROTOR_SPREAD_MAX_RAD)
+    {
+      motor_fault_raise(m, FAULT_ALIGN_FAILED);
+      // foc_align_finish(m, rt, align_angle);
+      return;
+    }
     foc_align_set_offset_from_raw(m, raw_locked, align_angle);
     foc_sense_update(m);
     rt->align_theta_after_rad = m->state.theta_elec_rad;
 
     iq_probe = foc_align_probe_iq(m, ALIGN_POLARITY_TEST_UQ_V, align_angle, ALIGN_POLARITY_TEST_MS);
+  }
+
+  /* 5) 转子吸合验证 */
+  rt->align_engaged = foc_align_check_rotor_engaged(m, dir, ud, align_angle, raw_locked, 
+                                                    (uint8_t)ALIGN_SAMPLE_COUNT, 
+                                                    &raw_engage_out, &spread_out);
+  rt->align_raw_engage_rad = raw_engage_out; // 转子吸合采样 raw 电角（未减 offset）
+  if (!rt->align_engaged)
+  {
+    motor_fault_raise(m, FAULT_ALIGN_FAILED);
+    // foc_align_finish(m, rt, align_angle);
+    return;
   }
 
   rt->align_polarity_test_iq = iq_probe;
