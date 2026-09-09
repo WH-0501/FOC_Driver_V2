@@ -57,6 +57,9 @@ mc_calibration_type_t mc_get_calibration_type(void);
 
 int mc_try_recover_from_fault(void);
 
+/** 异常复位：关断输出、清除故障、清零给定与 PID，回到 IDLE。 */
+int mc_reset_from_exception(void);
+
 /** 失能状态下将当前轴端位置设为零点（更新 theta_offset_rad）。 */
 int mc_set_joint_origin(void);
 

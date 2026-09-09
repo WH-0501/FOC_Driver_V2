@@ -108,6 +108,11 @@ class MotorClient:
     def broadcast_clear_fault(self) -> bool:
         return self._send(CAN_BROADCAST_ID, CMD.CLEAR_FAULT)
 
+    def broadcast_fault_reset(self) -> bool:
+        ok = self._send(CAN_BROADCAST_ID, CMD.FAULT_RESET)
+        self.broadcast_enable(False)
+        return ok
+
     # ---------- 多电机目标（广播） ----------
 
     def broadcast_target_positions(self, targets: List[Tuple[int, int]]) -> bool:
@@ -196,3 +201,8 @@ class MotorClient:
 
     def clear_fault(self, motor_id: int) -> bool:
         return self._send(motor_id, CMD.CLEAR_FAULT)
+
+    def fault_reset(self, motor_id: int) -> bool:
+        ok = self._send(motor_id, CMD.FAULT_RESET)
+        self._send(motor_id, CMD.ENABLE, bytes([0]))
+        return ok

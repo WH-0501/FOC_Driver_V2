@@ -357,6 +357,9 @@ class MainWindow(QMainWindow):
         elif cmd == CMD.CLEAR_FAULT:
             ok = parse_bool_result(payload)
             self.log(f"电机 {arb_id} 清除故障: {'成功' if ok else '无锁存故障'}")
+        elif cmd == CMD.FAULT_RESET:
+            ok = parse_bool_result(payload)
+            self.log(f"电机 {arb_id} 异常复位: {'成功' if ok else '失败'}")
         elif cmd == CMD.ALIGN_ELECTRIC_ANGLE:
             ok = parse_bool_result(payload)
             self.log(f"电机 {arb_id} 电角度对齐: {'成功' if ok else '失败'}")

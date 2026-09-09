@@ -231,18 +231,20 @@ mc_error_t mc_disable(void)
 {
   motor_handle_t *m = motor_get_handler();
 
-  m->ctrl_mode = CTRL_MODE_IDLE;
-
   if (foc_fsm_is_calibrating(m->fsm))
   {
     mc_stop_calibration();
     return MC_ERR_CALIBRATING;
   }
 
-  if (m->fsm != STATE_FAULT)
+  if ((m->fsm != STATE_FAULT) || !motor_fault_is_latched(m))
   {
     foc_fsm_next_state(m, STATE_IDLE);
+    foc_fsm_loop(m);
   }
+
+  motor_disarm(m);
+  m->out.pwm_enable = 0u;
   return MC_OK;
 }
 
@@ -275,6 +277,51 @@ int mc_try_recover_from_fault(void)
   motor_fault_clear_latched(m, (fault_t)0xFFFFFFFFu);
   motor_fault_clear_status(m, (fault_t)0xFFFFFFFFu);
   foc_fsm_next_state(m, STATE_IDLE);
+  return MC_OK;
+}
+
+int mc_reset_from_exception(void)
+{
+  motor_handle_t *m = motor_get_handler();
+  motor_runtime_t *rt = motor_runtime(m);
+
+  if (m == NULL)
+  {
+    return MC_ERR_STATE;
+  }
+
+  if (foc_fsm_is_calibrating(m->fsm))
+  {
+    mc_stop_calibration();
+  }
+
+  motor_shutdown(m);
+  motor_disarm(m);
+  m->out.pwm_enable = 0u;
+
+  motor_fault_clear_latched(m, (fault_t)0xFFFFFFFFu);
+  motor_fault_clear_status(m, (fault_t)0xFFFFFFFFu);
+
+  (void)mc_disable();
+
+  (void)foc_pid_clear(&m->id_pid);
+  (void)foc_pid_clear(&m->iq_pid);
+  (void)foc_pid_clear(&m->velocity_pid);
+  (void)foc_pid_clear(&m->position_pid);
+
+  m->ref.id = 0.f;
+  m->ref.iq = 0.f;
+  m->ref.torque_nm = 0.f;
+  m->ref.speed_rad_s = 0.f;
+  m->ref.position_rad = m->state.joint.position_rad;
+
+  if (rt != NULL)
+  {
+    rt->open_loop_uq = 0.f;
+    rt->open_loop_omega = 0.f;
+    rt->open_loop_shaft_angle = m->state.shaft.position_rad;
+  }
+
   return MC_OK;
 }
 

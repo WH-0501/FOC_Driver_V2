@@ -76,14 +76,14 @@ int16_t can_fd_codec_rad_s_to_vel_q7_rpm(float rad_s)
 {
   float rpm = RAD_PER_SEC_TO_RPM(rad_s);
 
-  if (rpm > 32767.0f / CAN_FD_POS_SCALE)
-  {
-    rpm = 32767.0f / CAN_FD_POS_SCALE;
-  }
-  if (rpm < -32768.0f / CAN_FD_POS_SCALE)
-  {
-    rpm = -32768.0f / CAN_FD_POS_SCALE;
-  }
+  // if (rpm > 32767.0f / CAN_FD_POS_SCALE)
+  // {
+  //   rpm = 32767.0f / CAN_FD_POS_SCALE;
+  // }
+  // if (rpm < -32768.0f / CAN_FD_POS_SCALE)
+  // {
+  //   rpm = -32768.0f / CAN_FD_POS_SCALE;
+  // }
 
   return (int16_t)(rpm /* * CAN_FD_POS_SCALE */);
 }

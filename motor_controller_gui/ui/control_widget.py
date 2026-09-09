@@ -36,6 +36,7 @@ class MotorControlWidget(QGroupBox):
         row1 = QHBoxLayout()
         self.enable_btn = QPushButton("广播使能")
         self.disable_btn = QPushButton("广播失能")
+        self.fault_reset_btn = QPushButton("异常复位")
         self.mode_combo = QComboBox()
         for mode in SELECTABLE_CONTROL_MODES:
             self.mode_combo.addItem(MODE_NAMES[mode], int(mode))
@@ -45,6 +46,7 @@ class MotorControlWidget(QGroupBox):
         self.sync_btn = QPushButton("同步信号")
         row1.addWidget(self.enable_btn)
         row1.addWidget(self.disable_btn)
+        row1.addWidget(self.fault_reset_btn)
         row1.addWidget(QLabel("模式:"))
         row1.addWidget(self.mode_combo)
         row1.addWidget(self.set_mode_btn)
@@ -88,6 +90,7 @@ class MotorControlWidget(QGroupBox):
 
         self.enable_btn.clicked.connect(lambda: self.client.broadcast_enable(True))
         self.disable_btn.clicked.connect(lambda: self.client.broadcast_enable(False))
+        self.fault_reset_btn.clicked.connect(lambda: self.client.fault_reset(self.motor_id))
         self.set_mode_btn.clicked.connect(self._send_mode)
         self.origin_btn.clicked.connect(self.client.broadcast_set_origin)
         self.align_btn.clicked.connect(self.client.broadcast_align_angle)

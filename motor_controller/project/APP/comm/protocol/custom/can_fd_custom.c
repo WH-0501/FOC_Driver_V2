@@ -291,6 +291,12 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       can_fd_custom_handle_pos_vel_curr(payload, payload_len);
       break;
 
+    case CAN_FD_CMD_FAULT_RESET:
+      result = mc_reset_from_exception();
+      reply_payload[0] = (result == MC_OK) ? 1u : 0u;
+      can_fd_custom_reply(CAN_FD_CMD_FAULT_RESET, reply_payload, 1u);
+      break;
+
     case CAN_FD_CMD_ENABLE:
       if (payload_len >= 1u)
       {
@@ -489,10 +495,14 @@ static void can_fd_custom_period_report(void)
 {
   motor_handle_t *m = motor_get_handler();
   motor_state_t *s = &m->state;
-  uint8_t payload[10];
+  uint8_t payload[64];
   int16_t pos_raw;
   int16_t vel_raw;
   int16_t iq_ma;
+  int16_t id_ma;
+  int16_t ia_ma;
+  int16_t ib_ma;
+  int16_t ic_ma;
   uint8_t status;
   uint8_t error;
   float temp_c;
@@ -503,6 +513,10 @@ static void can_fd_custom_period_report(void)
   pos_raw = can_fd_codec_rad_to_pos_q7_deg(s->joint.position_rad);
   vel_raw = can_fd_codec_rad_s_to_vel_q7_rpm(s->joint.velocity_rad_s);
   iq_ma = (int16_t)(s->i_q * 1000.0f);
+  id_ma = (int16_t)(s->i_d * 1000.0f);
+  ia_ma = (int16_t)(s->phase_current.ampere[0] * 1000.0f);
+  ib_ma = (int16_t)(s->phase_current.ampere[1] * 1000.0f);
+  ic_ma = (int16_t)(s->phase_current.ampere[2] * 1000.0f);
 
   status = (uint8_t)(can_fd_custom_ctrl_to_wire_mode(mc_get_ctrl_mode()) & 0x0Fu);
   if (mc_is_enabled())
@@ -536,12 +550,16 @@ static void can_fd_custom_period_report(void)
   can_fd_codec_write_i16_be(&payload[0], pos_raw);
   can_fd_codec_write_i16_be(&payload[2], vel_raw);
   can_fd_codec_write_i16_be(&payload[4], iq_ma);
-  payload[6] = status;
-  payload[7] = error;
-  payload[8] = temp_u8;
-  payload[9] = vbus_u8;
+  can_fd_codec_write_i16_be(&payload[6], id_ma);
+  can_fd_codec_write_i16_be(&payload[8], ia_ma);
+  can_fd_codec_write_i16_be(&payload[10], ib_ma);
+  can_fd_codec_write_i16_be(&payload[12], ic_ma);
+  payload[14] = status;
+  payload[15] = error;
+  payload[16] = temp_u8;
+  payload[17] = vbus_u8;
 
-  (void)can_fd_custom_send_frame(s_node_id, CAN_FD_CMD_PERIOD_REPORT, payload, 10u);
+  (void)can_fd_custom_send_frame(s_node_id, CAN_FD_CMD_PERIOD_REPORT, payload, 18u);
 }
 
 static bool can_fd_custom_init(uint16_t node_id)

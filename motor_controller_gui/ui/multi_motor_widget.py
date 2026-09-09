@@ -48,6 +48,7 @@ class MultiMotorWidget(QGroupBox):
         self.send_curr_btn = QPushButton("广播发送电流")
         self.enable_all_btn = QPushButton("广播使能")
         self.disable_all_btn = QPushButton("广播失能")
+        self.fault_reset_all_btn = QPushButton("广播异常复位")
         btn_row.addWidget(self.refresh_btn)
         btn_row.addWidget(self.add_row_btn)
         btn_row.addWidget(self.send_pos_btn)
@@ -55,6 +56,7 @@ class MultiMotorWidget(QGroupBox):
         btn_row.addWidget(self.send_curr_btn)
         btn_row.addWidget(self.enable_all_btn)
         btn_row.addWidget(self.disable_all_btn)
+        btn_row.addWidget(self.fault_reset_all_btn)
         layout.addLayout(btn_row)
         self.setLayout(layout)
 
@@ -65,6 +67,7 @@ class MultiMotorWidget(QGroupBox):
         self.send_curr_btn.clicked.connect(self._send_currents)
         self.enable_all_btn.clicked.connect(lambda: self.client.broadcast_enable(True))
         self.disable_all_btn.clicked.connect(lambda: self.client.broadcast_enable(False))
+        self.fault_reset_all_btn.clicked.connect(self._broadcast_fault_reset)
 
     def _add_row(self, motor_id: int = 1) -> None:
         row = self.table.rowCount()
@@ -124,6 +127,10 @@ class MultiMotorWidget(QGroupBox):
         if targets:
             self.client.broadcast_target_velocities(targets)
             self.log(f"广播速度指令 -> {targets}")
+
+    def _broadcast_fault_reset(self) -> None:
+        self.client.broadcast_fault_reset()
+        self.log("已广播异常复位 (0x39)")
 
     def _send_currents(self) -> None:
         targets = []
