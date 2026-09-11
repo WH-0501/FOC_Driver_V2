@@ -7,7 +7,9 @@ from protocol import (
     CAN_BROADCAST_ID,
     CAN_IAP_ID,
     CMD,
+    DEFAULT_PROTOCOL_VERSION,
     FrameCounter,
+    ProtocolVersion,
     format_bytes_binary,
     format_bytes_hex,
     pack_frame,
@@ -26,6 +28,10 @@ class MotorClient:
         self.can = can_thread
         self.counter = FrameCounter()
         self._log_fn = log_fn
+        self.protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION
+
+    def set_protocol_version(self, version: ProtocolVersion) -> None:
+        self.protocol_version = version
 
     def _log_tx(self, arb_id: int, cmd: CMD, frame: bytes, data: bytes) -> None:
         if self._log_fn is None:

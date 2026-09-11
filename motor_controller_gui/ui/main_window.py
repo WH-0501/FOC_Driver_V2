@@ -30,11 +30,13 @@ from protocol import (
     format_bytes_hex,
     parse_bool_result,
     parse_frame,
+    parse_iap_status_payload,
     parse_node_id_response,
     parse_period_report,
     parse_pid_response,
     parse_protect_response,
     parse_stiff_damp_response,
+    parse_protocol_version,
 )
 from ui.connection_panel import ConnectionPanel
 from ui.motor_panel import MotorPanel
@@ -57,7 +59,7 @@ class MainWindow(QMainWindow):
         self._init_connections()
 
     def _init_ui(self) -> None:
-        self.setWindowTitle("电机调试上位机 (CANFD)")
+        self.setWindowTitle(self._window_title())
         self.setMinimumSize(1280, 900)
 
         central = QWidget()
@@ -135,6 +137,7 @@ class MainWindow(QMainWindow):
         panel.start_channel_requested.connect(self._on_start_channel)
         panel.stop_channel_requested.connect(self._on_stop_channel)
         panel.close_device_requested.connect(self._on_close_device)
+        panel.protocol_version_changed.connect(self._on_protocol_version_changed)
         self.add_motor_btn.clicked.connect(self._add_motor)
         self.remove_motor_btn.clicked.connect(self._remove_motor)
         self.scan_btn.clicked.connect(self._scan_motors)
@@ -157,8 +160,24 @@ class MainWindow(QMainWindow):
         except ValueError:
             self.waveform_widget.set_motor(None)
 
+    def _window_title(self) -> str:
+        ver = self.client.protocol_version.value
+        return f"电机调试上位机 (CANFD) — 协议 V{ver}"
+
     def log(self, msg: str) -> None:
         self.log_text.append(f"[{QTime.currentTime().toString('HH:mm:ss')}] {msg}")
+
+    def _on_protocol_version_changed(self, version_text: str) -> None:
+        try:
+            version = parse_protocol_version(version_text)
+        except ValueError as exc:
+            self.log(str(exc))
+            return
+        self.client.set_protocol_version(version)
+        for panel in self.motor_panels.values():
+            panel.apply_protocol_version(version)
+        self.setWindowTitle(self._window_title())
+        self.log(f"固件协议已切换为 V{version.value}")
 
     def _log_rx(self, arb_id: int, cnt: int, cmd: int, data: bytes) -> None:
         try:
@@ -175,20 +194,38 @@ class MainWindow(QMainWindow):
     def _on_connection_status(self, ok: bool, msg: str) -> None:
         self.log(msg)
         if ok and "已启动" in msg:
+            ch = self.can_thread.manager.channel
             self.connection_panel.set_device_state(
                 DeviceState.RUNNING,
                 self.can_thread.manager.device_label(),
-                "通道已全部启动",
+                f"通道{ch + 1} (CAN{ch}) 运行中",
+                active_channel=ch,
             )
             if not self.motor_panels:
                 self._add_motor_by_id(1)
             QTimer.singleShot(100, self._sync_all_motor_params)
         elif ok and "已打开" in msg:
+            mgr = self.can_thread.manager
+            warning = mgr.last_open_warning
+            if mgr._zlg is not None:
+                self.connection_panel.apply_hardware_channels(mgr._zlg.channel_count, warning)
             self.connection_panel.set_device_state(
                 DeviceState.OPENED,
-                self.can_thread.manager.device_label(),
-                "设备已打开，请启动通道",
+                mgr.device_label(),
+                warning or "设备已打开，请启动通道",
             )
+            if warning:
+                QMessageBox.warning(
+                    self,
+                    "设备信息提示",
+                    f"{warning}\n\n硬件 CAN 通道数: {mgr._zlg.channel_count if mgr._zlg else 1}",
+                )
+            elif mgr._zlg is not None and mgr._zlg.channel_count >= 2:
+                self.log(
+                    f"已识别双通道 USBCANFD-200U："
+                    f"通道1=API CAN0，通道2=API CAN1，"
+                    f"序列号 {mgr._zlg.hardware_serial(mgr._zlg.device_info)}"
+                )
         elif not ok and ("失败" in msg or "已关闭" in msg):
             detail = msg.split(":", 1)[-1].strip() if ":" in msg else msg
             self.connection_panel.set_device_state(DeviceState.CLOSED, message=detail)
@@ -201,7 +238,8 @@ class MainWindow(QMainWindow):
             indices, message = self.can_thread.manager.scan_devices(profile_name)
             self.connection_panel.set_scan_result(indices, message)
             if indices:
-                self.log(f"扫描完成，发现设备索引: {indices}")
+                detail = f"，{message}" if message else ""
+                self.log(f"扫描完成，发现设备索引: {indices}{detail}")
             else:
                 self.log(f"扫描完成: {message or '未发现设备'}")
         except Exception as exc:
@@ -268,7 +306,7 @@ class MainWindow(QMainWindow):
     def _scan_motors(self) -> None:
         self._scan_pending = True
         self.log("开始扫描电机 ID 1~21 ...")
-        for mid in range(1, 22):
+        for mid in range(1, 22): 
             self.client.scan_motor(mid)
 
     def _maybe_update_status(self, motor_id: int, report: dict) -> None:
@@ -294,7 +332,7 @@ class MainWindow(QMainWindow):
         cnt, cmd, payload = parsed
 
         if cmd == CMD.PERIOD_REPORT:
-            report = parse_period_report(payload)
+            report = parse_period_report(payload, self.client.protocol_version)
             if report:
                 if arb_id not in self.motor_panels and self._scan_pending:
                     self._add_motor_by_id(arb_id)
@@ -373,7 +411,15 @@ class MainWindow(QMainWindow):
             if self._scan_pending and arb_id not in self.motor_panels:
                 self._add_motor_by_id(arb_id)
         elif cmd == CMD.IAP_STATUS:
-            self.log(f"电机 {arb_id} IAP 状态: {payload.hex()}")
+            iap = parse_iap_status_payload(self.client.protocol_version, payload)
+            if iap:
+                err = iap.get("error_name", "")
+                self.log(
+                    f"电机 {arb_id} IAP: {iap.get('iap_state_name', '?')}"
+                    + (f"，{err}" if err and err != "正常" else "")
+                )
+            else:
+                self.log(f"电机 {arb_id} IAP 状态: {payload.hex()}")
         else:
             self.log(f"电机 {arb_id} 未处理命令 CMD=0x{cmd:02X} payload={payload.hex()}")
 

@@ -5,6 +5,7 @@ from typing import Callable, Dict, Optional
 from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 from core.motor_client import MotorClient
+from protocol import ProtocolVersion
 from ui.control_widget import MotorControlWidget
 from ui.param_widget import MotorParamWidget
 from ui.status_widget import MotorStatusWidget
@@ -54,3 +55,6 @@ class MotorPanel(QWidget):
 
     def apply_protect(self, values: Dict) -> None:
         self.param_widget.apply_protect(values)
+
+    def apply_protocol_version(self, version: ProtocolVersion) -> None:
+        self.control_widget.apply_protocol_version(version)

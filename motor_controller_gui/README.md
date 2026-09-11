@@ -1,12 +1,12 @@
 # 电机调试上位机 (CANFD)
 
-基于 CAN/CANFD 协议的 FOC 电机调试 GUI，支持 ZQWL-UCANFD-100E 等周立功兼容 CAN 盒，以及 SLCAN / PCAN 适配器。
+基于 CAN/CANFD 协议的 FOC 电机调试 GUI，支持 ZQWL-UCANFD-100E、创芯科技 USBCAN-FD 等周立功 `zlgcan.dll` 兼容 CAN 盒，以及 SLCAN / PCAN 适配器。
 
 ## 环境要求
 
 - Python 3.8+
 - Windows 10/11（64 位 Python 需配 64 位 `zlgcan.dll`）
-- USB-CANFD 驱动（ZCANPRO 或 USB_CANFD Tool）
+- USB-CANFD 驱动（ZCANPRO、USB_CANFD Tool 或创芯 CANFDToolPro）
 
 ## 安装
 
@@ -25,18 +25,41 @@ python motor_gui.py
 
 ### 1. 连接 CAN 设备
 
-1. 选择 **CAN 卡型号**（默认 `ZQWL-UCANFD-100E`）
+1. 选择 **CAN 卡型号**（创芯选「创芯科技 USBCAN-FD (200U)」，ZQWL 选「ZQWL-UCANFD-100E」）
 2. 点击 **扫描设备**，选择正确 **索引**
 3. 点击 **打开设备**
 4. 点击 **CAN0 启动**
 
-> 使用前请关闭原厂 USB_CANFD / ZCANPRO 上位机，避免占用设备。
+> 使用前请关闭原厂 CANFDToolPro / USB_CANFD / ZCANPRO 上位机，避免占用设备。
 
 **驱动文件：** 将 64 位 `zlgcan.dll` 及 `kerneldlls` 文件夹放到 `library/` 目录。
 
 | 型号 | 说明 |
 |------|------|
-| ZQWL-UCANFD-100E | 周立功 USBCANFD-100U 协议，预设 1Mbps / 5Mbps CAN FD |
+| ZQWL-UCANFD-100E | 周立功 USBCANFD-100U（类型 42），单通道 |
+| 创芯科技 USBCAN-FD (200U) | CANFDToolPro 型号 `USBCANFD` / `USBCANFD-200U`（类型 41），双通道 |
+
+**与 CANFDToolPro 通道参数对应关系（本上位机内置，无需手动设置）：**
+
+| CANFDToolPro 参数 | 本上位机设置 |
+|-------------------|-------------|
+| CAN 卡型号 USBCANFD | 设备类型 41（200U） |
+| 索引 0 | 扫描/打开时选择索引 0 |
+| 工作模式：正常 | `InitCAN.mode = 0` |
+| CANFD 标准：ISO | `canfd_standard = 0` |
+| 仲裁域 1 Mbps (80%) | `canfd_abit_baud_rate = 1000000` |
+| 数据域 5 Mbps (75%) | `canfd_dbit_baud_rate = 5000000` |
+| 启用滤波：未勾选 | 不配置滤波；双通道 USBCANFD 使用合并接收 |
+| 终端电阻 | 默认开启（`initenal_resistance = 1`） |
+
+**通道如何选择：**
+
+| CANFDToolPro | 本上位机下拉框 | API 索引 |
+|--------------|----------------|----------|
+| 通道 1 | 通道1 (API CAN0) | 0 |
+| 通道 2 | 通道2 (API CAN1) | 1 |
+
+打开设备后，在「**CAN 通道**」下拉框选择电机所接物理口，再点 **启动**。单通道 ZQWL 仅显示通道 1。
 | SLCAN 适配器 | CANable 等，需选择串口 |
 | PCAN-USB | Peak CAN 接口 |
 

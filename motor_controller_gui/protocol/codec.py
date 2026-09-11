@@ -6,13 +6,18 @@ from typing import Any, Dict, List, Optional, Tuple
 from .constants import (
     CANFD_DLC_LENGTHS,
     CMD,
-    ERROR_NAMES,
-    MODE_NAMES,
     MotorError,
     PID_FORMAT,
     PID_RAW_MAX,
     PID_VALUE_MAX,
     POS_SCALE,
+)
+from .version import (
+    DEFAULT_PROTOCOL_VERSION,
+    ProtocolVersion,
+    mode_display_name,
+    parse_error_byte,
+    parse_status_byte,
 )
 
 
@@ -150,7 +155,10 @@ def detect_period_report_variant(payload: bytes) -> str:
     return "legacy"
 
 
-def parse_period_report(payload: bytes) -> Dict[str, Any]:
+def parse_period_report(
+    payload: bytes,
+    protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION,
+) -> Dict[str, Any]:
     """
     解析周期上报 payload（不含 CNT/CMD），自动兼容旧/新固件。
 
@@ -181,8 +189,8 @@ def parse_period_report(payload: bytes) -> Dict[str, Any]:
         error = payload[7]
         has_phase_current = False
 
-    mode = status & 0x0F
-    enable = (status >> 4) & 0x0F
+    mode, enable, enable_nibble = parse_status_byte(protocol_version, status)
+    error_info = parse_error_byte(protocol_version, error)
     return {
         "position_raw": pos,
         "position_deg": pos_raw_to_angle(pos),
@@ -195,10 +203,14 @@ def parse_period_report(payload: bytes) -> Dict[str, Any]:
         "current_ma": iq,
         "status": status,
         "mode": mode,
-        "mode_name": MODE_NAMES.get(mode, f"未知({mode})"),
-        "enable": bool(enable),
-        "error_code": error,
-        "error_name": ERROR_NAMES.get(error, f"未知({error})"),
+        "mode_name": mode_display_name(protocol_version, mode),
+        "enable": enable,
+        "enable_nibble": enable_nibble,
+        "error_code": error_info["error_code"],
+        "error_subcode": error_info["error_subcode"],
+        "error_is_iap": error_info["error_is_iap"],
+        "error_type": error_info["error_type"],
+        "error_name": error_info["error_name"],
         "report_variant": variant,
         "has_phase_current": has_phase_current,
     }

@@ -1,6 +1,10 @@
 """CANFD 设备连接管理面板（参考 ZQWL-UCANFD-100E 上位机）。"""
 
-from PyQt5.QtCore import pyqtSignal
+from __future__ import annotations
+
+from typing import Optional
+
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QComboBox,
     QGroupBox,
@@ -14,6 +18,7 @@ from PyQt5.QtWidgets import (
 from canbus.device_profiles import DEVICE_PROFILES
 from canbus.device_manager import DeviceState
 from canbus.serial_ports import list_serial_ports
+from protocol import DEFAULT_PROTOCOL_VERSION, ProtocolVersion
 
 
 class ConnectionPanel(QGroupBox):
@@ -24,11 +29,13 @@ class ConnectionPanel(QGroupBox):
     start_channel_requested = pyqtSignal(int)
     stop_channel_requested = pyqtSignal()
     close_device_requested = pyqtSignal()
+    protocol_version_changed = pyqtSignal(str)
 
     def __init__(self, device_info_fn=None, parent=None):
         super().__init__("CANFD 连接管理", parent)
         self._device_info_fn = device_info_fn
         self._state = DeviceState.CLOSED
+        self._running_channel: Optional[int] = None
         self._build_ui()
         self._update_ui_state()
 
@@ -55,6 +62,18 @@ class ConnectionPanel(QGroupBox):
         row1.addWidget(self.scan_btn)
         root.addLayout(row1)
 
+        row_proto = QHBoxLayout()
+        self.protocol_combo = QComboBox()
+        for version in ProtocolVersion:
+            self.protocol_combo.addItem(f"V{version.value}", version.value)
+        default_idx = self.protocol_combo.findData(DEFAULT_PROTOCOL_VERSION.value)
+        if default_idx >= 0:
+            self.protocol_combo.setCurrentIndex(default_idx)
+        row_proto.addWidget(QLabel("固件协议:"))
+        row_proto.addWidget(self.protocol_combo)
+        row_proto.addStretch()
+        root.addLayout(row_proto)
+
         # SLCAN 串口选择（仅 SLCAN 型号显示）
         self.serial_row = QWidget()
         serial_layout = QHBoxLayout()
@@ -69,29 +88,27 @@ class ConnectionPanel(QGroupBox):
         self.serial_row.setLayout(serial_layout)
         root.addWidget(self.serial_row)
 
-        # 第二行：设备控制
+        # 第二行：设备状态
         row2 = QHBoxLayout()
         self.device_label = QLabel("未连接")
-        self.device_start_btn = QPushButton("启动")
-        self.device_stop_btn = QPushButton("停止")
-        self.close_btn = QPushButton("关闭设备")
-        self.info_btn = QPushButton("设备信息")
         row2.addWidget(self.device_label, 1)
-        row2.addWidget(self.device_start_btn)
-        row2.addWidget(self.device_stop_btn)
-        row2.addWidget(self.close_btn)
-        row2.addWidget(self.info_btn)
         root.addLayout(row2)
 
-        # 第三行：通道控制
+        # 第三行：通道 + 控制（创芯 CANFDToolPro「通道1/2」= API 索引 0/1）
         row3 = QHBoxLayout()
-        self.channel_label = QLabel("CAN0")
-        self.ch_start_btn = QPushButton("启动")
-        self.ch_stop_btn = QPushButton("停止")
-        row3.addWidget(self.channel_label)
+        self.channel_combo = QComboBox()
+        self.channel_combo.setMinimumWidth(160)
+        self.start_btn = QPushButton("启动通道")
+        self.stop_btn = QPushButton("停止通道")
+        self.close_btn = QPushButton("关闭设备")
+        self.info_btn = QPushButton("设备信息")
+        row3.addWidget(QLabel("CAN 通道:"))
+        row3.addWidget(self.channel_combo)
+        row3.addWidget(self.start_btn)
+        row3.addWidget(self.stop_btn)
         row3.addStretch()
-        row3.addWidget(self.ch_start_btn)
-        row3.addWidget(self.ch_stop_btn)
+        row3.addWidget(self.close_btn)
+        row3.addWidget(self.info_btn)
         root.addLayout(row3)
 
         self.status_label = QLabel("状态: 未连接")
@@ -101,23 +118,72 @@ class ConnectionPanel(QGroupBox):
         self.setLayout(root)
 
         self.model_combo.currentTextChanged.connect(self._on_model_changed)
+        self.protocol_combo.currentIndexChanged.connect(self._on_protocol_changed)
         self.open_btn.clicked.connect(self._on_open)
         self.scan_btn.clicked.connect(self._on_scan)
         self.refresh_serial_btn.clicked.connect(self._refresh_serial_ports)
-        self.device_start_btn.clicked.connect(lambda: self.start_channel_requested.emit(0))
-        self.device_stop_btn.clicked.connect(self.stop_channel_requested.emit)
-        self.ch_start_btn.clicked.connect(lambda: self.start_channel_requested.emit(0))
-        self.ch_stop_btn.clicked.connect(self.stop_channel_requested.emit)
+        self.start_btn.clicked.connect(self._on_start_channel)
+        self.stop_btn.clicked.connect(self.stop_channel_requested.emit)
         self.close_btn.clicked.connect(self.close_device_requested.emit)
         self.info_btn.clicked.connect(self._show_device_info)
 
         self._on_model_changed(self.model_combo.currentText())
+
+    def _on_protocol_changed(self) -> None:
+        value = self.protocol_combo.currentData()
+        if value:
+            self.protocol_version_changed.emit(str(value))
+
+    def current_protocol_version(self) -> str:
+        return str(self.protocol_combo.currentData() or DEFAULT_PROTOCOL_VERSION.value)
 
     def _on_model_changed(self, model_name: str) -> None:
         is_slcan = "SLCAN" in model_name
         self.serial_row.setVisible(is_slcan)
         if is_slcan:
             self._refresh_serial_ports()
+        self._refresh_channel_options(model_name)
+
+    def _refresh_channel_options(self, model_name: str, channel_count: Optional[int] = None) -> None:
+        profile = next((p for p in DEVICE_PROFILES if p.name == model_name), None)
+        if channel_count is None:
+            channel_count = profile.channel_count if profile else 1
+        current = self._selected_channel() if self.channel_combo.count() else None
+        self.channel_combo.clear()
+        for ch in range(max(1, channel_count)):
+            # 界面/API 从 0 编号；创芯 CANFDToolPro 显示为通道 1/2
+            label = f"通道{ch + 1} (API CAN{ch})"
+            self.channel_combo.addItem(label)
+            idx = self.channel_combo.count() - 1
+            self.channel_combo.setItemData(idx, ch, Qt.UserRole)
+        if current is not None:
+            idx = self.channel_combo.findData(min(current, channel_count - 1), Qt.UserRole)
+            if idx >= 0:
+                self.channel_combo.setCurrentIndex(idx)
+
+    def apply_hardware_channels(self, channel_count: int, warning: str = "") -> None:
+        """设备打开后按硬件 can_Num 刷新通道列表（避免单通道卡仍显示通道 2）。"""
+        self._refresh_channel_options(self.model_combo.currentText(), channel_count)
+        if warning:
+            self.status_label.setText(f"状态: {warning}")
+            self.status_label.setStyleSheet("color: #cc6600;")
+
+    def select_profile(self, profile_name: str) -> None:
+        idx = self.model_combo.findData(profile_name)
+        if idx >= 0:
+            self.model_combo.setCurrentIndex(idx)
+
+    def _selected_channel(self) -> int:
+        idx = self.channel_combo.currentIndex()
+        if idx < 0:
+            return 0
+        data = self.channel_combo.itemData(idx, Qt.UserRole)
+        if data is not None:
+            return int(data)
+        return idx
+
+    def _on_start_channel(self) -> None:
+        self.start_channel_requested.emit(self._selected_channel())
 
     def _refresh_serial_ports(self) -> None:
         current = self.serial_combo.currentData() or self.serial_combo.currentText()
@@ -182,8 +248,18 @@ class ConnectionPanel(QGroupBox):
         )
         QMessageBox.information(self, "设备信息", info)
 
-    def set_device_state(self, state: DeviceState, device_label: str = "", message: str = "") -> None:
+    def set_device_state(
+        self,
+        state: DeviceState,
+        device_label: str = "",
+        message: str = "",
+        active_channel: Optional[int] = None,
+    ) -> None:
         self._state = state
+        if state == DeviceState.RUNNING and active_channel is not None:
+            self._running_channel = active_channel
+        elif state != DeviceState.RUNNING:
+            self._running_channel = None
         if device_label:
             self.device_label.setText(device_label)
         if message:
@@ -215,11 +291,10 @@ class ConnectionPanel(QGroupBox):
         self.index_combo.setEnabled(not opened)
         self.serial_combo.setEnabled(not opened)
         self.refresh_serial_btn.setEnabled(not opened)
+        self.channel_combo.setEnabled(not running)
 
-        self.device_start_btn.setEnabled(opened and not running)
-        self.device_stop_btn.setEnabled(running)
-        self.ch_start_btn.setEnabled(opened and not running)
-        self.ch_stop_btn.setEnabled(running)
+        self.start_btn.setEnabled(opened and not running)
+        self.stop_btn.setEnabled(running)
         self.close_btn.setEnabled(opened)
 
         if self._state == DeviceState.CLOSED:
@@ -231,5 +306,7 @@ class ConnectionPanel(QGroupBox):
             self.status_label.setText("状态: 设备已打开，请启动通道")
             self.status_label.setStyleSheet("color: #0066cc;")
         elif self._state == DeviceState.RUNNING:
-            self.status_label.setText("状态: 通道已全部启动")
+            ch = self._running_channel if self._running_channel is not None else self._selected_channel()
+            if not self.status_label.text().startswith("状态: 通道"):
+                self.status_label.setText(f"状态: 通道{ch + 1} (CAN{ch}) 运行中")
             self.status_label.setStyleSheet("color: #008800;")

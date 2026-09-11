@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 import can
 
 from canbus.device_profiles import DEVICE_PROFILES, DeviceProfile
-from canbus.zlg_native import ZlgCanSession, find_zlgcan_dll
+from canbus.zlg_native import ZlgCanSession, find_can_driver_dll
 
 
 class DeviceState(Enum):
@@ -24,8 +24,10 @@ class CanDeviceManager:
         self.state = DeviceState.CLOSED
         self.channel = 0
         self._serial_port: str = ""
+        self._resolved_device_type: Optional[int] = None
         self.last_error: str = ""
         self.last_scan_message: str = ""
+        self.last_open_warning: str = ""
 
     @property
     def is_running(self) -> bool:
@@ -56,7 +58,13 @@ class CanDeviceManager:
             return [0], ""
 
         device_type = self.profile.device_type or 42
-        found, message = ZlgCanSession.scan(device_type, max_index)
+        found, message, resolved_type = ZlgCanSession.scan(
+            device_type,
+            max_index,
+            expected_channels=self.profile.channel_count,
+            driver_dll=self.profile.driver_dll,
+        )
+        self._resolved_device_type = resolved_type if resolved_type == device_type else device_type
         self.last_scan_message = message
         return found, message
 
@@ -66,13 +74,24 @@ class CanDeviceManager:
         self.device_index = device_index
         self._serial_port = serial_port
         self.last_error = ""
+        self.last_open_warning = ""
 
         if self.profile.backend == "zlgcan":
-            dll_path, err = find_zlgcan_dll()
+            dll_path, err, _backend = find_can_driver_dll(self.profile.driver_dll)
             if dll_path is None:
                 raise RuntimeError(err)
             self._zlg = ZlgCanSession()
-            self._zlg.open_device(self.profile.device_type or 42, device_index)
+            self._zlg.open_device(
+                self.profile.device_type or 42,
+                device_index,
+                resolved_type=self._resolved_device_type,
+                channel_count=self.profile.channel_count,
+                abit_baud=self.profile.bitrate,
+                dbit_baud=self.profile.data_bitrate,
+                resistance=self.profile.resistance,
+                driver_dll=self.profile.driver_dll,
+            )
+            self.last_open_warning = self._zlg.open_type_mismatch
         elif self.profile.backend == "slcan":
             if not serial_port:
                 raise ValueError("请选择串口")
@@ -131,6 +150,7 @@ class CanDeviceManager:
             except Exception:
                 pass
             self.bus = None
+        self._resolved_device_type = None
         self.state = DeviceState.CLOSED
 
     def recv(self, timeout: float = 0.1) -> Optional[can.Message]:
@@ -210,19 +230,66 @@ class CanDeviceManager:
         if not self.profile:
             return "未选择设备"
         if self._zlg is not None:
-            return self._zlg.device_label(self.profile.name)
+            label = self._zlg.device_label(self.profile.name)
+            if self.state == DeviceState.RUNNING:
+                ch = self.channel
+                return f"{label}  通道{ch + 1}"
+            return label
         return f"{self.profile.name}  设备{self.device_index}"
 
     def device_info_text(self) -> str:
         if self._zlg and self._zlg.device_info:
             info = self._zlg.device_info
-            serial = bytes(info.str_Serial_Num).split(b"\x00", 1)[0].decode(errors="ignore")
-            hw_type = bytes(info.str_hw_Type).split(b"\x00", 1)[0].decode(errors="ignore")
-            return f"硬件类型: {hw_type}\n序列号: {serial}\nCAN 通道数: {info.can_Num}"
+            serial = ZlgCanSession.hardware_serial(info)
+            hw_type = ZlgCanSession.hardware_name(info)
+            dll_name = ""
+            dll_dir = ""
+            if self._zlg.api is not None:
+                dll_name = self._zlg.api.dll_path.name
+                dll_dir = str(self._zlg.api._dll_dir)
+            lines = [
+                f"硬件类型: {hw_type}",
+                f"序列号: {serial}",
+                f"CAN 通道数: {info.can_Num}",
+                f"设备类型: {ZlgCanSession.hardware_type_label(self._zlg.device_type)}",
+                f"设备类型号: {self._zlg.device_type}",
+            ]
+            if dll_name:
+                lines.append(f"驱动库: {dll_name} ({dll_dir})")
+            if self._zlg.open_type_mismatch:
+                lines.extend(["", f"注意: {self._zlg.open_type_mismatch}"])
+            if self.profile and self.profile.channel_count != self._zlg.channel_count:
+                lines.extend([
+                    "",
+                    f"注意: 当前 Profile 为 {self.profile.channel_count} 通道，"
+                    f"硬件仅 {self._zlg.channel_count} 通道；请使用通道 1 (API CAN0)",
+                ])
+            if self.state == DeviceState.RUNNING:
+                ch = self.channel
+                lines.extend([
+                    "",
+                    f"当前活动通道: 通道{ch + 1} (API CAN{ch})",
+                    f"通道句柄: {self._zlg.channel_handle:#x}",
+                ])
+            elif self.state == DeviceState.OPENED:
+                lines.append("")
+                lines.append("当前活动通道: 未启动（请在界面选择通道后点「启动通道」）")
+            if self.profile:
+                lines.append("")
+                lines.append(
+                    self._zlg.channel_config_summary(
+                        self.profile.bitrate,
+                        self.profile.data_bitrate,
+                        self.profile.resistance,
+                    )
+                )
+            return "\n".join(lines)
         if self.profile:
             return (
                 f"型号: {self.profile.name}\n"
+                f"CANFD 标准: ISO\n"
                 f"仲裁段: {self.profile.bitrate // 1000} kbps\n"
-                f"数据段: {self.profile.data_bitrate // 1000} kbps"
+                f"数据段: {self.profile.data_bitrate // 1000} kbps\n"
+                f"终端电阻: {'开启' if self.profile.resistance else '关闭'}"
             )
         return "无设备信息"

@@ -40,7 +40,12 @@ class CanThread(QThread):
             if not self.isRunning():
                 self.running = True
                 self.start()
-            self.connection_status.emit(True, f"CAN{channel} 已启动")
+            zlg = self.manager._zlg
+            handle_hint = f", handle={zlg.channel_handle:#x}" if zlg and zlg.channel_handle else ""
+            self.connection_status.emit(
+                True,
+                f"通道{channel + 1} (API CAN{channel}) 已启动{handle_hint}",
+            )
         except Exception as exc:
             self.connection_status.emit(False, f"启动通道失败: {exc}")
 

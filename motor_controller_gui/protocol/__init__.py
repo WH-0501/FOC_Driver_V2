@@ -1,3 +1,19 @@
+from .version import (
+    DEFAULT_PROTOCOL_VERSION,
+    ProtocolVersion,
+    ControlModeV1,
+    default_mode_wire,
+    mode_display_name,
+    mode_hint,
+    mode_needs_current,
+    mode_needs_position,
+    mode_needs_velocity,
+    parse_error_byte,
+    parse_iap_status_payload,
+    parse_protocol_version,
+    parse_status_byte,
+    selectable_mode_options,
+)
 from .constants import (
     CAN_BROADCAST_ID,
     CAN_IAP_ID,
@@ -10,9 +26,9 @@ from .constants import (
     PID_RAW_MAX,
     PID_VALUE_MAX,
     SELECTABLE_CONTROL_MODES,
-    mode_needs_current,
-    mode_needs_position,
-    mode_needs_velocity,
+    mode_needs_current as v2_mode_needs_current,
+    mode_needs_position as v2_mode_needs_position,
+    mode_needs_velocity as v2_mode_needs_velocity,
 )
 from .codec import (
     FrameCounter,
@@ -37,6 +53,17 @@ from .codec import (
 )
 
 __all__ = [
+    "DEFAULT_PROTOCOL_VERSION",
+    "ProtocolVersion",
+    "ControlModeV1",
+    "default_mode_wire",
+    "mode_display_name",
+    "mode_hint",
+    "parse_error_byte",
+    "parse_iap_status_payload",
+    "parse_protocol_version",
+    "parse_status_byte",
+    "selectable_mode_options",
     "CAN_BROADCAST_ID",
     "CAN_IAP_ID",
     "CMD",

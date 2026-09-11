@@ -13,13 +13,14 @@ from PyQt5.QtWidgets import (
 
 from core.motor_client import MotorClient
 from protocol import (
-    ControlMode,
-    MODE_NAMES,
-    SELECTABLE_CONTROL_MODES,
+    ProtocolVersion,
     angle_to_pos_raw,
+    default_mode_wire,
+    mode_hint,
     mode_needs_current,
     mode_needs_position,
     mode_needs_velocity,
+    selectable_mode_options,
 )
 
 
@@ -29,6 +30,7 @@ class MotorControlWidget(QGroupBox):
         self.motor_id = motor_id
         self.client = client
         self._build_ui()
+        self.apply_protocol_version(self.client.protocol_version)
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout()
@@ -38,8 +40,6 @@ class MotorControlWidget(QGroupBox):
         self.disable_btn = QPushButton("广播失能")
         self.fault_reset_btn = QPushButton("异常复位")
         self.mode_combo = QComboBox()
-        for mode in SELECTABLE_CONTROL_MODES:
-            self.mode_combo.addItem(MODE_NAMES[mode], int(mode))
         self.set_mode_btn = QPushButton("广播设置模式")
         self.origin_btn = QPushButton("广播设原点")
         self.align_btn = QPushButton("广播电角度对齐")
@@ -100,25 +100,41 @@ class MotorControlWidget(QGroupBox):
         self.send_curr_btn.clicked.connect(self._send_current)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
 
-        default_index = self.mode_combo.findData(int(ControlMode.SPEED_OPEN_LOOP))
-        if default_index >= 0:
-            self.mode_combo.setCurrentIndex(default_index)
+    def apply_protocol_version(self, version: ProtocolVersion, preserve_wire: bool = True) -> None:
+        prev_wire = self.mode_combo.currentData() if preserve_wire else None
+        self.mode_combo.blockSignals(True)
+        self.mode_combo.clear()
+        for opt in selectable_mode_options(version):
+            self.mode_combo.addItem(opt.label, opt.wire)
+        if prev_wire is not None:
+            idx = self.mode_combo.findData(prev_wire)
+            if idx >= 0:
+                self.mode_combo.setCurrentIndex(idx)
+        if self.mode_combo.currentIndex() < 0:
+            default_idx = self.mode_combo.findData(default_mode_wire(version))
+            if default_idx >= 0:
+                self.mode_combo.setCurrentIndex(default_idx)
+        self.mode_combo.blockSignals(False)
         self._on_mode_changed()
 
     def set_target_callback(self, callback) -> None:
         self._target_callback = callback
 
-    def _current_mode(self) -> ControlMode:
+    def _protocol_version(self) -> ProtocolVersion:
+        return self.client.protocol_version
+
+    def _current_mode_wire(self) -> int:
         mode_val = self.mode_combo.currentData()
         if mode_val is None:
-            return ControlMode.IDLE
-        return ControlMode(int(mode_val))
+            return default_mode_wire(self._protocol_version())
+        return int(mode_val)
 
     def _on_mode_changed(self) -> None:
-        mode = self._current_mode()
-        pos_on = mode_needs_position(mode)
-        vel_on = mode_needs_velocity(mode)
-        curr_on = mode_needs_current(mode)
+        version = self._protocol_version()
+        wire = self._current_mode_wire()
+        pos_on = mode_needs_position(version, wire)
+        vel_on = mode_needs_velocity(version, wire)
+        curr_on = mode_needs_current(version, wire)
 
         self.target_pos.setEnabled(pos_on)
         self.send_pos_btn.setEnabled(pos_on)
@@ -132,24 +148,7 @@ class MotorControlWidget(QGroupBox):
         self.send_curr_btn.setEnabled(curr_on)
         self.curr_label.setEnabled(curr_on)
 
-        if mode is ControlMode.IDLE:
-            hint = "空闲模式：请先设置其它模式并失能后再切换。"
-        elif mode is ControlMode.HOMING:
-            hint = "回零模式：由固件回零流程驱动，无需手动下发目标。"
-        elif mode is ControlMode.VOLTAGE:
-            hint = "电压模式：Vd/Vq 给定暂未在此面板提供，请通过其它接口配置。"
-        elif mode is ControlMode.MIT:
-            hint = "MIT 模式：可同时下发位置/速度/电流；刚度阻尼在参数页配置。"
-        else:
-            parts = []
-            if pos_on:
-                parts.append("位置")
-            if vel_on:
-                parts.append("速度")
-            if curr_on:
-                parts.append("电流/转矩")
-            hint = f"当前模式有效给定：{'、'.join(parts) if parts else '无'}"
-        self.mode_hint.setText(hint)
+        self.mode_hint.setText(mode_hint(version, wire))
 
     def _notify_target(self, pos=None, vel=None, curr=None) -> None:
         cb = getattr(self, "_target_callback", None)
@@ -157,25 +156,31 @@ class MotorControlWidget(QGroupBox):
             cb(pos=pos, vel=vel, curr=curr)
 
     def _send_mode(self) -> None:
-        mode = self._current_mode()
-        self.client.broadcast_mode(int(mode))
+        wire = self._current_mode_wire()
+        self.client.broadcast_mode(wire)
         self._on_mode_changed()
 
     def _send_position(self) -> None:
-        if not mode_needs_position(self._current_mode()):
+        version = self._protocol_version()
+        wire = self._current_mode_wire()
+        if not mode_needs_position(version, wire):
             return
         raw = angle_to_pos_raw(self.target_pos.value())
         self._notify_target(pos=self.target_pos.value())
         self.client.broadcast_target_positions([(self.motor_id, raw)])
 
     def _send_velocity(self) -> None:
-        if not mode_needs_velocity(self._current_mode()):
+        version = self._protocol_version()
+        wire = self._current_mode_wire()
+        if not mode_needs_velocity(version, wire):
             return
         self._notify_target(vel=float(self.target_vel.value()))
         self.client.broadcast_target_velocities([(self.motor_id, self.target_vel.value())])
 
     def _send_current(self) -> None:
-        if not mode_needs_current(self._current_mode()):
+        version = self._protocol_version()
+        wire = self._current_mode_wire()
+        if not mode_needs_current(version, wire):
             return
         self._notify_target(curr=float(self.target_curr.value()))
         self.client.broadcast_target_currents([(self.motor_id, self.target_curr.value())])
