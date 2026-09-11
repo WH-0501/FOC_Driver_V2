@@ -99,7 +99,7 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
   //   if (fabsf(pre_out) <= param->limit) {
   //       pid->last_integral = new_integral;
   //   }
-  //   // 积分抗饱和. 反击算法(Back-calculation),一旦输出饱和，积分项立即被拉会，退饱和速度大大加快
+  //   // 积分抗饱和. 反击算法(Back-calculation),一旦输出饱和，积分项立即被拉回，退饱和速度大大加快
   //   // float out_unlimited = P + I + D;
   //   // *output = out_unlimited;
   //   // if (*output > param->limit) {

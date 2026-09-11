@@ -111,7 +111,7 @@ static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, f
 
   (void)phase_vel;
 
-  // (void)foc_pid_calc(&m->id_pid, &m->config.pid.id, id, m->state.i_d, &v_d_ctrl);
+  (void)foc_pid_calc(&m->id_pid, &m->config.pid.id, id, m->state.i_d, &v_d_ctrl);
   (void)foc_pid_calc(&m->iq_pid, &m->config.pid.iq, iq, m->state.i_q, &v_q_ctrl);
 
   m->state.v_d = v_d_ctrl;
@@ -181,6 +181,7 @@ static float foc_align_sample_raw_elec(motor_handle_t *m,
     delay_ms(ALIGN_SAMPLE_INTERVAL_MS);
   }
 
+  /* 计算分散度 */
   if (spread_out != NULL) 
   {
     float range = raw_max - raw_min;
