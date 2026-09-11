@@ -85,6 +85,9 @@ int16_t can_fd_codec_rad_s_to_vel_q7_rpm(float rad_s)
   //   rpm = -32768.0f / CAN_FD_POS_SCALE;
   // }
 
+  // rad/s 已转换为输出轴,因此需要再转换为输入轴.
+  rpm = rpm * GEAR_RATIO;
+
   return (int16_t)(rpm /* * CAN_FD_POS_SCALE */);
 }
 

@@ -147,8 +147,9 @@ void motor_config_set_defaults(motor_config_t *config)
   config->limits.sw_ocp_hold_ms = DEF_SW_OCP_HOLD_MS;
   config->limits.id_limit = DEF_OCP_CURRENT;
   config->limits.iq_limit = DEF_OCP_CURRENT;
-  config->limits.vd_limit = BUS_VOLTAGE * 0.5f;
-  config->limits.vq_limit = BUS_VOLTAGE * 0.5f;
+  /// 电流环调试，临时限制为 4
+  config->limits.vd_limit =  2.0f; // BUS_VOLTAGE * ONE_DIV_SQRT_3; // 0.5f;
+  config->limits.vq_limit =  2.0f; // BUS_VOLTAGE * ONE_DIV_SQRT_3; // 0.5f;
   config->limits.temp_limit = DEF_TEMP_LIMIT;
 
   config->motion.max_speed_rad_s = MAX_VELOCITY_RAD_S;
@@ -161,6 +162,8 @@ void motor_config_set_defaults(motor_config_t *config)
   config->pid.id.ramp = DEF_D_RAMP;
   config->pid.id.limit = config->limits.vd_limit;
   config->pid.id.d_filter = DEF_D_D_FILTER;
+  config->pid.id.i_limit = config->limits.vd_limit * DEF_I_LIMIT_FACTOR;
+  config->pid.id.anti_windup_gain = DEF_D_ANTI_WINDUP_GAIN;
 
   config->pid.iq.kp = DEF_Q_KP;
   config->pid.iq.ki = DEF_Q_KI;
@@ -168,6 +171,8 @@ void motor_config_set_defaults(motor_config_t *config)
   config->pid.iq.ramp = DEF_Q_RAMP;
   config->pid.iq.limit = config->limits.vq_limit;
   config->pid.iq.d_filter = DEF_Q_D_FILTER;
+  config->pid.iq.i_limit = config->limits.vq_limit * DEF_I_LIMIT_FACTOR;
+  config->pid.iq.anti_windup_gain = DEF_Q_ANTI_WINDUP_GAIN;
 
   config->pid.velocity.kp = DEF_VEL_KP;
   config->pid.velocity.ki = DEF_VEL_KI;

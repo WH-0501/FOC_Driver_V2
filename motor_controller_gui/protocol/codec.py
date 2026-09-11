@@ -10,6 +10,8 @@ from .constants import (
     MODE_NAMES,
     MotorError,
     PID_FORMAT,
+    PID_RAW_MAX,
+    PID_VALUE_MAX,
     POS_SCALE,
 )
 
@@ -61,17 +63,32 @@ def format_bytes_binary(data: bytes) -> str:
 
 # ---------- 参数打包（大端，与固件一致） ----------
 
+def float_to_q12(value: float) -> int:
+    """float -> Q12 uint16，与固件 can_fd_codec_float_to_q12 一致。"""
+    scaled = value * PID_FORMAT
+    if scaled < 0.0:
+        scaled = 0.0
+    if scaled > PID_RAW_MAX:
+        scaled = float(PID_RAW_MAX)
+    return int(round(scaled))
+
+
+def pid_params_in_range(p: float, i: float, d: float) -> Optional[str]:
+    """超出 Q12 可编码范围时返回错误说明，否则返回 None。"""
+    for name, val in (("P", p), ("I", i), ("D", d)):
+        if val < 0.0:
+            return f"{name}={val} 不能为负数"
+        if val > PID_VALUE_MAX:
+            return f"{name}={val} 超出 Q12 上限 {PID_VALUE_MAX:.4f}（协议 uint16 最大 65535）"
+    return None
+
+
 def pack_pid_params(p: float, i: float, d: float) -> bytes:
-    p_int = int(round(p * PID_FORMAT))
-    i_int = int(round(i * PID_FORMAT))
-    d_int = int(round(d * PID_FORMAT))
-    return struct.pack(">HHH", p_int, i_int, d_int)
+    return struct.pack(">HHH", float_to_q12(p), float_to_q12(i), float_to_q12(d))
 
 
 def pack_stiff_damp(stiff: float, damp: float) -> bytes:
-    stiff_int = int(round(stiff * PID_FORMAT))
-    damp_int = int(round(damp * PID_FORMAT))
-    return struct.pack(">HH", stiff_int, damp_int)
+    return struct.pack(">HH", float_to_q12(stiff), float_to_q12(damp))
 
 
 def pack_protect(over_temp: int, over_current_ma: int, under_voltage_v: int, over_voltage_v: int) -> bytes:

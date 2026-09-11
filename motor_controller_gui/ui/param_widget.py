@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core.motor_client import MotorClient
+from protocol import PID_VALUE_MAX, pid_params_in_range
 
 
 class MotorParamWidget(QGroupBox):
@@ -37,17 +38,17 @@ class MotorParamWidget(QGroupBox):
 
     def _make_pid_row(self, layout: QGridLayout, row: int, label: str):
         p = QDoubleSpinBox()
-        p.setRange(0, 100)
+        p.setRange(0, PID_VALUE_MAX)
         p.setSingleStep(0.001)
         p.setDecimals(4)
         p.setValue(0.015)
         i = QDoubleSpinBox()
-        i.setRange(0, 100)
+        i.setRange(0, PID_VALUE_MAX)
         i.setSingleStep(0.001)
         i.setDecimals(4)
         i.setValue(0.001)
         d = QDoubleSpinBox()
-        d.setRange(0, 100)
+        d.setRange(0, PID_VALUE_MAX)
         d.setSingleStep(0.001)
         d.setDecimals(4)
         d.setValue(0.0)
@@ -195,20 +196,36 @@ class MotorParamWidget(QGroupBox):
             return
         self.client.reset_factory(self.motor_id)
 
+    def _validate_pid(self, p: float, i: float, d: float) -> bool:
+        err = pid_params_in_range(p, i, d)
+        if err is None:
+            return True
+        QMessageBox.warning(self, "PID 参数无效", err)
+        return False
+
     def _set_pos_pid(self) -> None:
         if not self._require_disabled():
             return
-        self.client.set_pos_pid(self.motor_id, self.pos_p.value(), self.pos_i.value(), self.pos_d.value())
+        p, i, d = self.pos_p.value(), self.pos_i.value(), self.pos_d.value()
+        if not self._validate_pid(p, i, d):
+            return
+        self.client.set_pos_pid(self.motor_id, p, i, d)
 
     def _set_vel_pid(self) -> None:
         if not self._require_disabled():
             return
-        self.client.set_vel_pid(self.motor_id, self.vel_p.value(), self.vel_i.value(), self.vel_d.value())
+        p, i, d = self.vel_p.value(), self.vel_i.value(), self.vel_d.value()
+        if not self._validate_pid(p, i, d):
+            return
+        self.client.set_vel_pid(self.motor_id, p, i, d)
 
     def _set_cur_pid(self) -> None:
         if not self._require_disabled():
             return
-        self.client.set_cur_pid(self.motor_id, self.cur_p.value(), self.cur_i.value(), self.cur_d.value())
+        p, i, d = self.cur_p.value(), self.cur_i.value(), self.cur_d.value()
+        if not self._validate_pid(p, i, d):
+            return
+        self.client.set_cur_pid(self.motor_id, p, i, d)
 
     def _set_stiff(self) -> None:
         if not self._require_disabled():

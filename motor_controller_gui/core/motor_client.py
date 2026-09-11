@@ -179,6 +179,7 @@ class MotorClient:
         return self._send(motor_id, CMD.SET_VEL_PID, pack_pid_params(p, i, d))
 
     def set_cur_pid(self, motor_id: int, p: float, i: float, d: float) -> bool:
+        print(f"set_cur_pid: p={p}, i={i}, d={d}")
         return self._send(motor_id, CMD.SET_CUR_PID, pack_pid_params(p, i, d))
 
     def set_stiff_damp(self, motor_id: int, stiff: float, damp: float) -> bool:

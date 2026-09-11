@@ -22,6 +22,8 @@ typedef struct
   float kd;             ///< 微分系数
   float ramp;           ///< 设定值斜坡或输出斜坡系数（依实现而定）
   float limit;          ///< 输出或积分限幅
+  float i_limit;        ///< 积分限幅
+  float anti_windup_gain;///< 反算系数，建议 0.5f ~ 1.0f
   float d_filter;       ///< 微分滤波系数
 } pid_param_t;
 

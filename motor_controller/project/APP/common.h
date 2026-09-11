@@ -111,9 +111,9 @@
 
 #define DEF_UVLO_VOLTAGE (9.0f)
 #define DEF_OVP_VOLTAGE (28.0f)
-#define DEF_OCP_CURRENT (1.0f)
+#define DEF_OCP_CURRENT (1.5f)
 #define DEF_TEMP_LIMIT (85.0f)
-#define DEF_SW_OCP (1.2f)
+#define DEF_SW_OCP (1.5f)
 #define DEF_SW_OCP_HOLD_MS (1000.0f)
 #define DEF_PHASE_DIAG_I_AVG_MIN_A (0.0f)
 #define DEF_PHASE_IMBALANCE_RATIO_MAX (0.0f)
@@ -150,6 +150,9 @@
 #define DEF_D_RAMP (0.0f)
 #define DEF_D_LIMIT (0.0f)
 #define DEF_D_D_FILTER (0.0f)
+#define DEF_D_ANTI_WINDUP_GAIN (0.5f)
+#define DEF_Q_ANTI_WINDUP_GAIN (0.5f)
+#define DEF_I_LIMIT_FACTOR (0.85f)
 
 #define PID_DT_THRESHOLD (0.5f)
 #define PID_DT_MAX (0.001f)
