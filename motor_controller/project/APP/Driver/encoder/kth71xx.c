@@ -1,10 +1,9 @@
 #include "kth71xx.h"
 #include "wk_spi.h"
 #include "wk_system.h"
-#include <stdbool.h>
 
 
-#define SPI_SOFT_CTRL   1
+#define SPI_SOFT_CTRL   0
 
 
 #if SPI_SOFT_CTRL
@@ -27,18 +26,16 @@
 
 #define READ_MISO	   	 		gpio_input_data_bit_read(GPIOB, GPIO_PINS_5)
 
+#define SET_MISO_INPUT		PB_SET_INPUT(GPIO_PINS_5)
 
-// #define SET_MISO_INPUT		PB_SET_INPUT(GPIO_PINS_5)
-// #define SET_MISO_OUTPUT		PB_SET_OUTPUT(GPIO_PINS_5)
-#define SET_MISO_INPUT		PB_SET_INPUT(5u)
-#define SET_MISO_OUTPUT		PB_SET_OUTPUT(5u)
+#define SET_MISO_OUTPUT		PB_SET_OUTPUT(GPIO_PINS_5)
 
 #define MISO_SET		    	gpio_bits_set(GPIOB, GPIO_PINS_5)
 #define MISO_CLR		    	gpio_bits_reset(GPIOB, GPIO_PINS_5)
 #endif
 
-#define CSN_SET(cs)     kth71_cs_set((cs), true)
-#define CSN_CLR(cs)     kth71_cs_set((cs), false)
+#define CSN_SET		   			gpio_bits_set(GPIOB, GPIO_PINS_6)
+#define CSN_CLR		   			gpio_bits_reset(GPIOB, GPIO_PINS_6)
 
 
 /**
@@ -64,84 +61,16 @@ uint8_t CRC8Table[256]={
 };
 
 static unsigned char KTH71_IsCRCOK(unsigned char* pbuf, unsigned char buflen);
-static void KTH71_SPI_TransmitReceive(kth71_cs_select_t cs,
-                                      unsigned char *pTxData,
-                                      unsigned char *pRxData,
-                                      unsigned char txLen,
-                                      unsigned char rxLen);
-
-static void kth71_cs_set(kth71_cs_select_t cs, bool selected)
-{
-  switch (cs)
-  {
-    case KTH71_CS_0:
-      if (selected)
-      {
-        gpio_bits_reset(GPIOB, GPIO_PINS_6);
-      }
-      else
-      {
-        gpio_bits_set(GPIOB, GPIO_PINS_6);
-      }
-      break;
-
-    case KTH71_CS_1:
-      if (selected)
-      {
-        gpio_bits_reset(GPIOB, GPIO_PINS_7);
-      }
-      else
-      {
-        gpio_bits_set(GPIOB, GPIO_PINS_7);
-      }
-      break;
-
-    case KTH71_CS_2:
-      if (selected)
-      {
-        gpio_bits_reset(GPIOB, GPIO_PINS_9);
-      }
-      else
-      {
-        gpio_bits_set(GPIOB, GPIO_PINS_9);
-      }
-      break;
-
-    default:
-      break;
-  }
-}
-
-static void kth71_cs_init_all(void)
-{
-  gpio_init_type gpio_init_struct;
-
-  gpio_default_para_init(&gpio_init_struct);
-  gpio_init_struct.gpio_mode = GPIO_MODE_OUTPUT;
-  gpio_init_struct.gpio_pull = GPIO_PULL_NONE;
-
-  gpio_init_struct.gpio_pins = GPIO_PINS_6;
-  gpio_init(GPIOB, &gpio_init_struct);
-  gpio_bits_set(GPIOB, GPIO_PINS_6);
-
-  gpio_init_struct.gpio_pins = GPIO_PINS_7;
-  gpio_init(GPIOB, &gpio_init_struct);
-  gpio_bits_set(GPIOB, GPIO_PINS_7);
-
-  gpio_init_struct.gpio_pins = GPIO_PINS_9;
-  gpio_init(GPIOB, &gpio_init_struct);
-  gpio_bits_set(GPIOB, GPIO_PINS_9);
-}
+static void KTH71_SPI_TransmitReceive(unsigned char *pTxData, unsigned char *pRxData, unsigned char txLen, unsigned char rxLen);
 void delay_us(unsigned int us) 
 {
     while(us--) 
 		{
 			;
-			;
 		}
 }
 // 发送一个字节，等待接收
-void spi_3wire_send_byte(unsigned char data)
+static inline void spi_3wire_send_byte(unsigned char data)
 {
 #if SPI_SOFT_CTRL
     SET_MISO_OUTPUT;  // 设置为输出模式
@@ -173,14 +102,10 @@ void spi_3wire_send_byte(unsigned char data)
     // 设置为输入模式
     SET_MISO_INPUT;
 #else
-
-    spi_half_duplex_direction_set(SPI2, SPI_HALF_DUPLEX_DIRECTION_TX);
-    
-    
-    spi_i2s_data_transmit(SPI2, data);
     while(spi_i2s_flag_get(SPI2, SPI_I2S_TDBE_FLAG) == RESET);
+    spi_i2s_data_transmit(SPI2, data);
     
- #endif
+#endif
 
     
 }
@@ -192,24 +117,14 @@ void spi_3wire_send_byte(unsigned char data)
   */
 unsigned char KTH71_ReadAngle(unsigned short *pAngle)
 {
-  return KTH71_ReadAngleCs(KTH71_CS_0, pAngle);
-}
+    unsigned char crcflag = 0;
+    unsigned char dataSend = KTH71_READ_ANGLE;
+    unsigned char dataBack[3];
 
-unsigned char KTH71_ReadAngleCs(kth71_cs_select_t cs, unsigned short *pAngle)
-{
-  unsigned char crcflag = 0;
-  unsigned char dataSend = KTH71_READ_ANGLE;
-  unsigned char dataBack[3];
-
-  if ((pAngle == NULL) || (cs >= KTH71_CS_COUNT))
-  {
-    return 0u;
-  }
-
-  KTH71_SPI_TransmitReceive(cs, &dataSend, dataBack, 1, 3);
-  crcflag = KTH71_IsCRCOK(dataBack, 3);
-  *pAngle = (dataBack[0] << 8) | dataBack[1];
-  return crcflag;
+    KTH71_SPI_TransmitReceive(&dataSend, dataBack, 1, 3);
+    crcflag = KTH71_IsCRCOK(dataBack, 3);
+    *pAngle = (dataBack[0] << 8) | dataBack[1];
+    return crcflag;
 }
 
 /**
@@ -225,7 +140,7 @@ unsigned char KTH71_ReadReg(unsigned char addr, unsigned char *pRegValue)
     unsigned char dataSend[2] = {KTH71_READ_REG, addr};
     unsigned char dataBack[2];
 
-    KTH71_SPI_TransmitReceive(KTH71_CS_0, dataSend, dataBack, 2, 2);
+    KTH71_SPI_TransmitReceive(dataSend, dataBack, 2, 2);
     crcflag = KTH71_IsCRCOK(dataBack, 2);
     *pRegValue = dataBack[0];
     return crcflag;
@@ -242,7 +157,7 @@ unsigned char KTH71_WriteReg(unsigned char addr, unsigned char data)
     unsigned char dataSend[3] = {KTH71_WRITE_REG, addr, data};
     unsigned char dataBack = 0;
 
-    KTH71_SPI_TransmitReceive(KTH71_CS_0, dataSend, &dataBack, 3, 1);
+    KTH71_SPI_TransmitReceive(dataSend, &dataBack, 3, 1);
     return dataBack;
 }
 
@@ -255,14 +170,20 @@ void KTH71_UnlockReg(void)
     unsigned char dataSend[4] = {0x20, 0x24, 0x01, 0x01};
 	unsigned char i;
 
-	CSN_CLR(KTH71_CS_0);
+#if !SPI_SOFT_CTRL
+    spi_enable(SPI2,FALSE);
+    spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_TX);
+    spi_enable(SPI2,TRUE);
+#endif
+    
+	CSN_CLR;
 
 	for(i=0;i<4;i++)
 	{
         spi_3wire_send_byte(dataSend[i]);	
 	}	
 
-	CSN_SET(KTH71_CS_0);
+	CSN_SET;
 }
 
 /**
@@ -274,14 +195,20 @@ void KTH71_LockReg(void)
     unsigned char dataSend[4] = {0x20, 0x24, 0x12, 0x31};
 	unsigned char i;
 
-	CSN_CLR(KTH71_CS_0);
+#if !SPI_SOFT_CTRL
+    spi_enable(SPI2,FALSE);
+    spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_TX);
+    spi_enable(SPI2,TRUE);
+#endif  
+    
+	CSN_CLR;
 
 	for(i=0;i<4;i++)
 	{
 		spi_3wire_send_byte(dataSend[i]);
 	}
 
-	CSN_SET(KTH71_CS_0);
+	CSN_SET;
 }
 
 /**
@@ -293,14 +220,20 @@ void KTH71_WriteRegToMTP(void)
     unsigned char dataSend[3] = {0x22, 0x55, 0xAA};
 	unsigned char i;
 
-	CSN_CLR(KTH71_CS_0);
+#if !SPI_SOFT_CTRL
+    spi_enable(SPI2,FALSE);
+    spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_TX);
+    spi_enable(SPI2,TRUE);
+#endif  
+    
+	CSN_CLR;
 
 	for(i=0;i<3;i++)
 	{
 		spi_3wire_send_byte(dataSend[i]);
 	}
 
-	CSN_SET(KTH71_CS_0);
+	CSN_SET;
 
 	wk_delay_ms(400);
 }
@@ -324,11 +257,10 @@ static unsigned char KTH71_IsCRCOK(unsigned char *pbuf, unsigned char buflen)
   return (crc == pbuf[buflen - 1]) ? 1 : 0;
 }
 // 接收一个字节，等待发送
-unsigned char spi_3wire_receive_byte(void)
+inline unsigned char spi_3wire_receive_byte(void)
 {
-#if SPI_SOFT_CTRL
     unsigned char data = 0;
-    
+#if SPI_SOFT_CTRL 
     // 设置为输入模式
     SET_MISO_INPUT;
     
@@ -352,21 +284,12 @@ unsigned char spi_3wire_receive_byte(void)
         
         // 等待
         delay_us(1);						//
-    }
-    
-    return data;
+    } 
 #else
-    unsigned char data = 0;
-
-    // 设置为输入模式
-    spi_half_duplex_direction_set(SPI2, SPI_HALF_DUPLEX_DIRECTION_RX);
-    
     while(spi_i2s_flag_get(SPI2, SPI_I2S_RDBF_FLAG) == RESET);
     data = spi_i2s_data_receive(SPI2);
-
-    return data;
 #endif
-    
+    return data;
 }
 /**
   * @brief  Transmit and Receive data.
@@ -377,48 +300,61 @@ unsigned char spi_3wire_receive_byte(void)
   * @param  Reception data buffer length.
   * @retval None
   */
-static void KTH71_SPI_TransmitReceive(kth71_cs_select_t cs,
-                                      unsigned char *pTxData,
-                                      unsigned char *pRxData,
-                                      unsigned char txLen,
-                                      unsigned char rxLen)
+static void KTH71_SPI_TransmitReceive(unsigned char *pTxData, unsigned char *pRxData, unsigned char txLen, unsigned char rxLen)
 {
-	unsigned char i;  
+	unsigned char i; 
     
-	CSN_CLR(cs);
-
+#if !SPI_SOFT_CTRL
+    spi_enable(SPI2,FALSE);
+    spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_TX);
+    spi_enable(SPI2,TRUE);
+#endif  
+	CSN_CLR;
 	for(i=0;i<txLen;i++)
 	{	 
-        
-        spi_3wire_send_byte(*pTxData);
-        pTxData++;
+         spi_3wire_send_byte(*pTxData);
+         pTxData++;
 	}
+#if !SPI_SOFT_CTRL
+    while(spi_i2s_flag_get(SPI2, SPI_I2S_BF_FLAG) != RESET);
 
+    spi_enable(SPI2,FALSE);
+    spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_RX);
+    spi_enable(SPI2,TRUE);
+#endif
 	for(i=0;i<rxLen;i++)
 	{
-
-      *pRxData	=spi_3wire_receive_byte();
-      pRxData++;
-	}  
-	CSN_SET(cs);
+        *pRxData = spi_3wire_receive_byte();
+        pRxData++;
+	}
+#if !SPI_SOFT_CTRL
+    spi_enable(SPI2,FALSE);
+#endif
+	CSN_SET;
 }
+
 
 // 第一次使用KTH7111芯片需执行以下代码
 static void SetKTH71(void)
 {
-    unsigned char Test_temp[3];
-	KTH71_ReadReg(0x11,&Test_temp[2]);
-	wk_delay_ms(10);
-	if(Test_temp[2]==0xac)
+    unsigned char Test_temp = 0xAC;
+	KTH71_ReadReg(0x11,&Test_temp);
+	wk_delay_ms(1);
+	if(Test_temp == 0xAC)
 	{
         KTH71_UnlockReg();
-        wk_delay_ms(10);
+        wk_delay_ms(1);
         KTH71_WriteReg(0x11,0x00);
-        wk_delay_ms(10);
+        wk_delay_ms(1);
         KTH71_WriteRegToMTP();
-        wk_delay_ms(10);
+        wk_delay_ms(1);
 	}
-	
+    KTH71_UnlockReg();
+    wk_delay_ms(1);
+    KTH71_WriteReg(0x16,0x00);
+    wk_delay_ms(1);
+    KTH71_LockReg();
+    wk_delay_ms(1);
 }
 
 void KTH71_Init(void)
@@ -440,7 +376,7 @@ void KTH71_Init(void)
 	gpio_init(GPIOB, &gpio_init_struct);
 	gpio_bits_reset(GPIOB, GPIO_PINS_4);
 
-    /* configure the MOSI pin */
+  /* configure the MOSI pin */
 
 		
     gpio_init_struct.gpio_mode = GPIO_MODE_OUTPUT;					//MISO
@@ -450,9 +386,17 @@ void KTH71_Init(void)
     gpio_bits_set(GPIOB, GPIO_PINS_5);
 		
 
-    kth71_cs_init_all();
+  /* configure the CS pin */
+    gpio_init_struct.gpio_mode = GPIO_MODE_OUTPUT;					//CS
+    gpio_init_struct.gpio_pins = GPIO_PINS_6;
+    gpio_init_struct.gpio_pull = GPIO_PULL_NONE;
+    gpio_init(GPIOB, &gpio_init_struct);
+    gpio_bits_set(GPIOB, GPIO_PINS_6);
 #else
     wk_spi2_init();
 #endif
     SetKTH71();
 }
+
+
+

@@ -14,7 +14,7 @@
  */
 static encoder_unit_t s_encoders[ENCODER_ROLE_COUNT] = {
   [ENCODER_ROLE_SHAFT] = {
-    .bind = { .dev = ENCODER_DEV_KTH71, .kth71_cs = KTH71_CS_0 },
+    .bind = { .dev = ENCODER_DEV_KTH71, .kth71_cs = 0 /*KTH71_CS_0*/ },
   },
   [ENCODER_ROLE_JOINT] = {
     .bind = { .dev = ENCODER_DEV_NONE },
@@ -142,20 +142,20 @@ static uint32_t time_us_delta(uint32_t prev, uint32_t now)
 
 static int encoder_hw_read(const encoder_bind_t *bind, uint16_t *raw)
 {
-  kth71_cs_select_t cs;
+  // kth71_cs_select_t cs;
 
   if ((bind == NULL) || (raw == NULL) || (bind->dev != ENCODER_DEV_KTH71))
   {
     return -1;
   }
 
-  if (bind->kth71_cs >= KTH71_CS_COUNT)
-  {
-    return -1;
-  }
+  // if (bind->kth71_cs >= KTH71_CS_COUNT)
+  // {
+  //   return -1;
+  // }
 
-  cs = (kth71_cs_select_t)bind->kth71_cs;
-  if (KTH71_ReadAngleCs(cs, raw) == 0u)
+  // cs = (kth71_cs_select_t)bind->kth71_cs;
+  if (KTH71_ReadAngle(raw) == 0u)
   {
     return -1;
   }
@@ -245,7 +245,7 @@ static float encoder_resolve_dir(const encoder_bind_t *bind, int8_t default_dir)
 
 static uint16_t encoder_raw_to_counts(uint16_t raw_u16)
 {
-  return (uint16_t)((raw_u16 >> 3) & ENCODER_COUNTS_PER_REV_MASK);
+  return (uint16_t)((raw_u16 >> 3) & ENCODER_COUNTS_PER_REV_MASK); // 去除噪声. 保留有效位
 }
 
 bool encoder_observer_update(encoder_observer_t *obs,
