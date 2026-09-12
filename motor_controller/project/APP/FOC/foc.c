@@ -11,6 +11,11 @@
 #include "math_compat.h"
 #include <string.h>
 
+static float foc_dwt_elapsed_us(uint32_t t0_us)
+{
+  return (float)(dwt_get_ticks_us() - t0_us);
+}
+
 static void foc_pid_apply_param(pid_state_t *pid, uint8_t mode)
 {
   if (pid == NULL)
@@ -106,8 +111,10 @@ static void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
 
 static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, float phase_vel)
 {
+  motor_runtime_t *rt = motor_runtime(m);
   float v_d_ctrl = 0.0f;
   float v_q_ctrl = 0.0f;
+  uint32_t t0_us = dwt_get_ticks_us();
 
   (void)phase_vel;
 
@@ -119,6 +126,11 @@ static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, f
   foc_voltage(m, v_q_ctrl, v_d_ctrl, angle_el);
 
   m->state.i_bus = sqrtf(SQ(m->state.i_d) + SQ(m->state.i_q));
+
+  if (rt != NULL)
+  {
+    rt->foc_cur_loop_us = foc_dwt_elapsed_us(t0_us);
+  }
 }
 
 /** 编码器 raw 电角（不含 theta_elec_offset），与 encoder_publish_state 一致 */
@@ -436,26 +448,75 @@ static void foc_speed_open_control(motor_handle_t *m, float target_speed)
 
 static void foc_speed_closed_control(motor_handle_t *m, float target_speed)
 {
+  motor_runtime_t *rt = motor_runtime(m);
   float iq_cmd = 0.0f;
+  uint32_t t0_us;
 
   if (m == NULL)
   {
     return;
   }
 
+  t0_us = dwt_get_ticks_us();
   (void)foc_pid_calc(&m->velocity_pid,
                      &m->config.pid.velocity,
                      target_speed,
                      m->state.joint.velocity_rad_s,
                      &iq_cmd);
+  if (rt != NULL)
+  {
+    rt->foc_vel_loop_us = foc_dwt_elapsed_us(t0_us);
+  }
+
   foc_current(m, 0.0f, iq_cmd, m->state.theta_elec_rad, 0.0f);
+}
+
+
+static void foc_position_closed_control(motor_handle_t *m, float target_pos)
+{
+  motor_runtime_t *rt = motor_runtime(m);
+  float speed_cmd = 0.0f;
+  uint32_t t0_us;
+  if (m == NULL)
+  {
+    return;
+  }
+  t0_us = dwt_get_ticks_us();
+  (void)foc_pid_calc(&m->position_pid,
+                     &m->config.pid.position,
+                     target_pos,
+                     m->state.joint.position_rad,
+                     &speed_cmd);
+  if (rt != NULL)
+  {
+    rt->foc_pos_loop_us = foc_dwt_elapsed_us(t0_us);
+  }
+  if (m->config.motion.max_speed_rad_s > 0.0f)
+  {
+    speed_cmd = CLAMP(speed_cmd,
+                      -m->config.motion.max_speed_rad_s,
+                      m->config.motion.max_speed_rad_s);
+  }
+
+  foc_speed_closed_control(m, speed_cmd);
 }
 
 static void foc_control_run(motor_handle_t *m)
 {
+  motor_runtime_t *rt = motor_runtime(m);
+  uint32_t t_ctrl_us;
+
   if (m == NULL)
   {
     return;
+  }
+
+  t_ctrl_us = dwt_get_ticks_us();
+  if (rt != NULL)
+  {
+    rt->foc_pos_loop_us = 0.0f;
+    rt->foc_vel_loop_us = 0.0f;
+    rt->foc_cur_loop_us = 0.0f;
   }
 
   switch (m->ctrl_mode)
@@ -475,11 +536,19 @@ static void foc_control_run(motor_handle_t *m)
     case CTRL_MODE_SPEED:
       foc_speed_closed_control(m, m->ref.speed_rad_s);
       break;
+    case CTRL_MODE_POSITION:
+      foc_position_closed_control(m, m->ref.position_rad);
+      break;
     case CTRL_MODE_SPEED_OPEN_LOOP:
       foc_speed_open_control(m, m->ref.speed_rad_s);
       break;
     default:
       break;
+  }
+
+  if (rt != NULL)
+  {
+    rt->foc_ctrl_loop_us = foc_dwt_elapsed_us(t_ctrl_us);
   }
 }
 
