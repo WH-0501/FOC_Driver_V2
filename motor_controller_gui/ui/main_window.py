@@ -5,7 +5,8 @@ import threading
 import time
 from typing import Dict, Optional
 
-from PyQt5.QtCore import QTime, QTimer
+from PyQt5.QtCore import QTime, QTimer, pyqtSignal
+
 from PyQt5.QtWidgets import (
     QApplication,
     QGroupBox,
@@ -16,7 +17,6 @@ from PyQt5.QtWidgets import (
     QSpinBox,
     QPushButton,
     QSplitter,
-    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -31,6 +31,7 @@ from protocol import (
     format_bytes_hex,
     parse_bool_result,
     parse_frame,
+    parse_fw_version_payload,
     parse_iap_status_payload,
     parse_node_id_response,
     parse_period_report,
@@ -41,18 +42,21 @@ from protocol import (
 )
 from ui.connection_panel import ConnectionPanel
 from ui.motor_panel import MotorPanel
-from ui.multi_motor_widget import MultiMotorWidget
 from ui.waveform_widget import WaveformWidget
 
 STATUS_UI_INTERVAL = 0.05  # 20 Hz
 
 
 class MainWindow(QMainWindow):
+    _log_signal = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
+        self._log_signal.connect(self._append_log)
         self.can_thread = CanThread()
         self.client = MotorClient(self.can_thread, log_fn=self.log)
-        self.motor_panels: Dict[int, MotorPanel] = {}
+        self.motor_panel: Optional[MotorPanel] = None
+        self._motor_id = 1
         self._scan_pending = False
         self._status_latest: Dict[int, dict] = {}
         self._status_last_ui: Dict[int, float] = {}
@@ -71,18 +75,15 @@ class MainWindow(QMainWindow):
         )
         root.addWidget(self.connection_panel)
 
-        mgr = QGroupBox("电机管理")
+        mgr = QGroupBox("电机")
         mgr_layout = QHBoxLayout()
         self.motor_id_spin = QSpinBox()
         self.motor_id_spin.setRange(1, 0x7FE)
         self.motor_id_spin.setValue(1)
-        self.add_motor_btn = QPushButton("添加电机")
-        self.remove_motor_btn = QPushButton("移除当前电机")
-        self.scan_btn = QPushButton("扫描在线电机 (1-21)")
-        mgr_layout.addWidget(QLabel("电机 ID:"))
+        self.motor_id_spin.valueChanged.connect(self._on_motor_id_changed)
+        self.scan_btn = QPushButton("扫描在线 (1-21)")
+        mgr_layout.addWidget(QLabel("Node-ID:"))
         mgr_layout.addWidget(self.motor_id_spin)
-        mgr_layout.addWidget(self.add_motor_btn)
-        mgr_layout.addWidget(self.remove_motor_btn)
         mgr_layout.addWidget(self.scan_btn)
         mgr_layout.addStretch()
         mgr.setLayout(mgr_layout)
@@ -99,18 +100,11 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout()
         right_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.main_tabs = QTabWidget()
-        self.motor_tab = QTabWidget()
-        self.motor_tab.currentChanged.connect(self._on_motor_tab_changed)
-        self.main_tabs.addTab(self.motor_tab, "单电机控制")
-
-        self.multi_motor_widget = MultiMotorWidget(
-            self.client,
-            get_motor_ids=lambda: list(self.motor_panels.keys()),
-            log_fn=self.log,
-        )
-        self.main_tabs.addTab(self.multi_motor_widget, "多电机批量")
-        right_layout.addWidget(self.main_tabs)
+        self.motor_panel_host = QWidget()
+        self.motor_panel_layout = QVBoxLayout()
+        self.motor_panel_layout.setContentsMargins(0, 0, 0, 0)
+        self.motor_panel_host.setLayout(self.motor_panel_layout)
+        right_layout.addWidget(self.motor_panel_host)
         right_panel.setLayout(right_layout)
         body_splitter.addWidget(right_panel)
 
@@ -139,8 +133,6 @@ class MainWindow(QMainWindow):
         panel.stop_channel_requested.connect(self._on_stop_channel)
         panel.close_device_requested.connect(self._on_close_device)
         panel.protocol_version_changed.connect(self._on_protocol_version_changed)
-        self.add_motor_btn.clicked.connect(self._add_motor)
-        self.remove_motor_btn.clicked.connect(self._remove_motor)
         self.scan_btn.clicked.connect(self._scan_motors)
         self.can_thread.connection_status.connect(self._on_connection_status)
         self.can_thread.scan_finished.connect(self._on_scan_finished)
@@ -152,22 +144,15 @@ class MainWindow(QMainWindow):
             self.waveform_widget.set_target(motor_id, pos=pos, vel=vel, iq=curr)
         return _cb
 
-    def _on_motor_tab_changed(self, index: int) -> None:
-        if index < 0:
-            self.waveform_widget.set_motor(None)
-            return
-        text = self.motor_tab.tabText(index)
-        try:
-            motor_id = int(text.split()[-1])
-            self.waveform_widget.set_motor(motor_id)
-        except ValueError:
-            self.waveform_widget.set_motor(None)
-
     def _window_title(self) -> str:
         ver = self.client.protocol_version.value
         return f"电机调试上位机 (CANFD) — 协议 V{ver}"
 
     def log(self, msg: str) -> None:
+        """线程安全：任意线程可调用，实际写入在主线程执行。"""
+        self._log_signal.emit(msg)
+
+    def _append_log(self, msg: str) -> None:
         self.log_text.append(f"[{QTime.currentTime().toString('HH:mm:ss')}] {msg}")
 
     def _on_protocol_version_changed(self, version_text: str) -> None:
@@ -177,9 +162,8 @@ class MainWindow(QMainWindow):
             self.log(str(exc))
             return
         self.client.set_protocol_version(version)
-        for panel in self.motor_panels.values():
-            panel.apply_protocol_version(version)
-        self.multi_motor_widget.apply_protocol_version(version)
+        if self.motor_panel:
+            self.motor_panel.apply_protocol_version(version)
         self.waveform_widget.apply_protocol_version(version)
         self.setWindowTitle(self._window_title())
         unit = "rad" if version.value == "2.0.0" else "°"
@@ -209,9 +193,9 @@ class MainWindow(QMainWindow):
                 f"通道{ch + 1} (CAN{ch}) 运行中",
                 active_channel=ch,
             )
-            if not self.motor_panels:
-                self._add_motor_by_id(1)
-            QTimer.singleShot(100, self._sync_all_motor_params)
+            if self.motor_panel is None:
+                self._ensure_motor_panel(self._motor_id)
+            QTimer.singleShot(100, self._sync_motor_params)
         elif ok and "已打开" in msg:
             mgr = self.can_thread.manager
             warning = mgr.last_open_warning
@@ -285,19 +269,25 @@ class MainWindow(QMainWindow):
         self.can_thread.close_device()
         self.connection_panel.set_device_state(DeviceState.CLOSED, message="未连接")
 
-    def _add_motor(self) -> None:
-        self._add_motor_by_id(self.motor_id_spin.value())
+    def _on_motor_id_changed(self, motor_id: int) -> None:
+        self._motor_id = motor_id
+        if self.motor_panel is not None:
+            self.motor_panel.motor_id = motor_id
+            self.motor_panel.control_widget.motor_id = motor_id
+            self.motor_panel.param_widget.motor_id = motor_id
+            self.motor_panel.iap_widget.set_motor_id(motor_id)
+            self.motor_panel.status_widget.set_motor_id(motor_id)
+        self.waveform_widget.set_motor(motor_id)
+        self.log(f"当前电机 Node-ID: {motor_id}")
 
-    def _sync_all_motor_params(self) -> None:
-        if not self.can_thread.manager.is_running or not self.motor_panels:
+    def _sync_motor_params(self) -> None:
+        if not self.can_thread.manager.is_running or self.motor_panel is None:
             return
-        for motor_id in self.motor_panels:
-            self.client.read_all_params(motor_id)
-        self.log(f"已请求同步 {len(self.motor_panels)} 台电机参数")
+        self.client.read_all_params(self._motor_id)
+        self.log(f"已请求同步电机 {self._motor_id} 参数")
 
-    def _add_motor_by_id(self, motor_id: int) -> None:
-        if motor_id in self.motor_panels:
-            self.log(f"电机 ID {motor_id} 已存在")
+    def _ensure_motor_panel(self, motor_id: int) -> None:
+        if self.motor_panel is not None:
             return
         panel = MotorPanel(
             motor_id,
@@ -305,28 +295,16 @@ class MainWindow(QMainWindow):
             log_fn=self.log,
             target_callback=self._make_target_callback(motor_id),
         )
-        self.motor_panels[motor_id] = panel
-        self.motor_tab.addTab(panel, f"电机 {motor_id}")
-        self.motor_tab.setCurrentWidget(panel)
+        self.motor_panel = panel
+        self.motor_panel_layout.addWidget(panel)
         self.waveform_widget.set_motor(motor_id)
-        self.log(f"添加电机 ID {motor_id}")
+        self.log(f"已加载电机面板 (Node-ID={motor_id})")
 
-    def _remove_motor(self) -> None:
-        idx = self.motor_tab.currentIndex()
-        if idx < 0:
-            return
-        text = self.motor_tab.tabText(idx)
-        try:
-            motor_id = int(text.split()[-1])
-        except ValueError:
-            return
-        if motor_id in self.motor_panels:
-            del self.motor_panels[motor_id]
-        self._status_latest.pop(motor_id, None)
-        self._status_last_ui.pop(motor_id, None)
-        self.motor_tab.removeTab(idx)
-        self.log(f"移除电机 {motor_id}")
-        self._on_motor_tab_changed(self.motor_tab.currentIndex())
+    def _set_scan_motor_id(self, motor_id: int) -> None:
+        self.motor_id_spin.blockSignals(True)
+        self.motor_id_spin.setValue(motor_id)
+        self.motor_id_spin.blockSignals(False)
+        self._on_motor_id_changed(motor_id)
 
     def _scan_motors(self) -> None:
         self._scan_pending = True
@@ -335,14 +313,14 @@ class MainWindow(QMainWindow):
             self.client.scan_motor(mid)
 
     def _maybe_update_status(self, motor_id: int, report: dict) -> None:
-        if motor_id not in self.motor_panels:
+        if motor_id != self._motor_id or self.motor_panel is None:
             return
         self._status_latest[motor_id] = report
         now = time.perf_counter()
         last = self._status_last_ui.get(motor_id, 0.0)
         if now - last < STATUS_UI_INTERVAL:
             return
-        self.motor_panels[motor_id].update_status(report)
+        self.motor_panel.update_status(report)
         self._status_last_ui[motor_id] = now
 
     def _handle_can_message(self, arb_id: int, data: bytes, timestamp: float) -> None:
@@ -359,9 +337,10 @@ class MainWindow(QMainWindow):
         if cmd == CMD.PERIOD_REPORT:
             report = parse_period_report(payload, self.client.protocol_version)
             if report:
-                if arb_id not in self.motor_panels and self._scan_pending:
-                    self._add_motor_by_id(arb_id)
-                if arb_id in self.motor_panels:
+                if self._scan_pending:
+                    self._set_scan_motor_id(arb_id)
+                    self._ensure_motor_panel(arb_id)
+                if arb_id == self._motor_id:
                     self._maybe_update_status(arb_id, report)
                 self.waveform_widget.append_sample(arb_id, report, timestamp=timestamp)
             return
@@ -376,15 +355,40 @@ class MainWindow(QMainWindow):
 
         self._log_rx(arb_id, cnt, cmd, data)
 
-        panel = self.motor_panels.get(arb_id)
+        if cmd == CMD.IAP_STATUS:
+            self.client.deliver_iap_response(arb_id, cmd, payload)
+            iap = parse_iap_status_payload(self.client.protocol_version, payload)
+            if iap:
+                err = iap.get("error_name", "")
+                self.log(
+                    f"电机 {arb_id} IAP: {iap.get('iap_state_name', '?')}"
+                    + (f"，{err}" if err and err != "正常" else "")
+                )
+            if arb_id == self._motor_id and self.motor_panel:
+                self.motor_panel.on_iap_status(payload)
+            return
+
+        if cmd == CMD.IAP_FW_VERSION:
+            version = parse_fw_version_payload(payload)
+            self.client.deliver_iap_response(arb_id, cmd, payload)
+            self.log(f"电机 {arb_id} 固件版本: {version or payload.hex()}")
+            if self._scan_pending:
+                self._set_scan_motor_id(arb_id)
+                self._ensure_motor_panel(arb_id)
+            if arb_id == self._motor_id and self.motor_panel:
+                self.motor_panel.on_firmware_version(version)
+            return
+
+        panel = self.motor_panel if arb_id == self._motor_id else None
 
         if cmd in (CMD.GET_POS_PID, CMD.SET_POS_PID):
             pid = parse_pid_response(payload)
             if panel:
                 panel.apply_pid("pos", pid)
             self.log(f"电机 {arb_id} 位置PID: P={pid.get('P', 0):.4f} I={pid.get('I', 0):.4f} D={pid.get('D', 0):.4f}")
-            if self._scan_pending and arb_id not in self.motor_panels:
-                self._add_motor_by_id(arb_id)
+            if self._scan_pending:
+                self._set_scan_motor_id(arb_id)
+                self._ensure_motor_panel(arb_id)
         elif cmd in (CMD.GET_VEL_PID, CMD.SET_VEL_PID):
             pid = parse_pid_response(payload)
             if panel:
@@ -430,21 +434,6 @@ class MainWindow(QMainWindow):
             new_id = parse_node_id_response(payload)
             if new_id is not None:
                 self.log(f"电机 {arb_id} Node-ID 已设为 {new_id}（保存参数后重启生效）")
-        elif cmd == CMD.IAP_FW_VERSION:
-            version = payload.decode("ascii", errors="replace") if payload else ""
-            self.log(f"电机 {arb_id} 固件版本: {version or payload.hex()}")
-            if self._scan_pending and arb_id not in self.motor_panels:
-                self._add_motor_by_id(arb_id)
-        elif cmd == CMD.IAP_STATUS:
-            iap = parse_iap_status_payload(self.client.protocol_version, payload)
-            if iap:
-                err = iap.get("error_name", "")
-                self.log(
-                    f"电机 {arb_id} IAP: {iap.get('iap_state_name', '?')}"
-                    + (f"，{err}" if err and err != "正常" else "")
-                )
-            else:
-                self.log(f"电机 {arb_id} IAP 状态: {payload.hex()}")
         else:
             self.log(f"电机 {arb_id} 未处理命令 CMD=0x{cmd:02X} payload={payload.hex()}")
 

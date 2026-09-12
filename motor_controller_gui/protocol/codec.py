@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .constants import (
     CANFD_DLC_LENGTHS,
     CMD,
+    IAP_MAX_BODY_SIZE,
     MotorError,
     PID_FORMAT,
     PID_RAW_MAX,
@@ -36,13 +37,121 @@ class FrameCounter:
 
 def pad_canfd_payload(data: bytes) -> bytes:
     """按 CAN FD DLC 规则尾部填充 0x00。"""
+    return _pad_canfd_payload(data, 0x00)
+
+
+def pad_iap_payload(data: bytes) -> bytes:
+    """IAP 数据帧按 CAN FD DLC 规则尾部填充 0xFF（协议要求）。"""
+    return _pad_canfd_payload(data, 0xFF)
+
+
+def _pad_canfd_payload(data: bytes, fill: int) -> bytes:
     length = len(data)
     for dlc_len in CANFD_DLC_LENGTHS:
         if length <= dlc_len:
             if length < dlc_len:
-                return data + b"\x00" * (dlc_len - length)
+                return data + bytes([fill]) * (dlc_len - length)
             return data
     return data
+
+
+def _iap_payload_capacity(remaining: int, header_bytes: int = 0) -> int:
+    """选取不超过 remaining 的最大 IAP 载荷，使 CNT+CMD+载荷 恰好落在标准 DLC 上（避免填充写入 Flash）。"""
+    best = 0
+    min_total = 2 + header_bytes
+    for dlc in CANFD_DLC_LENGTHS:
+        if dlc < min_total:
+            continue
+        payload = dlc - 2 - header_bytes
+        if payload <= remaining and payload > best:
+            best = payload
+    if best > 0:
+        return best
+    return min(remaining, max(dlc - 2 - header_bytes for dlc in CANFD_DLC_LENGTHS if dlc >= min_total))
+
+
+def iap_start_first_chunk_size(body_size: int) -> int:
+    """IAP_START 首包固件数据字节数（载荷 = 8B 头 + chunk，且 payload_len > 8）。"""
+    return _iap_payload_capacity(body_size, header_bytes=8)
+
+
+def iap_data_chunk_size(remaining: int) -> int:
+    """IAP_DATA 单帧固件数据字节数。"""
+    return _iap_payload_capacity(remaining, header_bytes=0)
+
+
+def firmware_checksum32(data: bytes) -> int:
+    """与 iap_upgrade.c / Bootloader 一致的 32 位累加校验（小端字）。"""
+    body_len = len(data)
+    count = body_len >> 2
+    cksum = 0
+    for i in range(count):
+        data32 = struct.unpack_from("<I", data, i * 4)[0]
+        cksum = (cksum + data32) & 0xFFFFFFFF
+        if cksum < data32:
+            cksum = (cksum + 1) & 0xFFFFFFFF
+    rem = body_len & 3
+    if rem:
+        data32 = struct.unpack_from("<I", data, count * 4)[0]
+        if rem == 3:
+            data32 &= 0x00FFFFFF
+        elif rem == 2:
+            data32 &= 0x0000FFFF
+        else:
+            data32 &= 0x000000FF
+        cksum = (cksum + data32) & 0xFFFFFFFF
+        if cksum < data32:
+            cksum = (cksum + 1) & 0xFFFFFFFF
+    return cksum
+
+
+def pack_iap_start_payload(body_size: int, firmware: bytes) -> bytes:
+    """打包 IAP_START 载荷：[body_size BE][checksum32 BE][首包固件数据]。"""
+    if body_size <= 0 or body_size > IAP_MAX_BODY_SIZE:
+        raise ValueError(f"固件大小无效: {body_size}（最大 {IAP_MAX_BODY_SIZE}）")
+    computed = firmware_checksum32(firmware)
+    checksum32 = (~computed) & 0xFFFFFFFF
+    chunk_len = iap_start_first_chunk_size(body_size)
+    header = struct.pack(">II", body_size, checksum32)
+    return header + firmware[:chunk_len]
+
+
+def _is_binary_fw_version(payload: bytes) -> bool:
+    """
+    协议文档 IAP 0xFD 二进制格式:
+    V + major(1B) + '.' + minor(1B) + '.' + patch(1B) + '_' + 日期时间(每字节十进制两位)
+    例: 56 03 2E 01 2E 05 5F 1A 06 ... -> V3.1.5_260610113015
+    """
+    if len(payload) < 8:
+        return False
+    if payload[0] != ord("V"):
+        return False
+    if payload[2] != ord(".") or payload[4] != ord(".") or payload[6] != ord("_"):
+        return False
+    # 纯 ASCII 串如 V1.0.0_FOC：版本位为 '0'~'9'
+    return not (
+        0x30 <= payload[1] <= 0x39
+        and 0x30 <= payload[3] <= 0x39
+        and 0x30 <= payload[5] <= 0x39
+    )
+
+
+def parse_fw_version_payload(payload: bytes) -> str:
+    """解析 IAP 0xFD 固件版本应答（兼容 ASCII 与协议二进制两种格式）。"""
+    if not payload:
+        return ""
+    end = payload.find(b"\x00")
+    if end >= 0:
+        payload = payload[:end]
+    if not payload:
+        return ""
+    if _is_binary_fw_version(payload):
+        major = payload[1]
+        minor = payload[3]
+        patch = payload[5]
+        date_str = "".join(f"{b:02d}" for b in payload[7:])
+        return f"V{major}.{minor}.{patch}_{date_str}"
+    return payload.decode("ascii", errors="replace")
 
 
 def pack_frame(cmd: CMD, payload: bytes = b"", cnt: int = 0) -> bytes:

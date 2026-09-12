@@ -101,6 +101,26 @@ V1_IAP_STATUS_NAMES: Dict[int, str] = {
     6: "错误",
 }
 
+# V2 / 当前 FOC 固件 iap_status_code_t
+V2_IAP_STATUS_NAMES: Dict[int, str] = {
+    0: "空闲",
+    1: "就绪",
+    2: "已验证",
+    3: "错误",
+}
+
+V2_IAP_ERROR_NAMES: Dict[int, str] = {
+    0: "正常",
+    1: "忙",
+    2: "大小错误",
+    3: "擦除失败",
+    4: "写入失败",
+    5: "CRC 校验失败",
+    6: "状态错误",
+    7: "溢出",
+    8: "数据不完整",
+}
+
 # V1 默认模式：CSV（周期速度）
 V1_DEFAULT_WIRE = int(ControlModeV1.CSV)
 # V2 默认模式：速度开环
@@ -173,23 +193,30 @@ def parse_error_byte(version: ProtocolVersion, error: int) -> Dict[str, object]:
 def iap_status_name(version: ProtocolVersion, status: int) -> str:
     if version == ProtocolVersion.V1_0_0:
         return V1_IAP_STATUS_NAMES.get(status, f"未知 ({status})")
-    return f"状态 {status}"
+    return V2_IAP_STATUS_NAMES.get(status, f"未知 ({status})")
+
+
+def iap_error_name(version: ProtocolVersion, error: int) -> str:
+    if version == ProtocolVersion.V1_0_0:
+        return V1_IAP_ERROR_NAMES.get(error, f"未知 (0x{error:02X})")
+    return V2_IAP_ERROR_NAMES.get(error, f"未知 ({error})")
 
 
 def parse_iap_status_payload(
     version: ProtocolVersion, payload: bytes
 ) -> Dict[str, object]:
-    """解析 IAP 0xFC 应答（V1：状态 + 错误码）。"""
+    """解析 IAP 0xFC 应答：[status][error]。"""
     if not payload:
         return {}
     iap_state = payload[0]
-    result: Dict[str, object] = {
+    error = payload[1] if len(payload) >= 2 else 0
+    err_name = iap_error_name(version, error)
+    return {
         "iap_state": iap_state,
         "iap_state_name": iap_status_name(version, iap_state),
+        "error_code": error,
+        "error_name": err_name if error else "正常",
     }
-    if len(payload) >= 2:
-        result.update(parse_error_byte(version, payload[1]))
-    return result
 
 
 def mode_display_name(version: ProtocolVersion, wire: int) -> str:

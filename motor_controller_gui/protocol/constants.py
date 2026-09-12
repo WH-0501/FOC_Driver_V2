@@ -183,3 +183,6 @@ CMD_DATA_LEN = {
 
 # CAN FD 标准 DLC 对应的数据长度
 CANFD_DLC_LENGTHS = (0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64)
+
+# IAP staging 区最大固件体长度（与 iap_upgrade.h 一致）
+IAP_MAX_BODY_SIZE = 61 * 1024 - 32  # 62432

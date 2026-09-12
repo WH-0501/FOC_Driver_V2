@@ -1,16 +1,18 @@
 """高层 CAN 电机通讯客户端。"""
 
-from typing import Callable, Dict, List, Optional, Tuple
+import threading
+import time
+from collections import deque
+from typing import Callable, Deque, Dict, List, Optional, Tuple
 
 from canbus.interface import CanThread
 from protocol import (
     CAN_BROADCAST_ID,
-    CAN_IAP_ID,
+    CANFD_DLC_LENGTHS,
     CMD,
     DEFAULT_PROTOCOL_VERSION,
     FrameCounter,
     ProtocolVersion,
-    format_bytes_binary,
     format_bytes_hex,
     pack_frame,
     pack_multi_targets,
@@ -29,6 +31,9 @@ class MotorClient:
         self.counter = FrameCounter()
         self._log_fn = log_fn
         self.protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION
+        self._iap_lock = threading.Lock()
+        self._iap_event = threading.Event()
+        self._iap_responses: Deque[tuple] = deque()
 
     def set_protocol_version(self, version: ProtocolVersion) -> None:
         self.protocol_version = version
@@ -46,11 +51,57 @@ class MotorClient:
             # f"BIN=[{format_bytes_binary(data)}]"
         )
 
-    def _send(self, arb_id: int, cmd: CMD, payload: bytes = b"") -> bool:
+    def _send(self, arb_id: int, cmd: CMD, payload: bytes = b"", *, exact_dlc: bool = False) -> bool:
         frame = pack_frame(cmd, payload, self.counter.next())
-        data = pad_canfd_payload(frame)
+        if exact_dlc:
+            if len(frame) not in CANFD_DLC_LENGTHS:
+                return False
+            data = frame
+        else:
+            data = pad_canfd_payload(frame)
         self._log_tx(arb_id, cmd, frame, data)
         return self.can.send_message(arb_id, data, is_fd=True)
+
+    def clear_iap_wait(self) -> None:
+        with self._iap_lock:
+            self._iap_responses.clear()
+            self._iap_event.clear()
+
+    def deliver_iap_response(self, motor_id: int, cmd: int, payload: bytes) -> None:
+        with self._iap_lock:
+            self._iap_responses.append((motor_id, int(cmd), payload))
+            self._iap_event.set()
+
+    def _take_iap_response(self, motor_id: int, cmd: int) -> Optional[bytes]:
+        target_cmd = int(cmd)
+        with self._iap_lock:
+            for idx, (mid, rsp_cmd, payload) in enumerate(self._iap_responses):
+                if mid == motor_id and rsp_cmd == target_cmd:
+                    del self._iap_responses[idx]
+                    if not self._iap_responses:
+                        self._iap_event.clear()
+                    return payload
+        return None
+
+    def wait_iap_response(self, motor_id: int, cmd: int, timeout: float) -> Optional[bytes]:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            payload = self._take_iap_response(motor_id, cmd)
+            if payload is not None:
+                return payload
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            self._iap_event.wait(timeout=min(0.05, remaining))
+        return self._take_iap_response(motor_id, cmd)
+
+    def poll_iap_error(self, motor_id: int, timeout: float = 0.05) -> Optional[bytes]:
+        payload = self.wait_iap_response(motor_id, CMD.IAP_STATUS, timeout)
+        if payload is None or len(payload) < 2:
+            return None
+        if payload[0] == 3 or payload[1] != 0:
+            return payload
+        return None
 
     # ---------- 广播命令 ----------
 
@@ -147,7 +198,33 @@ class MotorClient:
         return self._send(motor_id, CMD.SET_NODE_ID, payload)
 
     def get_firmware_version(self, motor_id: int) -> bool:
+        return self.iap_get_version(motor_id)
+
+    # ---------- IAP（单电机，仲裁 ID = motor_id） ----------
+
+    def iap_enter(self, motor_id: int) -> bool:
+        return self._send(motor_id, CMD.IAP_ENTER)
+
+    def iap_start(self, motor_id: int, payload: bytes) -> bool:
+        return self._send(motor_id, CMD.IAP_START, payload, exact_dlc=True)
+
+    def iap_data(self, motor_id: int, chunk: bytes) -> bool:
+        return self._send(motor_id, CMD.IAP_DATA, chunk, exact_dlc=True)
+
+    def iap_end(self, motor_id: int) -> bool:
+        return self._send(motor_id, CMD.IAP_END)
+
+    def iap_verify(self, motor_id: int) -> bool:
+        return self._send(motor_id, CMD.IAP_VERIFY)
+
+    def iap_reset(self, motor_id: int) -> bool:
+        return self._send(motor_id, CMD.IAP_RESET)
+
+    def iap_get_version(self, motor_id: int) -> bool:
         return self._send(motor_id, CMD.IAP_FW_VERSION)
+
+    def iap_query_status(self, motor_id: int) -> bool:
+        return self._send(motor_id, CMD.IAP_STATUS)
 
     def scan_motor(self, motor_id: int) -> bool:
         """向指定 ID 发送获取 PID 命令用于探测在线。"""

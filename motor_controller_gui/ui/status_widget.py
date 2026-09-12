@@ -62,6 +62,10 @@ class MotorStatusWidget(QGroupBox):
         self.ib_label.setText(f"Ib: {self._format_current(data, 'ib_ma')}")
         self.ic_label.setText(f"Ic: {self._format_current(data, 'ic_ma')}")
 
+    def set_motor_id(self, motor_id: int) -> None:
+        self.motor_id = motor_id
+        self.setTitle(f"实时状态 (ID={motor_id})")
+
     def is_enabled(self) -> bool:
         return self._enabled is True
 
