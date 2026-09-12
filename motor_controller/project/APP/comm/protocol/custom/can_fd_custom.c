@@ -127,7 +127,7 @@ static bool can_fd_custom_is_for_this_node(uint32_t id)
 
 static void can_fd_custom_apply_pos(motor_handle_t *m, int16_t pos_raw)
 {
-  m->ref.position_rad = can_fd_codec_pos_q7_deg_to_rad(pos_raw);
+  m->ref.position_rad = can_fd_codec_pos_q7_to_rad(pos_raw);
 }
 
 static void can_fd_custom_apply_vel(motor_handle_t *m, int16_t vel_raw)
@@ -511,7 +511,7 @@ static void can_fd_custom_period_report(void)
   fault_t fault_bits;
 
   /* joint 位置/速度均为控制系，与 ref 字段一一对应 */
-  pos_raw = can_fd_codec_rad_to_pos_q7_deg(s->joint.position_rad);
+  pos_raw = can_fd_codec_rad_to_pos_q7(s->joint.angle_rad);
   vel_raw = can_fd_codec_rad_s_to_vel_q7_rpm(s->joint.velocity_rad_s);
   iq_ma = (int16_t)(s->i_q * 1000.0f);
   id_ma = (int16_t)(s->i_d * 1000.0f);

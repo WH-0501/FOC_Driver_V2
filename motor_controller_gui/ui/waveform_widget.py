@@ -17,7 +17,8 @@ from PyQt5.QtWidgets import (
 )
 
 from core.waveform_buffer import NOMINAL_REPORT_PERIOD, WAVEFORM_WINDOW_SECONDS, WaveformBuffer
-from core.waveform_curves import WAVEFORM_CURVES
+from core.waveform_curves import WAVEFORM_CURVES, waveform_curves_for
+from protocol import ProtocolVersion
 from ui.curve_selector_widget import CurveSelectorWidget
 
 DEFAULT_X_WINDOW = WAVEFORM_WINDOW_SECONDS
@@ -62,6 +63,7 @@ class WaveformWidget(QGroupBox):
         self._paused = False
         self._x_window = DEFAULT_X_WINDOW
         self._v_zoom = 1.0
+        self._protocol_version = ProtocolVersion.V2_0_0
         self._build_ui()
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._refresh_plot)
@@ -198,6 +200,19 @@ class WaveformWidget(QGroupBox):
                 out_x.extend([bx[hi], bx[lo]])
                 out_y.extend([by[hi], by[lo]])
         return out_x, out_y
+
+    def apply_protocol_version(self, version: ProtocolVersion) -> None:
+        if version == self._protocol_version:
+            return
+        self._protocol_version = version
+        curves = waveform_curves_for(version)
+        name_by_key = {key: name for key, name, color, line_style, *_rest in curves}
+        for key, curve in self._curves.items():
+            if key in name_by_key:
+                curve.opts["name"] = name_by_key[key]
+        self._curve_selector.apply_curves(curves)
+        self._buffers.clear()
+        self._reset_zoom()
 
     def set_motor(self, motor_id: Optional[int]) -> None:
         self._motor_id = motor_id

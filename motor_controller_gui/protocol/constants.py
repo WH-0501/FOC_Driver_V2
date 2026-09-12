@@ -148,7 +148,7 @@ PID_FORMAT = 4096.0
 PID_RAW_MAX = 65535
 PID_VALUE_MAX = PID_RAW_MAX / PID_FORMAT  # 单参数 float 上限，约 15.9998
 
-# 位置 Q7：角度(°) * 128
+# 位置 Q7 缩放：V1 为 °×128，V2 为 rad×128，均为 raw/128
 POS_SCALE = 128.0
 
 # 协议数据域长度（不含 CNT + CMD）

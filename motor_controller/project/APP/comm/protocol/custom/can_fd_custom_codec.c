@@ -46,25 +46,32 @@ uint16_t can_fd_codec_float_to_q12(float v)
   return (uint16_t)(scaled + 0.5f);
 }
 
-float can_fd_codec_pos_q7_deg_to_rad(int16_t raw)
+/** 位置 Q7：raw / 128 -> [rad] */
+float can_fd_codec_pos_q7_to_rad(int16_t raw)
 {
-  return ((float)raw / CAN_FD_POS_SCALE) * (_PI / 180.0f);
+  return (float)raw / CAN_FD_POS_SCALE;
 }
 
-int16_t can_fd_codec_rad_to_pos_q7_deg(float rad)
+/** 位置 Q7：[rad] -> raw（Q7 定点，1 LSB = 1/128 rad） */
+int16_t can_fd_codec_rad_to_pos_q7(float rad)
 {
-  float deg = rad * (180.0f / _PI);
+  float scaled = rad * CAN_FD_POS_SCALE;
 
-  if (deg > 32767.0f / CAN_FD_POS_SCALE)
+  if (scaled > 32767.0f)
   {
-    deg = 32767.0f / CAN_FD_POS_SCALE;
+    scaled = 32767.0f;
   }
-  if (deg < -32768.0f / CAN_FD_POS_SCALE)
+  if (scaled < -32768.0f)
   {
-    deg = -32768.0f / CAN_FD_POS_SCALE;
+    scaled = -32768.0f;
   }
 
-  return (int16_t)(deg * CAN_FD_POS_SCALE);
+  if (scaled >= 0.0f)
+  {
+    return (int16_t)(scaled + 0.5f);
+  }
+
+  return (int16_t)(scaled - 0.5f);
 }
 
 float can_fd_codec_vel_q7_rpm_to_rad_s(int16_t raw)

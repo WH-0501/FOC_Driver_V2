@@ -61,11 +61,11 @@ static void encoder_publish_state(motor_handle_t *m)
         m->config.param.theta_elec_offset_rad);
   }
 
-  if (joint_ok)
+  if (joint_ok) // 启用关节编码器.则使用关节编码器观测值
   {
     m->state.joint = joint->observer.sample;
   }
-  else if (shaft_ok)
+  else if (shaft_ok) // 未启用关节编码器.则使用电机轴编码器观测值推算关节观测值
   {
     float joint_pos = shaft->observer.sample.position_rad / gear_ratio;
     int32_t joint_turns = (int32_t)floorf(joint_pos / _2PI);
@@ -117,6 +117,9 @@ void encoder_update(motor_handle_t *m)
 
   for (i = 0u; i < ENCODER_ROLE_COUNT; i++)
   {
+    /**
+     * 双编码器更新. 若为空(如未使用输出轴编码器), 则不更新 
+     */
     (void)encoder_observer_update(&s_encoders[i].observer,
                                   &s_encoders[i].bind,
                                   (encoder_role_t)i,

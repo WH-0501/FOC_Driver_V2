@@ -15,8 +15,8 @@ void can_fd_codec_write_i16_be(uint8_t *p, int16_t v);
 float can_fd_codec_q12_to_float(uint16_t raw);
 uint16_t can_fd_codec_float_to_q12(float v);
 
-float can_fd_codec_pos_q7_deg_to_rad(int16_t raw);
-int16_t can_fd_codec_rad_to_pos_q7_deg(float rad);
+float can_fd_codec_pos_q7_to_rad(int16_t raw);
+int16_t can_fd_codec_rad_to_pos_q7(float rad);
 
 float can_fd_codec_vel_q7_rpm_to_rad_s(int16_t raw);
 int16_t can_fd_codec_rad_s_to_vel_q7_rpm(float rad_s);

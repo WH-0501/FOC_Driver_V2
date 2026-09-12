@@ -59,9 +59,12 @@ class CurveSelectorWidget(QFrame):
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         self._checks: Dict[str, QCheckBox] = {}
         self._colors: Dict[str, tuple] = {}
-        self._build_ui()
+        self._defaults: Dict[str, bool] = {}
+        self._group_labels: Dict[str, QLabel] = {}
+        self._curves = WAVEFORM_CURVES
+        self._build_ui(WAVEFORM_CURVES)
 
-    def _build_ui(self) -> None:
+    def _build_ui(self, curves) -> None:
         outer = QVBoxLayout(self)
         outer.setContentsMargins(10, 8, 10, 8)
         outer.setSpacing(6)
@@ -84,17 +87,20 @@ class CurveSelectorWidget(QFrame):
         outer.addLayout(btn_row)
 
         groups: Dict[str, list] = {}
-        for key, name, color, _style, default, group in WAVEFORM_CURVES:
+        for key, name, color, _style, default, group in curves:
             cb = QCheckBox(name)
             cb.setChecked(default)
             self._colors[key] = color
+            self._defaults[key] = default
             cb.setStyleSheet(_checkbox_style(color, default))
             cb.stateChanged.connect(lambda state, k=key: self._on_check_changed(k, state))
             self._checks[key] = cb
             groups.setdefault(group, []).append(cb)
 
         for group, checks in groups.items():
-            outer.addWidget(QLabel(group))
+            group_lbl = QLabel(group)
+            self._group_labels[group] = group_lbl
+            outer.addWidget(group_lbl)
             for cb in checks:
                 outer.addWidget(cb)
 
@@ -117,10 +123,31 @@ class CurveSelectorWidget(QFrame):
             cb.blockSignals(False)
         self.selection_changed.emit()
 
+    def apply_curves(self, curves) -> None:
+        """切换协议版本时更新位置曲线标签。"""
+        self._curves = curves
+        pos_keys = {"target_pos", "actual_pos"}
+        name_by_key = {key: name for key, name, *_rest in curves}
+        group_by_key = {key: group for key, *_rest, group in curves}
+        for key in pos_keys:
+            if key in self._checks and key in name_by_key:
+                self._checks[key].setText(name_by_key[key])
+        old_groups = set(self._group_labels.keys())
+        new_groups = {group_by_key[k] for k in pos_keys if k in group_by_key}
+        for old_g in old_groups:
+            if old_g.startswith("位置(") and old_g not in new_groups:
+                lbl = self._group_labels.get(old_g)
+                if lbl is not None:
+                    for new_g in new_groups:
+                        if new_g.startswith("位置("):
+                            lbl.setText(new_g)
+                            self._group_labels[new_g] = lbl
+                            del self._group_labels[old_g]
+                            break
+
     def select_defaults(self) -> None:
-        defaults = {key: default for key, _n, _c, _s, default, _g in WAVEFORM_CURVES}
         for key, cb in self._checks.items():
-            default = defaults.get(key, False)
+            default = self._defaults.get(key, False)
             cb.blockSignals(True)
             cb.setChecked(default)
             cb.setStyleSheet(_checkbox_style(self._colors[key], default))

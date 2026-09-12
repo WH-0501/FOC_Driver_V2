@@ -77,7 +77,7 @@ class WaveformBuffer:
 
         self.times.append(t)
         self.channels["target_pos"].append(self._last_target["pos"])
-        self.channels["actual_pos"].append(sample.get("position_deg", 0.0))
+        self.channels["actual_pos"].append(sample.get("position_plot", sample.get("position_rad", 0.0)))
         self.channels["target_vel"].append(self._last_target["vel"])
         self.channels["actual_vel"].append(sample.get("velocity", 0.0))
         self.channels["target_iq"].append(self._last_target["iq"])

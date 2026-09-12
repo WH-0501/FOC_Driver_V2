@@ -14,7 +14,8 @@ from PyQt5.QtWidgets import (
 from core.motor_client import MotorClient
 from protocol import (
     ProtocolVersion,
-    angle_to_pos_raw,
+    encode_position,
+    pos_uses_rad,
     default_mode_wire,
     mode_hint,
     mode_needs_current,
@@ -56,10 +57,11 @@ class MotorControlWidget(QGroupBox):
         layout.addLayout(row1)
 
         row2 = QHBoxLayout()
-        self.pos_label = QLabel("目标位置(°):")
+        self.pos_label = QLabel("目标位置:")
         self.target_pos = QDoubleSpinBox()
-        self.target_pos.setRange(-36000.0, 36000.0)
-        self.target_pos.setDecimals(2)
+        self.target_pos.setRange(-256.0, 256.0)
+        self.target_pos.setDecimals(4)
+        self.target_pos.setSingleStep(0.01)
         self.send_pos_btn = QPushButton("发送位置")
         row2.addWidget(self.pos_label)
         row2.addWidget(self.target_pos)
@@ -115,7 +117,18 @@ class MotorControlWidget(QGroupBox):
             if default_idx >= 0:
                 self.mode_combo.setCurrentIndex(default_idx)
         self.mode_combo.blockSignals(False)
+        self._apply_position_unit(version)
         self._on_mode_changed()
+
+    def _apply_position_unit(self, version: ProtocolVersion) -> None:
+        if pos_uses_rad(version):
+            self.pos_label.setText("目标位置(rad):")
+            self.target_pos.setDecimals(4)
+            self.target_pos.setSingleStep(0.01)
+        else:
+            self.pos_label.setText("目标位置(°):")
+            self.target_pos.setDecimals(2)
+            self.target_pos.setSingleStep(0.1)
 
     def set_target_callback(self, callback) -> None:
         self._target_callback = callback
@@ -165,7 +178,7 @@ class MotorControlWidget(QGroupBox):
         wire = self._current_mode_wire()
         if not mode_needs_position(version, wire):
             return
-        raw = angle_to_pos_raw(self.target_pos.value())
+        raw = encode_position(version, self.target_pos.value())
         self._notify_target(pos=self.target_pos.value())
         self.client.broadcast_target_positions([(self.motor_id, raw)])
 

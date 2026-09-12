@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core.motor_client import MotorClient
-from protocol import angle_to_pos_raw
+from protocol import ProtocolVersion, encode_position, pos_uses_rad
 
 
 class MultiMotorWidget(QGroupBox):
@@ -37,7 +37,8 @@ class MultiMotorWidget(QGroupBox):
         layout = QVBoxLayout()
 
         self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["电机ID", "位置(°)", "速度(RPM)", "电流(mA)", "启用"])
+        self._pos_header = "位置(rad)"
+        self.table.setHorizontalHeaderLabels(["电机ID", self._pos_header, "速度(RPM)", "电流(mA)", "启用"])
         layout.addWidget(self.table)
 
         btn_row = QHBoxLayout()
@@ -69,6 +70,17 @@ class MultiMotorWidget(QGroupBox):
         self.disable_all_btn.clicked.connect(lambda: self.client.broadcast_enable(False))
         self.fault_reset_all_btn.clicked.connect(self._broadcast_fault_reset)
 
+    def apply_protocol_version(self, version: ProtocolVersion) -> None:
+        self._pos_header = "位置(rad)" if pos_uses_rad(version) else "位置(°)"
+        self.table.setHorizontalHeaderLabels(
+            ["电机ID", self._pos_header, "速度(RPM)", "电流(mA)", "启用"]
+        )
+        for row in range(self.table.rowCount()):
+            spin = self.table.cellWidget(row, 1)
+            if spin is not None:
+                spin.setDecimals(4 if pos_uses_rad(version) else 2)
+                spin.setSingleStep(0.01 if pos_uses_rad(version) else 0.1)
+
     def _add_row(self, motor_id: int = 1) -> None:
         row = self.table.rowCount()
         self.table.insertRow(row)
@@ -76,8 +88,10 @@ class MultiMotorWidget(QGroupBox):
         id_spin.setRange(1, 0x7FE)
         id_spin.setValue(motor_id)
         pos_spin = QDoubleSpinBox()
-        pos_spin.setRange(-360, 360)
-        pos_spin.setDecimals(2)
+        pos_spin.setRange(-256.0, 256.0)
+        use_rad = pos_uses_rad(self.client.protocol_version)
+        pos_spin.setDecimals(4 if use_rad else 2)
+        pos_spin.setSingleStep(0.01 if use_rad else 0.1)
         vel_spin = QSpinBox()
         vel_spin.setRange(-32768, 32767)
         curr_spin = QSpinBox()
@@ -112,8 +126,8 @@ class MultiMotorWidget(QGroupBox):
         targets = []
         for row in self._collect_enabled_rows():
             mid = self.table.cellWidget(row, 0).value()
-            deg = self.table.cellWidget(row, 1).value()
-            targets.append((mid, angle_to_pos_raw(deg)))
+            pos_val = self.table.cellWidget(row, 1).value()
+            targets.append((mid, encode_position(self.client.protocol_version, pos_val)))
         if targets:
             self.client.broadcast_target_positions(targets)
             self.log(f"广播位置指令 -> {targets}")

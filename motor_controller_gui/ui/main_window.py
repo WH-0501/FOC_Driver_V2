@@ -179,8 +179,11 @@ class MainWindow(QMainWindow):
         self.client.set_protocol_version(version)
         for panel in self.motor_panels.values():
             panel.apply_protocol_version(version)
+        self.multi_motor_widget.apply_protocol_version(version)
+        self.waveform_widget.apply_protocol_version(version)
         self.setWindowTitle(self._window_title())
-        self.log(f"固件协议已切换为 V{version.value}")
+        unit = "rad" if version.value == "2.0.0" else "°"
+        self.log(f"固件协议已切换为 V{version.value}（位置单位: {unit}）")
 
     def _log_rx(self, arb_id: int, cnt: int, cmd: int, data: bytes) -> None:
         try:

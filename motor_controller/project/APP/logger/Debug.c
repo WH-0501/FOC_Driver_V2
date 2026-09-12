@@ -2,7 +2,7 @@
 #include "motor.h"
 #include "../../Board/board.h"
 
-unsigned char UartTemp[28];
+unsigned char UartTemp[32];
 SENDDATA Send;
 
 void VoFaDisUart(void)
@@ -35,11 +35,10 @@ void VoFaDisUart(void)
     Send.Data[0].FloatData = state.i_q;
     Send.Data[1].FloatData = state.i_d;
     Send.Data[2].FloatData = m->ref.iq;
-    // Send.Data[3].FloatData = state.shaft.velocity_rad_s;
-    Send.Data[3].FloatData = state.v_q;
-    Send.Data[4].FloatData = state.theta_elec_rad;
-    Send.Data[5].FloatData = state.shaft.angle_rad;
-    // Send.Data[5].FloatData = state.joint.position_rad;
+    Send.Data[3].FloatData = state.theta_elec_rad;
+    Send.Data[4].FloatData = state.shaft.angle_rad;
+    Send.Data[5].FloatData = state.shaft.position_rad;
+    Send.Data[6].FloatData = state.joint.angle_rad;
     // Send.Data[5].FloatData = state.phase_current.ampere[0];
     __enable_irq();
 
@@ -72,11 +71,16 @@ void VoFaDisUart(void)
     UartTemp[21] = Send.Data[5].ByteData[1]; //
     UartTemp[22] = Send.Data[5].ByteData[2]; //
     UartTemp[23] = Send.Data[5].ByteData[3]; //
-        
-    UartTemp[24] = 0x00;
-    UartTemp[25] = 0x00;
-    UartTemp[26] = 0x80;
-    UartTemp[27] = 0x7f;
 
-    (void)board_uart_tx_try(UartTemp, 28u);
+    UartTemp[24] = Send.Data[6].ByteData[0]; //The seventh data
+    UartTemp[25] = Send.Data[6].ByteData[1]; //
+    UartTemp[26] = Send.Data[6].ByteData[2]; //
+    UartTemp[27] = Send.Data[6].ByteData[3]; //
+        
+    UartTemp[28] = 0x00;
+    UartTemp[29] = 0x00;
+    UartTemp[30] = 0x80;
+    UartTemp[31] = 0x7f;
+
+    (void)board_uart_tx_try(UartTemp, 32u);
 }

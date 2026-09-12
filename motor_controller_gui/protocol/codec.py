@@ -1,5 +1,6 @@
 """CANFD 协议编解码，帧格式: [CNT, CMD, DATA...]，仲裁段 ID 为 Node-ID。"""
 
+import math
 import struct
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -111,13 +112,68 @@ def pack_multi_targets(motor_targets: List[Tuple[int, int]]) -> bytes:
     return b"".join(pack_target_entry(mid, val) for mid, val in motor_targets)
 
 
+def deg_to_pos_raw(deg: float) -> int:
+    """角度(°) -> Q7 位置 raw（V1.0.0，1 LSB = 1/128 °）。"""
+    return int(round(deg * POS_SCALE))
+
+
+def pos_raw_to_deg_v1(raw: int) -> float:
+    """Q7 位置 raw -> 角度(°)（V1.0.0）。"""
+    return raw / POS_SCALE
+
+
+def rad_to_pos_raw(rad: float) -> int:
+    """弧度(rad) -> Q7 位置 raw（V2.0.0，1 LSB = 1/128 rad）。"""
+    return int(round(rad * POS_SCALE))
+
+
+def pos_raw_to_rad(raw: int) -> float:
+    """Q7 位置 raw -> 弧度(rad)（V2.0.0）。"""
+    return raw / POS_SCALE
+
+
+def pos_uses_rad(protocol_version: ProtocolVersion) -> bool:
+    """V2.0.0 起 CAN 位置单位为 rad，此前为 °。"""
+    return protocol_version == ProtocolVersion.V2_0_0
+
+
+def encode_position(protocol_version: ProtocolVersion, value: float) -> int:
+    """按协议版本将 GUI 位置值编码为 Q7 raw。"""
+    if pos_uses_rad(protocol_version):
+        return rad_to_pos_raw(value)
+    return deg_to_pos_raw(value)
+
+
+def decode_position_from_raw(
+    protocol_version: ProtocolVersion, raw: int
+) -> Dict[str, float]:
+    """
+    按协议版本解析 Q7 位置 raw。
+    position_plot：波形/控制用（V1=°，V2=rad）；position_deg：状态页显示。
+    """
+    if pos_uses_rad(protocol_version):
+        pos_rad = pos_raw_to_rad(raw)
+        pos_deg = math.degrees(pos_rad)
+        pos_plot = pos_rad
+    else:
+        pos_deg = pos_raw_to_deg_v1(raw)
+        pos_rad = math.radians(pos_deg)
+        pos_plot = pos_deg
+    return {
+        "position_rad": pos_rad,
+        "position_deg": pos_deg,
+        "position_plot": pos_plot,
+    }
+
+
 def angle_to_pos_raw(degrees: float) -> int:
-    """角度(°) -> Q7 位置 raw 值。"""
-    return int(round(degrees * POS_SCALE))
+    """角度(°) -> Q7 位置 raw（V1.0.0 兼容别名）。"""
+    return deg_to_pos_raw(degrees)
 
 
 def pos_raw_to_angle(raw: int) -> float:
-    return raw / POS_SCALE
+    """Q7 位置 raw -> 角度(°)（V1.0.0 兼容别名）。"""
+    return pos_raw_to_deg_v1(raw)
 
 
 # ---------- 应答解析 ----------
@@ -191,9 +247,10 @@ def parse_period_report(
 
     mode, enable, enable_nibble = parse_status_byte(protocol_version, status)
     error_info = parse_error_byte(protocol_version, error)
+    pos_fields = decode_position_from_raw(protocol_version, pos)
     return {
         "position_raw": pos,
-        "position_deg": pos_raw_to_angle(pos),
+        **pos_fields,
         "velocity": vel,
         "iq_ma": iq,
         "id_ma": id_ma,
