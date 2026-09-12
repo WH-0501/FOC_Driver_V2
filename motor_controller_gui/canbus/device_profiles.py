@@ -22,6 +22,8 @@ class DeviceProfile:
     resistance: bool = True
     device_type: Optional[int] = None
     driver_dll: Optional[str] = None
+    auto_start_channel: bool = False
+    show_channel_selector: bool = True
     default_channel: str = "0"
     tty_baudrate: int = 115200
 
@@ -33,6 +35,8 @@ DEVICE_PROFILES: List[DeviceProfile] = [
         device_type=ZCAN_USBCANFD_100U,
         driver_dll=ZLG_CAN_DLL,
         channel_count=1,
+        auto_start_channel=True,
+        show_channel_selector=False,
     ),
     DeviceProfile(
         name="创芯科技 USBCAN-FD (100E 单通道)",

@@ -1,6 +1,6 @@
 """CAN/CANFD 通信线程。"""
 
-from typing import Optional
+import threading
 
 from PyQt5.QtCore import QThread, pyqtSignal
 
@@ -12,11 +12,14 @@ class CanThread(QThread):
 
     msg_received = pyqtSignal(int, bytes, float)
     connection_status = pyqtSignal(bool, str)
+    scan_finished = pyqtSignal(list, str)
+    scan_failed = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.manager = CanDeviceManager()
         self.running = False
+        self._op_lock = threading.Lock()
 
     @property
     def bus(self):
@@ -26,43 +29,63 @@ class CanThread(QThread):
         return self.manager.is_device_open
 
     def open_device(self, profile_name: str, device_index: int = 0, serial_port: str = "") -> None:
-        try:
-            self.manager.open_device(profile_name, device_index, serial_port)
+        def action() -> None:
+            with self._op_lock:
+                self.manager.open_device(profile_name, device_index, serial_port)
             self.connection_status.emit(True, f"设备已打开: {self.manager.device_label()}")
-        except Exception as exc:
-            self.connection_status.emit(False, f"打开设备失败: {exc}")
+
+        def task() -> None:
+            try:
+                action()
+            except Exception as exc:
+                self.connection_status.emit(False, f"打开设备失败: {exc}")
+
+        threading.Thread(target=task, daemon=True).start()
 
     def start_channel(self, channel: int = 0) -> None:
-        try:
-            if not self._is_device_open():
-                raise RuntimeError("请先打开设备")
-            self.manager.start_channel(channel)
-            if not self.isRunning():
-                self.running = True
-                self.start()
-            zlg = self.manager._zlg
-            handle_hint = f", handle={zlg.channel_handle:#x}" if zlg and zlg.channel_handle else ""
-            self.connection_status.emit(
-                True,
-                f"通道{channel + 1} (API CAN{channel}) 已启动{handle_hint}",
-            )
-        except Exception as exc:
-            self.connection_status.emit(False, f"启动通道失败: {exc}")
+        def task() -> None:
+            try:
+                with self._op_lock:
+                    if not self._is_device_open():
+                        raise RuntimeError("请先打开设备")
+                    self.manager.start_channel(channel)
+                if not self.isRunning():
+                    self.running = True
+                    self.start()
+                zlg = self.manager._zlg
+                handle_hint = f", handle={zlg.channel_handle:#x}" if zlg and zlg.channel_handle else ""
+                self.connection_status.emit(
+                    True,
+                    f"通道{channel + 1} (API CAN{channel}) 已启动{handle_hint}",
+                )
+            except Exception as exc:
+                self.connection_status.emit(False, f"启动通道失败: {exc}")
+
+        threading.Thread(target=task, daemon=True).start()
 
     def stop_channel(self) -> None:
-        self.running = False
-        self.wait(2000)
-        self.manager.stop_channel()
-        self.connection_status.emit(True, "通道已停止")
+        def task() -> None:
+            self.running = False
+            self.wait(2000)
+            with self._op_lock:
+                self.manager.stop_channel()
+            self.connection_status.emit(True, "通道已停止")
+
+        threading.Thread(target=task, daemon=True).start()
 
     def close_device(self) -> None:
-        self.running = False
-        self.wait(2000)
-        self.manager.close_device()
-        self.connection_status.emit(False, "设备已关闭")
+        def task() -> None:
+            self.running = False
+            self.wait(2000)
+            with self._op_lock:
+                self.manager.close_device()
+            self.connection_status.emit(False, "设备已关闭")
+
+        threading.Thread(target=task, daemon=True).start()
 
     def send_message(self, arbitration_id: int, data: bytes, is_fd: bool = True) -> bool:
-        return self.manager.send(arbitration_id, data, is_fd)
+        with self._op_lock:
+            return self.manager.send(arbitration_id, data, is_fd)
 
     def run(self) -> None:
         while self.running and self.manager.is_running:
@@ -70,7 +93,8 @@ class CanThread(QThread):
                 drained = 0
                 while drained < 512:
                     wait = 0.05 if drained == 0 else 0.0
-                    batch = self.manager.recv_batch(timeout=wait, max_messages=64)
+                    with self._op_lock:
+                        batch = self.manager.recv_batch(timeout=wait, max_messages=64)
                     if not batch:
                         break
                     for msg in batch:

@@ -1,6 +1,7 @@
 """主窗口。"""
 
 import sys
+import threading
 import time
 from typing import Dict, Optional
 
@@ -142,6 +143,8 @@ class MainWindow(QMainWindow):
         self.remove_motor_btn.clicked.connect(self._remove_motor)
         self.scan_btn.clicked.connect(self._scan_motors)
         self.can_thread.connection_status.connect(self._on_connection_status)
+        self.can_thread.scan_finished.connect(self._on_scan_finished)
+        self.can_thread.scan_failed.connect(self._on_scan_failed)
         self.can_thread.msg_received.connect(self._handle_can_message)
 
     def _make_target_callback(self, motor_id: int):
@@ -192,6 +195,8 @@ class MainWindow(QMainWindow):
         )
 
     def _on_connection_status(self, ok: bool, msg: str) -> None:
+        if "打开设备" in msg or "设备已打开" in msg or (not ok and "打开" in msg):
+            self.connection_panel.set_busy_opening(False)
         self.log(msg)
         if ok and "已启动" in msg:
             ch = self.can_thread.manager.channel
@@ -207,6 +212,7 @@ class MainWindow(QMainWindow):
         elif ok and "已打开" in msg:
             mgr = self.can_thread.manager
             warning = mgr.last_open_warning
+            profile = mgr.profile
             if mgr._zlg is not None:
                 self.connection_panel.apply_hardware_channels(mgr._zlg.channel_count, warning)
             self.connection_panel.set_device_state(
@@ -214,6 +220,9 @@ class MainWindow(QMainWindow):
                 mgr.device_label(),
                 warning or "设备已打开，请启动通道",
             )
+            if profile and profile.auto_start_channel:
+                # ZQWL 经 COM 枚举，等设备信息稳定后再 InitCAN
+                QTimer.singleShot(200, lambda: self.can_thread.start_channel(0))
             if warning:
                 QMessageBox.warning(
                     self,
@@ -231,19 +240,32 @@ class MainWindow(QMainWindow):
             self.connection_panel.set_device_state(DeviceState.CLOSED, message=detail)
 
     def _on_open_device(self, profile_name: str, device_index: int, serial_port: str) -> None:
+        self.connection_panel.set_busy_opening(True)
+        self.log(f"正在打开设备 ({profile_name})…")
         self.can_thread.open_device(profile_name, device_index, serial_port)
 
     def _on_scan_devices(self, profile_name: str) -> None:
-        try:
-            indices, message = self.can_thread.manager.scan_devices(profile_name)
-            self.connection_panel.set_scan_result(indices, message)
-            if indices:
-                detail = f"，{message}" if message else ""
-                self.log(f"扫描完成，发现设备索引: {indices}{detail}")
-            else:
-                self.log(f"扫描完成: {message or '未发现设备'}")
-        except Exception as exc:
-            QMessageBox.warning(self, "扫描失败", str(exc))
+        self.log(f"正在扫描设备 ({profile_name})…")
+
+        def task() -> None:
+            try:
+                indices, message = self.can_thread.manager.scan_devices(profile_name)
+                self.can_thread.scan_finished.emit(indices, message or "")
+            except Exception as exc:
+                self.can_thread.scan_failed.emit(str(exc))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _on_scan_finished(self, indices: list, message: str) -> None:
+        self.connection_panel.set_scan_result(indices, message)
+        if indices:
+            detail = f"，{message}" if message else ""
+            self.log(f"扫描完成，发现设备索引: {indices}{detail}")
+        else:
+            self.log(f"扫描完成: {message or '未发现设备'}")
+
+    def _on_scan_failed(self, err: str) -> None:
+        self.log(f"扫描失败: {err}")
 
     def _on_start_channel(self, channel: int) -> None:
         self.can_thread.start_channel(channel)

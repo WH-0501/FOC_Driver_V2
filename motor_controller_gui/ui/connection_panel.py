@@ -36,6 +36,7 @@ class ConnectionPanel(QGroupBox):
         self._device_info_fn = device_info_fn
         self._state = DeviceState.CLOSED
         self._running_channel: Optional[int] = None
+        self._opening = False
         self._build_ui()
         self._update_ui_state()
 
@@ -94,22 +95,30 @@ class ConnectionPanel(QGroupBox):
         row2.addWidget(self.device_label, 1)
         root.addLayout(row2)
 
-        # 第三行：通道 + 控制（创芯 CANFDToolPro「通道1/2」= API 索引 0/1）
+        # 第三行：通道 + 控制（创芯双通道需选通道；ZQWL 单通道无此概念）
+        self.channel_row = QWidget()
         row3 = QHBoxLayout()
+        row3.setContentsMargins(0, 0, 0, 0)
+        self.channel_label = QLabel("CAN 通道:")
         self.channel_combo = QComboBox()
         self.channel_combo.setMinimumWidth(160)
         self.start_btn = QPushButton("启动通道")
         self.stop_btn = QPushButton("停止通道")
-        self.close_btn = QPushButton("关闭设备")
-        self.info_btn = QPushButton("设备信息")
-        row3.addWidget(QLabel("CAN 通道:"))
+        row3.addWidget(self.channel_label)
         row3.addWidget(self.channel_combo)
         row3.addWidget(self.start_btn)
         row3.addWidget(self.stop_btn)
         row3.addStretch()
-        row3.addWidget(self.close_btn)
-        row3.addWidget(self.info_btn)
-        root.addLayout(row3)
+        self.channel_row.setLayout(row3)
+        root.addWidget(self.channel_row)
+
+        row4 = QHBoxLayout()
+        self.close_btn = QPushButton("关闭设备")
+        self.info_btn = QPushButton("设备信息")
+        row4.addStretch()
+        row4.addWidget(self.close_btn)
+        row4.addWidget(self.info_btn)
+        root.addLayout(row4)
 
         self.status_label = QLabel("状态: 未连接")
         self.status_label.setStyleSheet("color: #0066cc;")
@@ -142,6 +151,9 @@ class ConnectionPanel(QGroupBox):
         self.serial_row.setVisible(is_slcan)
         if is_slcan:
             self._refresh_serial_ports()
+        profile = next((p for p in DEVICE_PROFILES if p.name == model_name), None)
+        show_channel = True if profile is None else profile.show_channel_selector
+        self.channel_row.setVisible(show_channel)
         self._refresh_channel_options(model_name)
 
     def _refresh_channel_options(self, model_name: str, channel_count: Optional[int] = None) -> None:
@@ -248,6 +260,13 @@ class ConnectionPanel(QGroupBox):
         )
         QMessageBox.information(self, "设备信息", info)
 
+    def set_busy_opening(self, opening: bool) -> None:
+        self._opening = opening
+        if opening:
+            self.status_label.setText("状态: 正在打开设备…")
+            self.status_label.setStyleSheet("color: #0066cc;")
+        self._update_ui_state()
+
     def set_device_state(
         self,
         state: DeviceState,
@@ -285,16 +304,17 @@ class ConnectionPanel(QGroupBox):
         opened = self._state in (DeviceState.OPENED, DeviceState.RUNNING)
         running = self._state == DeviceState.RUNNING
 
-        self.open_btn.setEnabled(not opened)
-        self.scan_btn.setEnabled(not opened)
+        self.open_btn.setEnabled(not opened and not self._opening)
+        self.scan_btn.setEnabled(not opened and not self._opening)
         self.model_combo.setEnabled(not opened)
         self.index_combo.setEnabled(not opened)
         self.serial_combo.setEnabled(not opened)
         self.refresh_serial_btn.setEnabled(not opened)
         self.channel_combo.setEnabled(not running)
 
-        self.start_btn.setEnabled(opened and not running)
-        self.stop_btn.setEnabled(running)
+        show_channel = self.channel_row.isVisible()
+        self.start_btn.setEnabled(show_channel and opened and not running)
+        self.stop_btn.setEnabled(show_channel and running)
         self.close_btn.setEnabled(opened)
 
         if self._state == DeviceState.CLOSED:
@@ -303,7 +323,10 @@ class ConnectionPanel(QGroupBox):
                 self.status_label.setText("状态: 未连接")
             self.status_label.setStyleSheet("color: #666;")
         elif self._state == DeviceState.OPENED:
-            self.status_label.setText("状态: 设备已打开，请启动通道")
+            if show_channel:
+                self.status_label.setText("状态: 设备已打开，请启动通道")
+            else:
+                self.status_label.setText("状态: 设备已打开，正在启动…")
             self.status_label.setStyleSheet("color: #0066cc;")
         elif self._state == DeviceState.RUNNING:
             ch = self._running_channel if self._running_channel is not None else self._selected_channel()
