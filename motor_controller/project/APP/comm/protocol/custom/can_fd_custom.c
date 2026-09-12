@@ -510,6 +510,7 @@ static void can_fd_custom_period_report(void)
   uint8_t vbus_u8;
   fault_t fault_bits;
 
+  /* joint 位置/速度均为控制系，与 ref 字段一一对应 */
   pos_raw = can_fd_codec_rad_to_pos_q7_deg(s->joint.position_rad);
   vel_raw = can_fd_codec_rad_s_to_vel_q7_rpm(s->joint.velocity_rad_s);
   iq_ma = (int16_t)(s->i_q * 1000.0f);

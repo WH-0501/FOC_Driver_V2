@@ -21,6 +21,12 @@ static encoder_unit_t s_encoders[ENCODER_ROLE_COUNT] = {
   },
 };
 
+/**
+ * @brief 确认是否启用关节编码器(低速轴编码器)
+ * 
+ * @return true: 启用
+ * @return false: 未启用
+ */
 static bool encoder_joint_enabled(void)
 {
   return s_encoders[ENCODER_ROLE_JOINT].bind.dev != ENCODER_DEV_NONE;
@@ -31,7 +37,6 @@ static void encoder_publish_state(motor_handle_t *m)
   const encoder_unit_t *shaft = &s_encoders[ENCODER_ROLE_SHAFT];
   const encoder_unit_t *joint = &s_encoders[ENCODER_ROLE_JOINT];
   float pole_pairs;
-  float shaft_dir;
   float gear_ratio;
   bool shaft_ok;
   bool joint_ok;
@@ -45,15 +50,14 @@ static void encoder_publish_state(motor_handle_t *m)
   joint_ok = encoder_joint_enabled();
 
   pole_pairs = (m->config.param.pole_pairs > 0u) ? (float)m->config.param.pole_pairs : 1.0f;
-  shaft_dir = (m->config.param.direction == DIR_CCW) ? -1.0f : 1.0f;
   gear_ratio = (m->config.param.gear_ratio > 0.0f) ? m->config.param.gear_ratio : 1.0f;
 
   if (shaft_ok)
   {
     m->state.shaft = shaft->observer.sample;
-    /* FOC 电角只用单圈机械角；position_rad 含机械零偏/圈数，不可直接乘 pole_pairs */
+    /* shaft.angle_rad 已在控制系；乘 pole_pairs 得电角，不再重复乘 direction */
     m->state.theta_elec_rad = angle_normalize(
-        (shaft->observer.sample.angle_rad * pole_pairs * shaft_dir) -
+        (shaft->observer.sample.angle_rad * pole_pairs) -
         m->config.param.theta_elec_offset_rad);
   }
 
@@ -280,10 +284,14 @@ bool encoder_observer_update(encoder_observer_t *obs,
     obs->sample.turn_count += (diff_angle > 0.0f) ? -1 : 1;
   }
 
-  obs->sample.counts = (uint32_t)counts;
-  obs->sample.angle_rad = angle;
-  obs->sample.position_rad =
-      (float)obs->sample.turn_count * _2PI + angle * dir - zero_rad;
+  {
+    float sensor_rad = (float)obs->sample.turn_count * _2PI + angle;
+
+    obs->sample.counts = (uint32_t)counts;
+    /* 观测量统一为控制坐标系：direction 在此一次性施加，turn 解包仍用 raw angle */
+    obs->sample.angle_rad = angle_normalize(angle * dir);
+    obs->sample.position_rad = dir * (sensor_rad - zero_rad);
+  }
 
   delta_angle = angle - obs->prev_angle_rad;
   if (delta_angle > _PI)

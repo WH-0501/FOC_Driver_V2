@@ -38,7 +38,9 @@ void VoFaDisUart(void)
     // Send.Data[3].FloatData = state.shaft.velocity_rad_s;
     Send.Data[3].FloatData = state.v_q;
     Send.Data[4].FloatData = state.theta_elec_rad;
-    Send.Data[5].FloatData = state.phase_current.ampere[0];
+    Send.Data[5].FloatData = state.shaft.angle_rad;
+    // Send.Data[5].FloatData = state.joint.position_rad;
+    // Send.Data[5].FloatData = state.phase_current.ampere[0];
     __enable_irq();
 
     UartTemp[0] = Send.Data[0].ByteData[0]; //The first data

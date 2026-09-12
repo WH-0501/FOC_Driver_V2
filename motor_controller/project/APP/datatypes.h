@@ -57,7 +57,7 @@ typedef enum
 
 /**
  * 控制模式：决定外环如何产生电流目标（ref.id / ref.iq 或由速度环、位置环算出）。
- * 速度/位置模式下的 ref 与 state.joint 一致（关节侧 position_rad / velocity_rad_s）。
+ * 外环 ref 与 state.joint 均在控制坐标系（见 encoder_sample_t）。
  */
 typedef enum
 {
@@ -101,11 +101,11 @@ typedef struct
   float inductance_q;             ///< q 轴电感 Lq [H]
   float flux_linkage;             ///< 永磁磁链 ψf [Wb]（或等价常数）
   uint8_t pole_pairs;             ///< 极对数 p
-  int8_t direction;               ///< 方向系数：1 正向，-1 反向
+  int8_t direction;               ///< 控制正方向：1=CW，-1=CCW；在 encoder 观测层统一施加
   float gear_ratio;               ///< 电机到关节减速比（直驱填 1.0）
   uint32_t encoder_counts_per_rev; ///< 机械旋转一圈编码器计数（分辨率定义依传感器）
   float theta_elec_offset_rad;    ///< FOC 电角零偏 [rad]（对齐流程写入，见 foc_align_electrical）
-  float theta_offset_rad;         ///< SHAFT 机械零偏 [rad]（bind.zero_rad 为 0 时使用）
+  float theta_offset_rad;         ///< SHAFT 机械零偏 [rad]（传感器系；bind.zero_rad 为 0 时使用）
 } motor_param_t;
 
 typedef struct
@@ -179,8 +179,8 @@ typedef struct
   float id;             ///< d 轴电流给定 [A]
   float iq;             ///< q 轴电流给定 [A]
   float torque_nm;      ///< 转矩给定 [N·m]（若外环用转矩模式）
-  float speed_rad_s;    ///< 关节角速度给定 [rad/s]（同 state.joint.velocity_rad_s）
-  float position_rad;   ///< 关节角位置给定 [rad]（同 state.joint.position_rad）
+  float speed_rad_s;    ///< 关节角速度给定 [rad/s]（控制系，同 joint.velocity_rad_s）
+  float position_rad;   ///< 关节多圈位置给定 [rad]（控制系，同 joint.position_rad）
 } motor_reference_t;
 
 typedef struct
@@ -192,17 +192,23 @@ typedef struct
 } motor_actuation_t;
 
 /**
- * 机械位置/速度观测量（shaft / joint 共用）。
- * 多圈位置：position_rad = turn_count * 2π + angle_rad * dir - zero_rad。
- * 大角度场景可用 turn_count（int32）+ angle_rad 重建，避免 float position_rad 大数精度损失。
+ * 机械位置/速度观测量（shaft / joint 共用，均为控制坐标系）。
+ *
+ * encoder_observer_update 内部用 raw counts 解包 turn，发布时统一施加 direction：
+ * - angle_rad      = normalize(raw_angle * direction)
+ * - position_rad   = direction * (turn*2π + raw_angle - zero_rad)，zero 为传感器系
+ * - velocity_rad_s = Δraw_angle * direction / dt
+ * - theta_elec_rad = normalize(shaft.angle_rad * pole_pairs - theta_elec_offset)
+ *
+ * counts / turn_count 仍为传感器系，仅供调试或重建。
  */
 typedef struct
 {
-  uint32_t counts;        ///< 单圈原始计数（硬件分辨率内）
-  int32_t turn_count;     ///< 累计整圈数（过零检测维护）
-  float angle_rad;        ///< 单圈机械角 [0, 2π) [rad]
-  float position_rad;     ///< 多圈机械角 [rad]
-  float velocity_rad_s;   ///< 机械角速度 [rad/s]
+  uint32_t counts;        ///< 单圈原始计数（传感器系）
+  int32_t turn_count;     ///< 累计整圈数（传感器系，由 raw angle 跨圈检测）
+  float angle_rad;        ///< 单圈机械角 [0, 2π) [rad]（控制系）
+  float position_rad;     ///< 多圈机械角 [rad]（控制系）
+  float velocity_rad_s;   ///< 机械角速度 [rad/s]（控制系，正=控制正方向）
 } encoder_sample_t;
 
 typedef struct
@@ -225,9 +231,9 @@ typedef struct
   float i_mod;   ///< 模电流 [A] iα 和 iβ 的合成电流
   float i_bus;   ///< 母线电流 [A]
 
-  float theta_elec_rad;     ///< 电角 [rad]，由 shaft.angle_rad 换算，Park/逆 Park 用
-  encoder_sample_t shaft;   ///< 电机轴端
-  encoder_sample_t joint;   ///< 关节端；单编码器时由 shaft 经 gear_ratio 推算
+  float theta_elec_rad;     ///< 电角 [rad]：normalize(shaft.angle_rad * pole_pairs - offset)，Park/逆 Park 用
+  encoder_sample_t shaft;   ///< 电机轴端观测量（控制系）
+  encoder_sample_t joint;   ///< 关节端观测量；单编时由 shaft 经 gear_ratio 推算（控制系）
 
   float sin_elec;       ///< sin(θ_e)，可与 θ 同步更新减少三角运算
   float cos_elec;       ///< cos(θ_e)

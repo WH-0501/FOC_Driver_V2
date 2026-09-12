@@ -334,7 +334,12 @@ int mc_set_joint_origin(void)
     return MC_ERR_STATE;
   }
 
-  m->config.param.theta_offset_rad += m->state.shaft.position_rad;
+  {
+    float dir_f = (m->config.param.direction == DIR_CCW) ? -1.0f : 1.0f;
+
+    /* position 为控制系；theta_offset 存传感器系零偏：zero += position * dir */
+    m->config.param.theta_offset_rad += m->state.shaft.position_rad * dir_f;
+  }
   return MC_OK;
 }
 

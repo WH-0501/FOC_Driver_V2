@@ -125,13 +125,13 @@ static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, f
 static float foc_align_raw_elec_rad(const motor_handle_t *m, int8_t dir)
 {
   float pole_pairs;
-  float shaft_dir;
+
+  (void)dir;
 
   if (m == NULL) return 0.0f;
 
   pole_pairs = (m->config.param.pole_pairs > 0u) ? (float)m->config.param.pole_pairs : 1.0f;
-  shaft_dir = (dir == DIR_CCW) ? -1.0f : 1.0f;
-  return m->state.shaft.angle_rad * pole_pairs * shaft_dir;
+  return m->state.shaft.angle_rad * pole_pairs;
 }
 
 static void foc_align_set_offset_from_raw(motor_handle_t *m, float raw_elec, float align_angle)

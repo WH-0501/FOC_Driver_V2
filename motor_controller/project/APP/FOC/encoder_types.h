@@ -31,7 +31,7 @@ typedef struct
 {
   encoder_dev_t dev;
   float zero_rad;
-  int8_t dir;      ///< 1 / -1；0 表示沿用 motor_param.direction
+  int8_t dir;      ///< 控制正方向：1 / -1；0 表示沿用 motor_param.direction（观测发布时施加）
   uint8_t kth71_cs; ///< dev==ENCODER_DEV_KTH71 时片选索引（见 kth71_cs_select_t）
 } encoder_bind_t;
 
