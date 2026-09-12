@@ -28,10 +28,10 @@ typedef struct
   bool align_ok;                ///< 对齐+极性校验是否通过
   bool align_engaged;           ///< 转子是否吸合到位
 
-  float foc_pos_loop_us;        ///< 位置环耗时 [us]（本周期未运行则为 0）
-  float foc_vel_loop_us;        ///< 速度环耗时 [us]
-  float foc_cur_loop_us;        ///< 电流环耗时 [us]
-  float foc_ctrl_loop_us;       ///< foc_control_run 总耗时 [us]
+  uint32_t foc_pos_loop_us;        ///< 位置环耗时 [us]（本周期未运行则为 0）
+  uint32_t foc_vel_loop_us;        ///< 速度环耗时 [us]
+  uint32_t foc_cur_loop_us;        ///< 电流环耗时 [us]
+  uint32_t foc_ctrl_loop_us;       ///< foc_control_run 总耗时 [us]
 } motor_runtime_t;
 
 motor_handle_t *motor_get_handler(void);

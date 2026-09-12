@@ -11,9 +11,15 @@
 #include "math_compat.h"
 #include <string.h>
 
-static float foc_dwt_elapsed_us(uint32_t t0_us)
+/**
+ * @brief 计算时间差
+ * 
+ * @param t0_us: 开始时间
+ * @return uint32_t: 时间差[us]
+ */
+static uint32_t foc_dwt_elapsed_us(uint32_t t0_us)
 {
-  return (float)(dwt_get_ticks_us() - t0_us);
+  return (uint32_t)(dwt_get_ticks_us() - t0_us);
 }
 
 static void foc_pid_apply_param(pid_state_t *pid, uint8_t mode)
