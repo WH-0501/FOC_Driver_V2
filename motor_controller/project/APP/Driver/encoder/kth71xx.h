@@ -11,7 +11,12 @@ extern "C" {
 #endif
 
 #include "datatypes.h"
-	
+
+/**
+ * 旧版只有一个磁编. CS 为 PB6
+ * 新版有两个磁编：CS 分别为 PA4 和 PA15
+ * 
+ */
 typedef enum
 {
   KTH71_CS_0 = 0, /**< GPIOB PIN6 */

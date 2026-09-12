@@ -34,7 +34,8 @@ void VoFaDisUart(void)
     // Send.Data[2].FloatData = state.joint.position_rad;
     Send.Data[0].FloatData = state.i_q;
     Send.Data[1].FloatData = state.i_d;
-    Send.Data[2].FloatData = m->ref.iq;
+    // Send.Data[2].FloatData = m->ref.iq;
+    Send.Data[2].FloatData = state.shaft.counts;
     Send.Data[3].FloatData = state.theta_elec_rad;
     Send.Data[4].FloatData = state.shaft.angle_rad;
     Send.Data[5].FloatData = state.shaft.position_rad;
