@@ -226,6 +226,22 @@ class CanDeviceManager:
             return False
         return False
 
+    def send_burst(self, frames: list[tuple[int, bytes]], is_fd: bool = True) -> bool:
+        if not frames:
+            return True
+        if not self.is_running:
+            return False
+        try:
+            if self._zlg is not None:
+                return self._zlg.send_burst(frames, is_fd)
+            for arbitration_id, data in frames:
+                if not self.send(arbitration_id, data, is_fd):
+                    return False
+            return True
+        except Exception as exc:
+            self.last_error = str(exc)
+            return False
+
     def device_label(self) -> str:
         if not self.profile:
             return "未选择设备"

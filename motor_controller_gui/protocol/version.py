@@ -121,6 +121,36 @@ V2_IAP_ERROR_NAMES: Dict[int, str] = {
     8: "数据不完整",
 }
 
+# dex-con-firmware-v5 motor_control/project/IAP/iap.h
+V5_IAP_STATUS_NAMES: Dict[int, str] = {
+    0: "空闲",
+    1: "准备升级",
+    2: "接收固件",
+    3: "验证固件",
+    4: "编程中",
+    5: "完成",
+    6: "错误",
+}
+
+V5_IAP_ERROR_NAMES: Dict[int, str] = {
+    0x80: "成功",
+    0x81: "无效命令",
+    0x82: "无效参数",
+    0x83: "Flash 擦除错误",
+    0x84: "Flash 写入错误",
+    0x85: "Flash 验证错误",
+    0x86: "CRC 校验错误",
+    0x87: "超时错误",
+    0x88: "设备忙",
+    0x89: "不支持操作",
+    0x8A: "通信错误",
+    0x8B: "响应超时 (3s)",
+    0x8C: "拒绝升级",
+    0x8D: "内存分配失败",
+    0x8E: "Flash 切换错误",
+    0x8F: "丢帧",
+}
+
 # V1 默认模式：CSV（周期速度）
 V1_DEFAULT_WIRE = int(ControlModeV1.CSV)
 # V2 默认模式：速度开环
@@ -202,6 +232,56 @@ def iap_error_name(version: ProtocolVersion, error: int) -> str:
     return V2_IAP_ERROR_NAMES.get(error, f"未知 ({error})")
 
 
+def iap_wire_uses_dex_v5_format(status: int, error: int) -> bool:
+    """dex-con IAP：ERROR_IAP_SUCCESS=0x80，错误码 0x81~0x8F。"""
+    if error == 0x80:
+        return True
+    if 0x81 <= error <= 0x8F:
+        return True
+    return False
+
+
+def iap_is_dex_v5_success(error: int) -> bool:
+    return error == 0x80
+
+
+def iap_is_error_state(version: ProtocolVersion, status: int, error: int = 0) -> bool:
+    if iap_wire_uses_dex_v5_format(status, error):
+        return status == 6 or not iap_is_dex_v5_success(error)
+    if iap_wire_uses_v1_format(status, error):
+        return status >= 6
+    if version == ProtocolVersion.V1_0_0:
+        return status >= 6
+    return status == 3
+
+
+def iap_is_ready_state(version: ProtocolVersion, status: int) -> bool:
+    return status == 1
+
+
+def iap_is_receiving_state(status: int) -> bool:
+    """dex-con START 成功后 state=IAP_STATE_RECEIVING (2)。"""
+    return status == 2
+
+
+def iap_is_verified_state(version: ProtocolVersion, status: int) -> bool:
+    if version == ProtocolVersion.V1_0_0:
+        return status in (5, 2)
+    return status == 2
+
+
+def iap_is_complete_state(status: int) -> bool:
+    """dex-con VERIFY 成功后 state=IAP_STATE_COMPLETE (5)。"""
+    return status == 5
+
+
+def iap_wire_uses_v1_format(status: int, error: int) -> bool:
+    """IAP 0xFC 应答与运动控制协议版本无关；V1 设备常用 status>=6 或 error bit7。"""
+    if iap_wire_uses_dex_v5_format(status, error):
+        return False
+    return status >= 6 or bool(error & 0x80) or error > 8
+
+
 def parse_iap_status_payload(
     version: ProtocolVersion, payload: bytes
 ) -> Dict[str, object]:
@@ -210,12 +290,34 @@ def parse_iap_status_payload(
         return {}
     iap_state = payload[0]
     error = payload[1] if len(payload) >= 2 else 0
-    err_name = iap_error_name(version, error)
+    if iap_wire_uses_dex_v5_format(iap_state, error):
+        err_name = V5_IAP_ERROR_NAMES.get(error, f"未知 (0x{error:02X})")
+        state_name = V5_IAP_STATUS_NAMES.get(iap_state, f"未知 ({iap_state})")
+        return {
+            "iap_state": iap_state,
+            "iap_state_name": state_name,
+            "error_code": error,
+            "error_name": err_name,
+            "iap_format": "dex_v5",
+        }
+    iap_ver = (
+        ProtocolVersion.V1_0_0
+        if iap_wire_uses_v1_format(iap_state, error)
+        else version
+    )
+    if iap_ver == ProtocolVersion.V1_0_0:
+        err_info = parse_error_byte(ProtocolVersion.V1_0_0, error)
+        err_name = str(err_info.get("error_name", "正常"))
+        err_code = int(err_info.get("error_subcode", error))
+    else:
+        err_name = iap_error_name(version, error)
+        err_code = error
     return {
         "iap_state": iap_state,
-        "iap_state_name": iap_status_name(version, iap_state),
-        "error_code": error,
-        "error_name": err_name if error else "正常",
+        "iap_state_name": iap_status_name(iap_ver, iap_state),
+        "error_code": err_code,
+        "error_name": err_name if err_code else "正常",
+        "iap_format": "v1" if iap_ver == ProtocolVersion.V1_0_0 else "v2",
     }
 
 

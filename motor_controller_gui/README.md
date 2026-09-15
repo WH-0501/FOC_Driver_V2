@@ -175,3 +175,19 @@ pyinstaller -F --noconsole --add-data "library;library" motor_gui.py
 可选：下载 [UPX](https://github.com/upx/upx/releases)，将 `upx.exe` 放到与 `pyinstaller.exe` 同级目录以减小体积。
 
 产物在 `dist/motor_gui.exe`。若仍报 DLL 错误，可将 `library/` 文件夹放在 exe 同目录作为备用。
+
+
+## IAP 固件升级
+
+遵循 `motor_controller/docs/CAN-FD通信协议.md` 与 dex-con `iap.c`：
+
+1. **FD** 读固件版本
+2. **F8 ENTER**（Node-ID，无应答，state: IDLE→READY）
+3. **F9 START**（ASIX 32B 头 + 首段数据，载荷 >32B；从机**同步擦除** Flash）
+4. **等待 FC**（`state=2 接收中, error=0x80`；iap.c 注释「应答后才开始下一帧接收」）
+5. **FA DATA**（帧计数从 2 递增，62B/帧，末帧 0xFF 补齐）→ **FB END** → **FE VERIFY** → **FF RESET**
+
+注意：
+- 固件 `IAP_TIMEOUT=3000ms` **从 START 进入起算且含擦除时间**；FC 到达后剩余窗口通常仅数百 ms，须**立即连发 DATA**。
+- ENTER+START 使用 ZCAN 批量提交；发送/接收分锁，避免周期上报阻塞 IAP。
+- IAP 关键帧日志异步输出，避免 Qt 阻塞 CAN。

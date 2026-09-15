@@ -8,11 +8,13 @@ from typing import Callable, Deque, Dict, List, Optional, Tuple
 from canbus.interface import CanThread
 from protocol import (
     CAN_BROADCAST_ID,
+    CAN_IAP_ID,
     CANFD_DLC_LENGTHS,
     CMD,
     DEFAULT_PROTOCOL_VERSION,
     FrameCounter,
     ProtocolVersion,
+    build_iap_v5_can_frame,
     format_bytes_hex,
     pack_frame,
     pack_multi_targets,
@@ -29,6 +31,9 @@ class MotorClient:
     def __init__(self, can_thread: CanThread, log_fn: Optional[Callable[[str], None]] = None):
         self.can = can_thread
         self.counter = FrameCounter()
+        self.iap_counter = FrameCounter()
+        self._iap_session = False
+        self._iap_arb_id = CAN_IAP_ID
         self._log_fn = log_fn
         self.protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION
         self._iap_lock = threading.Lock()
@@ -38,18 +43,137 @@ class MotorClient:
     def set_protocol_version(self, version: ProtocolVersion) -> None:
         self.protocol_version = version
 
-    def _log_tx(self, arb_id: int, cmd: CMD, frame: bytes, data: bytes) -> None:
-        if self._log_fn is None:
+    def _log_tx(
+        self,
+        arb_id: int,
+        cmd: CMD,
+        frame: bytes,
+        data: bytes,
+        *,
+        log_fn: Optional[Callable[[str], None]] = None,
+    ) -> None:
+        logger = log_fn if log_fn is not None else self._log_fn
+        if logger is None:
             return
         cnt = frame[0] if frame else 0
         cmd_name = cmd.name if isinstance(cmd, CMD) else f"CMD_{int(cmd):02X}"
-        self._log_fn(
+        logger(
             f"下发 NodeID=0x{arb_id:03X} "
             f"[CNT=0x{cnt:02X} 帧计数] CMD=0x{int(cmd):02X}({cmd_name}) "
             f"LEN={len(data)} "
             f"HEX=[{format_bytes_hex(data)}] "
-            # f"BIN=[{format_bytes_binary(data)}]"
         )
+
+    def begin_iap_session(self, motor_id: int) -> None:
+        """IAP 升级：独立帧计数从 0 起；单电机使用 Node-ID（协议文档）。"""
+        self.iap_counter = FrameCounter()
+        self._iap_arb_id = motor_id
+        self._iap_session = True
+        self.clear_iap_wait()
+
+    def end_iap_session(self) -> None:
+        self._iap_session = False
+
+    def _send_iap_v5(self, cmd: CMD, payload: bytes = b"", *, log: bool = True) -> bool:
+        cnt = self.iap_counter.next()
+        try:
+            data = build_iap_v5_can_frame(cmd, payload, cnt)
+        except ValueError:
+            return False
+        if log:
+            self._log_tx(
+                self._iap_arb_id,
+                cmd,
+                data[: min(len(data), 2 + len(payload))],
+                data,
+            )
+        return self.can.send_message(self._iap_arb_id, data, is_fd=True)
+
+    def iap_enter_start_burst(self, motor_id: int, start_payload: bytes) -> tuple[int, int, float, float]:
+        """
+        连续发送 ENTER(CNT=0) + START(CNT=1)；须等 FC(擦除完成) 后再发 DATA。
+        返回 (enter_cnt, start_cnt, start_sent_at, can_elapsed_s)；失败时 start_sent_at=0。
+        """
+        if not self._iap_session:
+            self.begin_iap_session(motor_id)
+        enter_cnt = self.iap_counter.next()
+        start_cnt = self.iap_counter.next()
+        try:
+            enter_frame = build_iap_v5_can_frame(CMD.IAP_ENTER, b"", enter_cnt)
+            start_frame = build_iap_v5_can_frame(CMD.IAP_START, start_payload, start_cnt)
+        except ValueError:
+            return (-1, -1, 0.0, 0.0)
+        t_can = time.monotonic()
+        ok = self.can.send_messages_burst(
+            [(self._iap_arb_id, enter_frame), (self._iap_arb_id, start_frame)]
+        )
+        can_elapsed = time.monotonic() - t_can
+        start_sent_at = time.monotonic()
+        if not ok:
+            return (-1, -1, 0.0, can_elapsed)
+        # 日志异步写入，避免 Qt 阻塞导致错过擦除 FC / 3s DATA 窗口
+        if self._log_fn is not None:
+            arb_id = self._iap_arb_id
+            log_fn = self._log_fn
+
+            def _log_burst() -> None:
+                log_fn(
+                    f"下发 NodeID=0x{arb_id:03X} "
+                    f"[CNT=0x{enter_cnt:02X} 帧计数] CMD=0xF8(IAP_ENTER) LEN=2 "
+                    f"HEX=[{format_bytes_hex(enter_frame)}] "
+                )
+                log_fn(
+                    f"下发 NodeID=0x{arb_id:03X} "
+                    f"[CNT=0x{start_cnt:02X} 帧计数] CMD=0xF9(IAP_START) LEN={len(start_frame)} "
+                    f"HEX=[{format_bytes_hex(start_frame)}] "
+                )
+
+            threading.Thread(target=_log_burst, daemon=True).start()
+        return (enter_cnt, start_cnt, start_sent_at, can_elapsed)
+
+    def iap_send_data_burst(
+        self, chunks: list[bytes], *, log_first: bool = False, log_async: bool = False
+    ) -> int:
+        """连发多帧 IAP_DATA，返回成功发送的帧数。"""
+        if not chunks:
+            return 0
+        frames: list[tuple[int, bytes]] = []
+        built: list[tuple[bytes, bytes]] = []
+        for chunk in chunks:
+            cnt = self.iap_counter.next()
+            try:
+                frame = build_iap_v5_can_frame(CMD.IAP_DATA, chunk, cnt)
+            except ValueError:
+                break
+            frames.append((self._iap_arb_id, frame))
+            built.append((chunk, frame))
+        if not frames:
+            return 0
+        if not self.can.send_messages_burst(frames):
+            return 0
+        if log_first and self._log_fn is not None and built:
+            chunk, frame = built[0]
+            if log_async:
+                arb_id = self._iap_arb_id
+                log_fn = self._log_fn
+                snap = frame[: min(len(frame), 2 + len(chunk))]
+
+                def _log() -> None:
+                    log_fn(
+                        f"下发 NodeID=0x{arb_id:03X} "
+                        f"[CNT=0x{snap[0]:02X} 帧计数] CMD=0xFA(IAP_DATA) "
+                        f"LEN={len(frame)} HEX=[{format_bytes_hex(frame)}] "
+                    )
+
+                threading.Thread(target=_log, daemon=True).start()
+            else:
+                self._log_tx(
+                    self._iap_arb_id,
+                    CMD.IAP_DATA,
+                    frame[: min(len(frame), 2 + len(chunk))],
+                    frame,
+                )
+        return len(frames)
 
     def _send(self, arb_id: int, cmd: CMD, payload: bytes = b"", *, exact_dlc: bool = False) -> bool:
         frame = pack_frame(cmd, payload, self.counter.next())
@@ -66,6 +190,15 @@ class MotorClient:
         with self._iap_lock:
             self._iap_responses.clear()
             self._iap_event.clear()
+
+    def drain_iap_status(self, motor_id: int) -> int:
+        """丢弃队列中该电机的 IAP_STATUS（如 FC 后的滞后 0x87），返回丢弃条数。"""
+        drained = 0
+        while True:
+            if self._take_iap_response(motor_id, CMD.IAP_STATUS) is None:
+                break
+            drained += 1
+        return drained
 
     def deliver_iap_response(self, motor_id: int, cmd: int, payload: bytes) -> None:
         with self._iap_lock:
@@ -96,10 +229,17 @@ class MotorClient:
         return self._take_iap_response(motor_id, cmd)
 
     def poll_iap_error(self, motor_id: int, timeout: float = 0.05) -> Optional[bytes]:
+        from protocol.version import iap_is_dex_v5_success, iap_wire_uses_dex_v5_format
+
         payload = self.wait_iap_response(motor_id, CMD.IAP_STATUS, timeout)
         if payload is None or len(payload) < 2:
             return None
-        if payload[0] == 3 or payload[1] != 0:
+        status, err = payload[0], payload[1]
+        if iap_wire_uses_dex_v5_format(status, err):
+            if status >= 6 or not iap_is_dex_v5_success(err):
+                return payload
+            return None
+        if err != 0 or status >= 3:
             return payload
         return None
 
@@ -203,27 +343,41 @@ class MotorClient:
     # ---------- IAP（单电机，仲裁 ID = motor_id） ----------
 
     def iap_enter(self, motor_id: int) -> bool:
+        if self._iap_session:
+            return self._send_iap_v5(CMD.IAP_ENTER)
         return self._send(motor_id, CMD.IAP_ENTER)
 
-    def iap_start(self, motor_id: int, payload: bytes) -> bool:
+    def iap_start(self, motor_id: int, payload: bytes, *, log: bool = True) -> bool:
+        if self._iap_session:
+            return self._send_iap_v5(CMD.IAP_START, payload, log=log)
         return self._send(motor_id, CMD.IAP_START, payload, exact_dlc=True)
 
-    def iap_data(self, motor_id: int, chunk: bytes) -> bool:
+    def iap_data(self, motor_id: int, chunk: bytes, *, log: bool = False) -> bool:
+        if self._iap_session:
+            return self._send_iap_v5(CMD.IAP_DATA, chunk, log=log)
         return self._send(motor_id, CMD.IAP_DATA, chunk, exact_dlc=True)
 
     def iap_end(self, motor_id: int) -> bool:
+        if self._iap_session:
+            return self._send_iap_v5(CMD.IAP_END)
         return self._send(motor_id, CMD.IAP_END)
 
     def iap_verify(self, motor_id: int) -> bool:
+        if self._iap_session:
+            return self._send_iap_v5(CMD.IAP_VERIFY)
         return self._send(motor_id, CMD.IAP_VERIFY)
 
     def iap_reset(self, motor_id: int) -> bool:
+        if self._iap_session:
+            return self._send_iap_v5(CMD.IAP_RESET)
         return self._send(motor_id, CMD.IAP_RESET)
 
     def iap_get_version(self, motor_id: int) -> bool:
         return self._send(motor_id, CMD.IAP_FW_VERSION)
 
     def iap_query_status(self, motor_id: int) -> bool:
+        if self._iap_session:
+            return self._send_iap_v5(CMD.IAP_STATUS, log=False)
         return self._send(motor_id, CMD.IAP_STATUS)
 
     def scan_motor(self, motor_id: int) -> bool:

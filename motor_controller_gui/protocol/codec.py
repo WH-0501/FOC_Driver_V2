@@ -7,7 +7,15 @@ from typing import Any, Dict, List, Optional, Tuple
 from .constants import (
     CANFD_DLC_LENGTHS,
     CMD,
+    IAP_ASIX_HEADER_SIZE,
+    IAP_ASIX_SIGNATURE,
     IAP_MAX_BODY_SIZE,
+    IAP_MAX_FILE_SIZE,
+    IAP_START_MIN_FIRMWARE_CHUNK,
+    IAP_V5_CHUNK_SIZE,
+    IAP_V5_FRAME_SIZE,
+    IAP_V5_PAD_BYTE,
+    IAP_V5_MIN_START_PAYLOAD,
     MotorError,
     PID_FORMAT,
     PID_RAW_MAX,
@@ -70,9 +78,26 @@ def _iap_payload_capacity(remaining: int, header_bytes: int = 0) -> int:
     return min(remaining, max(dlc - 2 - header_bytes for dlc in CANFD_DLC_LENGTHS if dlc >= min_total))
 
 
-def iap_start_first_chunk_size(body_size: int) -> int:
-    """IAP_START 首包固件数据字节数（载荷 = 8B 头 + chunk，且 payload_len > 8）。"""
-    return _iap_payload_capacity(body_size, header_bytes=8)
+def iap_start_first_chunk_size(body_size: int, *, prefer_largest: bool = True) -> int:
+    """
+    IAP_START 首包固件数据字节数。
+    - 协议要求 IAP_START 载荷 >32B（固件头 + 数据；头为 ASIX 格式，内含 FileLen/CRC32）
+    - 帧长须落在标准 DLC 上，避免 0 填充被写入 Flash
+    - 默认取最大合法首包（64B 帧 = 54B 固件数据），减少总帧数
+    """
+    if body_size <= 0:
+        return 0
+    min_chunk = min(IAP_START_MIN_FIRMWARE_CHUNK, body_size)
+    candidates: list[int] = []
+    for dlc in CANFD_DLC_LENGTHS:
+        if dlc < 10:
+            continue
+        chunk = dlc - 10  # 2(CNT+CMD) + 8(header)
+        if chunk >= min_chunk and chunk <= body_size:
+            candidates.append(chunk)
+    if not candidates:
+        return min(body_size, max(2, min_chunk))
+    return max(candidates) if prefer_largest else min(candidates)
 
 
 def iap_data_chunk_size(remaining: int) -> int:
@@ -105,14 +130,162 @@ def firmware_checksum32(data: bytes) -> int:
     return cksum
 
 
-def pack_iap_start_payload(body_size: int, firmware: bytes) -> bytes:
+def format_asix_header_log(data: bytes) -> str:
+    """格式化 START 首帧中的 32B ASIX 固件头，便于日志核对。"""
+    header = data[:IAP_ASIX_HEADER_SIZE]
+    info = parse_asix_header(header)
+    hex32 = format_bytes_hex(header)
+    if info is None:
+        return f"IAP START 固件头（无法解析）HEX=[{hex32}]"
+    sig = header[:4].decode("ascii", errors="replace")
+    return (
+        f"IAP START 固件头 32B: Signature={sig!r} ImageType={info['image_type']} "
+        f"FileLen={info['file_len']} Body={info['body_size']} B "
+        f"Checksum32=0x{info['checksum32']:08X} "
+        f"首帧数据 +{max(0, len(data) - IAP_ASIX_HEADER_SIZE)} B "
+        f"HEX=[{hex32}]"
+    )
+
+
+def parse_asix_header(data: bytes) -> Optional[Dict[str, int]]:
+    """
+    解析 32B UPGRADE_RT_HEAD（dex-con iap.c / iap_upgrade.c 布局）。
+    FileLen @12 BE；Checksum32 @20 LE。
+    """
+    if len(data) < IAP_ASIX_HEADER_SIZE or data[:4] != IAP_ASIX_SIGNATURE:
+        return None
+    file_len = struct.unpack(">I", data[12:16])[0]
+    if file_len <= IAP_ASIX_HEADER_SIZE:
+        return None
+    body_size = file_len - IAP_ASIX_HEADER_SIZE
+    checksum32 = struct.unpack("<I", data[20:24])[0]
+    image_type = struct.unpack("<H", data[4:6])[0]
+    return {
+        "file_len": file_len,
+        "body_size": body_size,
+        "checksum32": checksum32,
+        "image_type": image_type,
+    }
+
+
+def build_asix_header(body: bytes) -> bytes:
+    """为纯 App .bin 生成 dex-con 兼容的 32B ASIX 头。"""
+    file_len = IAP_ASIX_HEADER_SIZE + len(body)
+    checksum32 = (~firmware_checksum32(body)) & 0xFFFFFFFF
+    header = bytearray(IAP_ASIX_HEADER_SIZE)
+    header[0:4] = IAP_ASIX_SIGNATURE
+    struct.pack_into("<H", header, 4, 3)  # ImageType
+    struct.pack_into("<H", header, 6, 0)  # Compress
+    struct.pack_into("<I", header, 8, 0)  # ContentOffset
+    struct.pack_into(">I", header, 12, file_len)
+    struct.pack_into("<I", header, 20, checksum32)
+    return bytes(header)
+
+
+def prepare_iap_firmware_image(data: bytes) -> tuple[bytes, str]:
+    """
+    准备 dex-con IAP 整包镜像（含 32B ASIX 头）。
+    IAP_Process START 会 memcpy(&data[2], 32) 并整包写入 Flash。
+    """
+    info = parse_asix_header(data)
+    if info is not None:
+        file_len = info["file_len"]
+        note = f"ASIX 整包 {len(data)} B（FileLen={file_len}，体 {info['body_size']} B）"
+        if len(data) != file_len:
+            note += f"，与声明长度 {file_len} B 不一致，按文件实际长度传输"
+        return data, note
+
+    if len(data) > IAP_MAX_BODY_SIZE:
+        raise ValueError(f"固件体 {len(data)} B 超过上限 {IAP_MAX_BODY_SIZE} B")
+    image = build_asix_header(data) + data
+    return image, f"已补 ASIX 头，整包 {len(image)} B（体 {len(data)} B）"
+
+
+def prepare_iap_firmware_body(data: bytes) -> tuple[bytes, str, Optional[int]]:
+    """V2 iap_upgrade.c 用：剥离 ASIX，仅传 App 体。"""
+    info = parse_asix_header(data)
+    if info is None:
+        return data, "", None
+    body = data[IAP_ASIX_HEADER_SIZE:]
+    note = (
+        f"检测到 ASIX staging 头，已跳过 {IAP_ASIX_HEADER_SIZE}B，"
+        f"实际传输体 {len(body)} B"
+    )
+    return body, note, info["checksum32"]
+
+
+def iap_v5_start_payload_size(remaining: int, *, prefer_largest: bool = True) -> int:
+    """dex-con START 载荷：至少 32B ASIX 头 + 可选后续体，帧长须为标准 DLC。"""
+    if remaining <= 0:
+        return 0
+    min_payload = min(IAP_V5_MIN_START_PAYLOAD, remaining)
+    candidates: list[int] = []
+    for dlc in CANFD_DLC_LENGTHS:
+        payload = dlc - 2
+        if payload < min_payload or payload > remaining:
+            continue
+        candidates.append(payload)
+    if not candidates:
+        return remaining
+    return max(candidates) if prefer_largest else min(candidates)
+
+
+def split_iap_v5_image_chunks(image: bytes, chunk_size: int = IAP_V5_CHUNK_SIZE) -> list[bytes]:
+    """将 ASIX 整包切为 START/DATA 用的固定长度块（末块可不足 chunk_size）。"""
+    if not image:
+        return []
+    chunks: list[bytes] = []
+    offset = 0
+    while offset < len(image):
+        chunks.append(image[offset : offset + chunk_size])
+        offset += chunk_size
+    return chunks
+
+
+def build_iap_v5_can_frame(cmd: CMD, payload: bytes, cnt: int) -> bytes:
+    """
+    构造 dex-con IAP CAN-FD 帧（对齐 CSV 回放）。
+    START/DATA：CNT+CMD+payload 不足 64B 时用 0xFF 补齐至 64B。
+    其余命令：仅 CNT+CMD（DLC=2）。
+    """
+    frame = bytes([cnt & 0xFF, int(cmd)]) + payload
+    if int(cmd) in (CMD.IAP_START, CMD.IAP_DATA):
+        if len(frame) > IAP_V5_FRAME_SIZE:
+            raise ValueError(f"IAP 帧过长: {len(frame)} > {IAP_V5_FRAME_SIZE}")
+        if len(frame) < IAP_V5_FRAME_SIZE:
+            frame += bytes([IAP_V5_PAD_BYTE]) * (IAP_V5_FRAME_SIZE - len(frame))
+        return frame
+    if len(frame) not in CANFD_DLC_LENGTHS:
+        raise ValueError(f"IAP 命令帧 DLC 非法: len={len(frame)}")
+    return frame
+
+
+def pack_iap_v5_start_payload(image: bytes, payload_size: Optional[int] = None) -> bytes:
+    """dex-con IAP_START：CNT/CMD 之后为 ASIX 头 + 首段固件（不剥离头）。"""
+    if not image:
+        raise ValueError("固件镜像为空")
+    if len(image) > IAP_MAX_FILE_SIZE:
+        raise ValueError(f"固件整包 {len(image)} B 超过上限 {IAP_MAX_FILE_SIZE} B")
+    size = payload_size if payload_size is not None else iap_v5_start_payload_size(len(image))
+    size = max(min(size, len(image)), min(IAP_V5_MIN_START_PAYLOAD, len(image)))
+    return image[:size]
+
+
+def pack_iap_start_payload(
+    body_size: int,
+    firmware: bytes,
+    *,
+    checksum32: Optional[int] = None,
+    first_chunk: Optional[int] = None,
+) -> bytes:
     """打包 IAP_START 载荷：[body_size BE][checksum32 BE][首包固件数据]。"""
     if body_size <= 0 or body_size > IAP_MAX_BODY_SIZE:
         raise ValueError(f"固件大小无效: {body_size}（最大 {IAP_MAX_BODY_SIZE}）")
-    computed = firmware_checksum32(firmware)
-    checksum32 = (~computed) & 0xFFFFFFFF
-    chunk_len = iap_start_first_chunk_size(body_size)
-    header = struct.pack(">II", body_size, checksum32)
+    if checksum32 is None:
+        computed = firmware_checksum32(firmware)
+        checksum32 = (~computed) & 0xFFFFFFFF
+    chunk_len = first_chunk if first_chunk is not None else iap_start_first_chunk_size(body_size)
+    header = struct.pack(">II", body_size, checksum32 & 0xFFFFFFFF)
     return header + firmware[:chunk_len]
 
 

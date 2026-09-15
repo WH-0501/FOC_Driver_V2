@@ -153,7 +153,9 @@ class MainWindow(QMainWindow):
         self._log_signal.emit(msg)
 
     def _append_log(self, msg: str) -> None:
-        self.log_text.append(f"[{QTime.currentTime().toString('HH:mm:ss')}] {msg}")
+        from protocol.time_util import format_log_timestamp
+
+        self.log_text.append(f"[{format_log_timestamp()}] {msg}")
 
     def _on_protocol_version_changed(self, version_text: str) -> None:
         try:

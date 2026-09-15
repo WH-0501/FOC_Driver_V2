@@ -10,6 +10,7 @@
  * - Median Filter
  * - State Variable Filter (SVF)
  * - PI-based Filter / Integrator with Anti-windup
+ * - PLL Observer (encoder angle / position tracking)
  * 
  * @version 0.1
  * @date 2026-05-15
@@ -22,7 +23,9 @@
 #define __FOC_FILTER_H__
 
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
+#include "common.h"
 #include "foc_math.h"
 
 #ifndef FOC_FLT_EPSILON
@@ -163,6 +166,26 @@ typedef struct {
     float int_min;    ///< 积分器下限 (抗积分饱和)
 } pi_filter_t;
 
+#if FOC_ENCODER_USE_PLL
+/**
+ * @brief 编码器 PLL（ODrive / DGM 离散鉴相器 + 二阶观测器）
+ *
+ * 在 counts 域运行：Kp=2·bandwidth，Ki=0.25·Kp²，snap 抑制零速抖动。
+ * innovation gate：|delta_pos| 超阈值时仅做速度预测，不施加 Kp/Ki 反馈。
+ */
+typedef struct
+{
+  float pos_counts;
+  float vel_counts;
+  float kp;
+  float ki;
+  float snap_threshold;
+  float innovation_gate_counts;
+  float last_delta_pos;
+  uint8_t innovation_rejected;
+} encoder_pll_t;
+#endif /* FOC_ENCODER_USE_PLL */
+
 /**
  * @brief 高通滤波器结构体
  * 
@@ -264,5 +287,19 @@ bool pi_filter_set_Ki(pi_filter_t *pi_filter, float Ki);
 bool pi_filter_set_out_max(pi_filter_t *pi_filter, float out_max);
 bool pi_filter_set_out_min(pi_filter_t *pi_filter, float out_min); 
 bool pi_filter_set_int_max(pi_filter_t *pi_filter, float int_max);
+
+#if FOC_ENCODER_USE_PLL
+/*========================================================
+ * Encoder PLL (ODrive / DGM)
+ *========================================================*/
+bool encoder_pll_init(encoder_pll_t *pll, float bandwidth_rad_s, float sample_period);
+void encoder_pll_reset(encoder_pll_t *pll, float count_in_cpr);
+float encoder_pll_effective_gate(const encoder_pll_t *pll, float sample_period);
+void encoder_pll_update(encoder_pll_t *pll,
+                        float count_in_cpr,
+                        float sample_period,
+                        float cpr,
+                        float cpr_half);
+#endif /* FOC_ENCODER_USE_PLL */
 
 #endif /* __FOC_FILTER_H__ */

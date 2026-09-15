@@ -197,7 +197,7 @@ typedef struct
  * encoder_observer_update 内部用 raw counts 解包 turn，发布时统一施加 direction：
  * - angle_rad      = normalize(raw_angle * direction)
  * - position_rad   = direction * (turn*2π + raw_angle - zero_rad)，zero 为传感器系
- * - velocity_rad_s = Δraw_angle * direction / dt
+ * - velocity_rad_s = Δangle/dt+LPF（默认）或 PLL 速度估计（FOC_ENCODER_USE_PLL=1）
  * - theta_elec_rad = normalize(shaft.angle_rad * pole_pairs - theta_elec_offset)
  *
  * counts / turn_count 仍为传感器系，仅供调试或重建。

@@ -46,6 +46,24 @@ APP_STATIC_INLINE float angle_normalize(float angle)
 }
 
 /**
+ * @brief 两角之差，归一化到 (-π, π]
+ */
+APP_STATIC_INLINE float angle_delta_pm_pi(float a, float b)
+{
+  float d = a - b;
+
+  if (d > _PI)
+  {
+    d -= _2PI;
+  }
+  else if (d <= -_PI)
+  {
+    d += _2PI;
+  }
+  return d;
+}
+
+/**
  * @brief Clarke 变换
  * 将三相电流转换为两相电流
  * @param xa A 相电流/电压

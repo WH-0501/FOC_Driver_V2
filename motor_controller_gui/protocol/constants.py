@@ -184,5 +184,31 @@ CMD_DATA_LEN = {
 # CAN FD 标准 DLC 对应的数据长度
 CANFD_DLC_LENGTHS = (0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64)
 
-# IAP staging 区最大固件体长度（与 iap_upgrade.h 一致）
-IAP_MAX_BODY_SIZE = 61 * 1024 - 32  # 62432
+# IAP staging 区（dex-con-firmware-v5 / iap.c 与 iap_upgrade.h）
+IAP_MAX_BODY_SIZE = 61 * 1024 - 32  # 62432，仅 App 体
+IAP_MAX_FILE_SIZE = 61 * 1024  # 含 32B ASIX 头的整包上限
+IAP_V5_SUCCESS = 0x80  # dex-con IAPError_t：ERROR_IAP_SUCCESS
+IAP_V5_MIN_START_PAYLOAD = 32  # IAP_Process START：data[2..] 至少 32B ASIX 头
+
+# IAP V5 帧格式（对齐 USB_CANFD CSV / gen_iap_efw.py）
+IAP_V5_CHUNK_SIZE = 62  # START/DATA 每帧固件字节数（64B 帧 = CNT+CMD+62）
+IAP_V5_FRAME_SIZE = 64
+IAP_V5_PAD_BYTE = 0xFF
+
+# IAP 时序（秒；对齐 dex-con iap.c + CAN-FD通信协议.md）
+# START 内同步擦除，完成后 FC(state=2,err=0x80)；注释「应答后才开始下一帧接收」
+IAP_START_ERASE_WAIT_S = 120.0  # 等待擦除 FC 上限
+IAP_START_MIN_RESPONSE_WAIT_S = 0.5  # 此前忽略擦除过程中的瞬时 FC
+IAP_START_ERASE_POLL_S = 2.0  # 保留常量，擦除等待期间不主动发 FC 查询
+IAP_START_DATA_DEADLINE_S = 2.5  # 收到 FC 后须尽快发 DATA（3s 超时从 START 起算且含擦除）
+IAP_START_FC_POLL_S = 0.02  # 等待擦除 FC 轮询间隔（须快，擦除耗掉大部分 3s 窗口）
+IAP_START_DATA_BURST_FRAMES = 32  # 收到 FC 后立即连发的 DATA 帧数
+IAP_FIRMWARE_TIMEOUT_MS = 3000  # dex-con iap.c IAP_TIMEOUT
+IAP_V5_RECOVERY_WAIT_S = 15.0  # 失败后等待再重试
+IAP_V5_IDLE_WAIT_S = 90.0  # 轮询等到 state=0 & error=0x80（0x8F 丢帧不算空闲）
+IAP_STATUS_QUERY_TIMEOUT_S = 0.5
+IAP_POST_VERIFY_QUERY_S = 5.0
+IAP_DATA_FRAME_INTERVAL_S = 0.001  # DATA 帧间隔
+IAP_START_MIN_FIRMWARE_CHUNK = 25  # 8 + 25 > 32（协议文档 IAP_START 载荷 >32）
+IAP_ASIX_SIGNATURE = b"ASIX"
+IAP_ASIX_HEADER_SIZE = 32  # 与 iap_upgrade.h / Bootloader 一致，VERIFY 时由设备写入

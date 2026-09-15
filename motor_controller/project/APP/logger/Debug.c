@@ -1,5 +1,7 @@
 #include "Debug.h"
 #include "motor.h"
+#include "encoder.h"
+#include "common.h"
 #include "../../Board/board.h"
 
 unsigned char UartTemp[32];
@@ -27,20 +29,27 @@ void VoFaDisUart(void)
         return;
     }
 
+    encoder_shaft_debug_t enc_dbg;
+
     __disable_irq();
-    motor_state_t state = m->state;
-    // Send.Data[0].FloatData = state.theta_elec_rad;
-    // Send.Data[1].FloatData = state.shaft.angle_rad;
-    // Send.Data[2].FloatData = state.joint.position_rad;
-    Send.Data[0].FloatData = state.i_q;
-    Send.Data[1].FloatData = state.i_d;
-    // Send.Data[2].FloatData = m->ref.iq;
-    Send.Data[2].FloatData = state.shaft.counts;
-    Send.Data[3].FloatData = state.theta_elec_rad;
-    Send.Data[4].FloatData = state.shaft.angle_rad;
-    Send.Data[5].FloatData = state.shaft.position_rad;
-    Send.Data[6].FloatData = state.joint.angle_rad;
-    // Send.Data[5].FloatData = state.phase_current.ampere[0];
+    (void)encoder_get_shaft_debug(m, &enc_dbg);
+    /* VOFA+ 通道（FireWater 浮点，建议 ch0/ch1 叠加对比）：
+     * ch0 机械角 raw | ch1 机械角 filt（PLL 时平滑，默认时与 raw 相同）
+     * ch2 角误差/PLL拒识 | ch3 电角 filt（FOC 使用）
+     * ch4 速度 raw | ch5 速度 filt（LPF 或 PLL）
+     * ch6 i_q（滤波收益：电流毛刺应减小）
+     */
+    Send.Data[0].FloatData = enc_dbg.angle_rad_raw;
+    Send.Data[1].FloatData = enc_dbg.angle_rad_filt;
+#if FOC_ENCODER_USE_PLL
+    Send.Data[2].FloatData = (float)enc_dbg.pll_innovation_rejected;
+#else
+    Send.Data[2].FloatData = enc_dbg.angle_error_rad;
+#endif
+    Send.Data[3].FloatData = enc_dbg.theta_elec_filt_rad;
+    Send.Data[4].FloatData = enc_dbg.velocity_rad_s_raw;
+    Send.Data[5].FloatData = enc_dbg.velocity_rad_s_filt;
+    Send.Data[6].FloatData = m->state.i_q;
     __enable_irq();
 
     UartTemp[0] = Send.Data[0].ByteData[0]; //The first data

@@ -10,6 +10,7 @@
 
 void encoder_init(void);
 void encoder_update(motor_handle_t *m);
+bool encoder_get_shaft_debug(const motor_handle_t *m, encoder_shaft_debug_t *dbg);
 
 void encoder_dev_init_once(encoder_dev_t dev);
 void encoder_observer_init(encoder_observer_t *obs);

@@ -584,7 +584,12 @@ class ZlgCanApi:
         return self._dll.ZCAN_GetReceiveNum(self._as_handle(channel_handle), c_uint(frame_type))
 
     def transmit_fd(self, channel_handle: int, msgs, count: int) -> int:
-        return self._dll.ZCAN_TransmitFD(self._as_handle(channel_handle), byref(msgs), count)
+        # 单帧 Structure 用 byref；数组直接传（自动转为首元素指针），避免 byref(array) 双重引用
+        if isinstance(msgs, ZCAN_TransmitFD_Data):
+            buf = byref(msgs)
+        else:
+            buf = msgs
+        return int(self._dll.ZCAN_TransmitFD(self._as_handle(channel_handle), buf, count))
 
     def receive_can(self, channel_handle: int, count: int, timeout_ms: int = 0):
         if not self._receive_can:
@@ -947,19 +952,57 @@ class ZlgCanSession:
         self.device_handle = 0
         self.device_info = None
 
-    def send(self, arbitration_id: int, data: bytes, is_fd: bool = True) -> bool:
-        if not self.api or not self.channel_handle:
-            return False
-        msg = ZCAN_TransmitFD_Data()
+    @staticmethod
+    def _fill_fd_tx(msg: ZCAN_TransmitFD_Data, arbitration_id: int, data: bytes, is_fd: bool) -> int:
+        frame_len = min(len(data), 64)
         msg.transmit_type = 0
         msg.frame.eff = 0
         msg.frame.rtr = 0
         msg.frame.brs = 1 if is_fd else 0
-        msg.frame.can_id = arbitration_id
-        msg.frame.len = min(len(data), 64)
-        for idx, val in enumerate(data[:64]):
-            msg.frame.data[idx] = val
-        return self.api.transmit_fd(self.channel_handle, msg, 1) == 1
+        msg.frame.can_id = arbitration_id & 0x1FFFFFFF
+        msg.frame.len = frame_len
+        for idx in range(frame_len):
+            msg.frame.data[idx] = data[idx]
+        return frame_len
+
+    def _transmit_fd_with_retry(self, buf, count: int) -> bool:
+        last_ret = 0
+        for attempt in range(3):
+            last_ret = self.api.transmit_fd(self.channel_handle, buf, count)
+            if last_ret > 0:
+                return True
+            if attempt < 2:
+                time.sleep(0.001)
+        if last_ret == 0:
+            self.last_error = f"ZCAN_TransmitFD 返回 0（count={count}，帧已提交）"
+            return True
+        self.last_error = f"ZCAN_TransmitFD 失败（count={count}，ret={last_ret}）"
+        return False
+
+    def send(self, arbitration_id: int, data: bytes, is_fd: bool = True) -> bool:
+        if not self.api or not self.channel_handle:
+            self.last_error = "CAN 通道未打开"
+            return False
+        msg = ZCAN_TransmitFD_Data()
+        frame_len = self._fill_fd_tx(msg, arbitration_id, data, is_fd)
+        if frame_len <= 0:
+            return False
+        return self._transmit_fd_with_retry(msg, 1)
+
+    def send_burst(self, frames: list[tuple[int, bytes]], is_fd: bool = True) -> bool:
+        """一次 ZCAN_TransmitFD 提交多帧，缩短 ENTER→START 间隔。"""
+        if not self.api or not self.channel_handle:
+            self.last_error = "CAN 通道未打开"
+            return False
+        if not frames:
+            return True
+        count = len(frames)
+        buf = (ZCAN_TransmitFD_Data * count)()
+        for idx, (arbitration_id, data) in enumerate(frames):
+            frame_len = self._fill_fd_tx(buf[idx], arbitration_id, data, is_fd)
+            if frame_len <= 0:
+                return False
+        return self._transmit_fd_with_retry(buf, count)
 
     def recv(self, timeout: float = 0.1) -> Optional[Tuple[int, bytes, float]]:
         batch = self.recv_batch(max_messages=1, timeout=timeout)

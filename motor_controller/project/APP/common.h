@@ -86,6 +86,31 @@
 #ifndef FOC_CURRENT_MEAS_PERIOD
 #define FOC_CURRENT_MEAS_PERIOD (float)(1.0f / (float)FOC_CURRENT_LOOP_FS_HZ)
 #endif
+
+/** 1=ODrive/DGM PLL；0=原始方式（raw 角 + Δangle/dt + 速度 LPF，默认） */
+#ifndef FOC_ENCODER_USE_PLL
+#define FOC_ENCODER_USE_PLL (0)
+#endif
+
+#if FOC_ENCODER_USE_PLL
+/** 编码器 PLL 带宽 [Hz]（ODrive/DGM：bandwidth_rad_s = 2π·Hz，Kp=2·bandwidth） */
+#ifndef FOC_ENCODER_PLL_BW_HZ
+#define FOC_ENCODER_PLL_BW_HZ (100.0f)
+#endif
+/** PLL innovation gate 上限 [counts]；0=关闭 gate */
+#ifndef FOC_ENCODER_PLL_INNOVATION_GATE_MAX_COUNTS
+#define FOC_ENCODER_PLL_INNOVATION_GATE_MAX_COUNTS (256.0f)
+#endif
+/** 静止/低速最小 gate [counts]，避免把正常步进当野值 */
+#ifndef FOC_ENCODER_PLL_INNOVATION_GATE_MIN_COUNTS
+#define FOC_ENCODER_PLL_INNOVATION_GATE_MIN_COUNTS (24.0f)
+#endif
+/** 有效 gate = vel·dt·factor + min，再截断到 max */
+#ifndef FOC_ENCODER_PLL_INNOVATION_GATE_VEL_FACTOR
+#define FOC_ENCODER_PLL_INNOVATION_GATE_VEL_FACTOR (4.0f)
+#endif
+#endif /* FOC_ENCODER_USE_PLL */
+
 /* 开环周期 */
 #define OPEN_LOOP_TS         FOC_CURRENT_MEAS_PERIOD
 
