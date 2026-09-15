@@ -38,3 +38,6 @@ JLinkLog.txt
 **/*.bin
 **/*.axf
 **/*.efw
+
+**/__pycache__
+*.pyc

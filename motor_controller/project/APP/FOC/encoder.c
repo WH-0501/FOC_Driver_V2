@@ -21,6 +21,12 @@ static encoder_unit_t s_encoders[ENCODER_ROLE_COUNT] = {
   },
 };
 
+/**
+ * @brief 确认是否启用关节编码器(低速轴编码器)
+ * 
+ * @return true: 启用
+ * @return false: 未启用
+ */
 static bool encoder_joint_enabled(void)
 {
   return s_encoders[ENCODER_ROLE_JOINT].bind.dev != ENCODER_DEV_NONE;
@@ -49,16 +55,17 @@ static void encoder_publish_state(motor_handle_t *m)
   if (shaft_ok)
   {
     m->state.shaft = shaft->observer.sample;
+    /* shaft.angle_rad 已在控制系；乘 pole_pairs 得电角，不再重复乘 direction */
     m->state.theta_elec_rad = angle_normalize(
         (shaft->observer.sample.angle_rad * pole_pairs) -
         m->config.param.theta_elec_offset_rad);
   }
 
-  if (joint_ok)
+  if (joint_ok) // 启用关节编码器.则使用关节编码器观测值
   {
     m->state.joint = joint->observer.sample;
   }
-  else if (shaft_ok)
+  else if (shaft_ok) // 未启用关节编码器.则使用电机轴编码器观测值推算关节观测值
   {
     float joint_pos = shaft->observer.sample.position_rad / gear_ratio;
     int32_t joint_turns = (int32_t)floorf(joint_pos / _2PI);
@@ -110,6 +117,9 @@ void encoder_update(motor_handle_t *m)
 
   for (i = 0u; i < ENCODER_ROLE_COUNT; i++)
   {
+    /**
+     * 双编码器更新. 若为空(如未使用输出轴编码器), 则不更新 
+     */
     (void)encoder_observer_update(&s_encoders[i].observer,
                                   &s_encoders[i].bind,
                                   (encoder_role_t)i,
@@ -132,11 +142,19 @@ static uint32_t time_us_delta(uint32_t prev, uint32_t now)
 
 static int encoder_hw_read(const encoder_bind_t *bind, uint16_t *raw)
 {
+  // kth71_cs_select_t cs;
+
   if ((bind == NULL) || (raw == NULL) || (bind->dev != ENCODER_DEV_KTH71))
   {
     return -1;
   }
 
+  // if (bind->kth71_cs >= KTH71_CS_COUNT)
+  // {
+  //   return -1;
+  // }
+
+  // cs = (kth71_cs_select_t)bind->kth71_cs;
   if (KTH71_ReadAngle(raw) == 0u)
   {
     return -1;
@@ -145,6 +163,12 @@ static int encoder_hw_read(const encoder_bind_t *bind, uint16_t *raw)
   return 0;
 }
 
+/**
+ * @brief 初始化编码器设备
+ * 
+ * @param dev: 编码器设备
+ * @return void
+ */
 void encoder_dev_init_once(encoder_dev_t dev)
 {
   static uint8_t s_kth71_inited = 0u;
@@ -156,6 +180,12 @@ void encoder_dev_init_once(encoder_dev_t dev)
   }
 }
 
+/**
+ * @brief 初始化编码器观测器
+ * 
+ * @param obs: 编码器观测器
+ * @return void
+ */
 void encoder_observer_init(encoder_observer_t *obs)
 {
   if (obs == NULL)
@@ -228,6 +258,18 @@ bool encoder_get_shaft_debug(const motor_handle_t *m, encoder_shaft_debug_t *dbg
   return true;
 }
 
+/**
+ * @brief 解析编码器零位角. 
+ * 
+ *  当 bind.zero_rad 不为 0 时，使用 bind.zero_rad；
+ *  当 role 为 ENCODER_ROLE_SHAFT 时，使用 default_zero_rad；
+ *  否则返回 0.0f
+ * 
+ * @param bind: 编码器绑定
+ * @param role: 编码器角色
+ * @param default_zero_rad: 默认零位角
+ * @return float: 零位角
+ */
 static float encoder_resolve_zero_rad(const encoder_bind_t *bind,
                                       encoder_role_t role,
                                       float default_zero_rad)
@@ -257,7 +299,7 @@ static float encoder_resolve_dir(const encoder_bind_t *bind, int8_t default_dir)
 
 static uint16_t encoder_raw_to_counts(uint16_t raw_u16)
 {
-  return (uint16_t)((raw_u16 >> 3) & ENCODER_COUNTS_PER_REV_MASK);
+  return (uint16_t)((raw_u16 >> 3) & ENCODER_COUNTS_PER_REV_MASK); // 去除噪声. 保留有效位
 }
 
 #if !FOC_ENCODER_USE_PLL
@@ -289,7 +331,7 @@ static bool encoder_observer_update_legacy(encoder_observer_t *obs,
     return false;
   }
 
-  counts = encoder_raw_to_counts(raw_u16);
+  counts = encoder_raw_to_counts(raw_u16); // 13bit 有效分辨率
   angle = (float)counts * RAW_ANGLE_U16_TO_RAD;
   dir = encoder_resolve_dir(bind, default_dir);
   zero_rad = encoder_resolve_zero_rad(bind, role, default_zero_rad);
@@ -302,6 +344,7 @@ static bool encoder_observer_update_legacy(encoder_observer_t *obs,
 
   sensor_rad = (float)obs->sample.turn_count * _2PI + angle;
   obs->sample.counts = (uint32_t)counts;
+  /* 观测量统一为控制坐标系：direction 在此一次性施加，turn 解包仍用 raw angle */
   obs->sample.angle_rad = angle_normalize(angle * dir);
   obs->sample.position_rad = dir * (sensor_rad - zero_rad);
 

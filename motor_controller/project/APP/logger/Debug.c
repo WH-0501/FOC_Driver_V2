@@ -39,17 +39,27 @@ void VoFaDisUart(void)
      * ch4 速度 raw | ch5 速度 filt（LPF 或 PLL）
      * ch6 i_q（滤波收益：电流毛刺应减小）
      */
-    Send.Data[0].FloatData = enc_dbg.angle_rad_raw;
-    Send.Data[1].FloatData = enc_dbg.angle_rad_filt;
-#if FOC_ENCODER_USE_PLL
-    Send.Data[2].FloatData = (float)enc_dbg.pll_innovation_rejected;
-#else
+//     Send.Data[0].FloatData = enc_dbg.angle_rad_raw;
+//     Send.Data[1].FloatData = enc_dbg.angle_rad_filt;
+// #if FOC_ENCODER_USE_PLL
+//     Send.Data[2].FloatData = (float)enc_dbg.pll_innovation_rejected;
+// #else
+//     Send.Data[2].FloatData = enc_dbg.angle_error_rad;
+// #endif
+//     Send.Data[3].FloatData = enc_dbg.theta_elec_filt_rad;
+//     Send.Data[4].FloatData = enc_dbg.velocity_rad_s_raw;
+//     Send.Data[5].FloatData = enc_dbg.velocity_rad_s_filt;
+//     Send.Data[6].FloatData = m->state.i_q;
+
+    Send.Data[0].FloatData = m->state.shaft.counts;
+    Send.Data[1].FloatData = enc_dbg.theta_elec_filt_rad;
     Send.Data[2].FloatData = enc_dbg.angle_error_rad;
-#endif
-    Send.Data[3].FloatData = enc_dbg.theta_elec_filt_rad;
-    Send.Data[4].FloatData = enc_dbg.velocity_rad_s_raw;
-    Send.Data[5].FloatData = enc_dbg.velocity_rad_s_filt;
-    Send.Data[6].FloatData = m->state.i_q;
+    Send.Data[3].FloatData = enc_dbg.position_rad_raw;
+    Send.Data[4].FloatData = enc_dbg.position_rad_filt;
+    Send.Data[5].FloatData = enc_dbg.velocity_rad_s_raw;
+    Send.Data[6].FloatData = enc_dbg.velocity_rad_s_filt;
+    Send.Data[7].FloatData = m->state.i_q;
+
     __enable_irq();
 
     UartTemp[0] = Send.Data[0].ByteData[0]; //The first data
