@@ -142,19 +142,11 @@ static uint32_t time_us_delta(uint32_t prev, uint32_t now)
 
 static int encoder_hw_read(const encoder_bind_t *bind, uint16_t *raw)
 {
-  // kth71_cs_select_t cs;
-
   if ((bind == NULL) || (raw == NULL) || (bind->dev != ENCODER_DEV_KTH71))
   {
     return -1;
   }
 
-  // if (bind->kth71_cs >= KTH71_CS_COUNT)
-  // {
-  //   return -1;
-  // }
-
-  // cs = (kth71_cs_select_t)bind->kth71_cs;
   if (KTH71_ReadAngle(raw) == 0u)
   {
     return -1;

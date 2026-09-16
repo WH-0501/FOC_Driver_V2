@@ -8,10 +8,40 @@
 #include "motor.h"
 #include "control_mode.h"
 #include "error_types.h"
+#include "encoder/kth71xx.h"
+#include "dwt_profile_delay.h"
 
-#ifndef MC_DEFAULT_ENABLE_MODE
-#define MC_DEFAULT_ENABLE_MODE CTRL_MODE_SPEED_OPEN_LOOP
+#ifndef MC_KTH71_CAL_STATUS_POLL_MS
+#define MC_KTH71_CAL_STATUS_POLL_MS (500u)
 #endif
+
+typedef enum
+{
+  MC_KTH71_CAL_PHASE_IDLE = 0,
+  MC_KTH71_CAL_PHASE_SPINUP,
+  MC_KTH71_CAL_PHASE_ANLC,
+} mc_kth71_cal_phase_t;
+
+static struct
+{
+  mc_kth71_cal_phase_t phase;
+  uint8_t anlc_status;
+  uint8_t anlc_status_valid;
+  uint32_t last_anlc_poll_us;
+} s_kth71_cal = {
+  .phase = MC_KTH71_CAL_PHASE_IDLE,
+  .anlc_status = KTH71_ANLC_STATUS_IDLE,
+  .anlc_status_valid = 1u,
+  .last_anlc_poll_us = 0u,
+};
+
+static void mc_kth71_cal_reset(void)
+{
+  s_kth71_cal.phase = MC_KTH71_CAL_PHASE_IDLE;
+  s_kth71_cal.anlc_status = KTH71_ANLC_STATUS_IDLE;
+  s_kth71_cal.anlc_status_valid = 1u;
+  s_kth71_cal.last_anlc_poll_us = 0u;
+}
 
 static mc_error_t mc_platform_init(void)
 {
@@ -67,6 +97,7 @@ void mc_poll(void)
   motor_handle_t *m = motor_get_handler();
 
   foc_sense_poll_vbus(m);
+  mc_kth71_cal_service();
   motor_fault_protect(m);
 }
 
@@ -106,11 +137,6 @@ mc_error_t mc_enable(void)
   if (!m->current_offset_cal_done)
   {
     return MC_ERR_OFFSET_CAL;
-  }
-
-  if (m->ctrl_mode == CTRL_MODE_IDLE)
-  {
-    m->ctrl_mode = MC_DEFAULT_ENABLE_MODE;
   }
 
   if (!control_mode_needs_pwm(m->ctrl_mode))
@@ -230,6 +256,15 @@ mc_calibration_type_t mc_get_calibration_type(void)
 mc_error_t mc_disable(void)
 {
   motor_handle_t *m = motor_get_handler();
+
+  if (s_kth71_cal.phase != MC_KTH71_CAL_PHASE_IDLE)
+  {
+    if (s_kth71_cal.phase == MC_KTH71_CAL_PHASE_ANLC)
+    {
+      (void)KTH71_StopCalibration();
+    }
+    mc_kth71_cal_reset();
+  }
 
   if (foc_fsm_is_calibrating(m->fsm))
   {
@@ -363,5 +398,138 @@ int mc_align_electrical(void)
   }
 
   foc_align_electrical(m);
+  return MC_OK;
+}
+
+bool mc_kth71_cal_active(void)
+{
+  return s_kth71_cal.phase != MC_KTH71_CAL_PHASE_IDLE;
+}
+
+static void mc_kth71_cal_on_status_update(uint8_t status)
+{
+  s_kth71_cal.anlc_status = status;
+  s_kth71_cal.anlc_status_valid = 1u;
+
+  if ((status == KTH71_ANLC_STATUS_DONE) || (status == KTH71_ANLC_STATUS_FAILED))
+  {
+    (void)KTH71_StopCalibration();
+  }
+}
+
+static bool mc_kth71_cal_refresh_status(uint32_t now_us, uint32_t min_interval_us)
+{
+  uint8_t status;
+  uint32_t elapsed_us;
+
+  if (s_kth71_cal.phase != MC_KTH71_CAL_PHASE_ANLC)
+  {
+    s_kth71_cal.anlc_status = 0x66;
+    return false;
+  }
+
+  if (s_kth71_cal.last_anlc_poll_us != 0u)
+  {
+    elapsed_us = now_us - s_kth71_cal.last_anlc_poll_us;
+    if (elapsed_us < min_interval_us)
+    {
+      return false;
+    }
+  }
+
+  s_kth71_cal.last_anlc_poll_us = now_us;
+
+  if (KTH71_GetCalibrationStatus(&status) != 0)
+  {
+    s_kth71_cal.anlc_status = 0x77;
+    return false;
+  }
+
+  mc_kth71_cal_on_status_update(status);
+  return true;
+}
+
+void mc_kth71_cal_service(void)
+{
+  (void)mc_kth71_cal_refresh_status(
+      dwt_get_ticks_us(),
+      MC_KTH71_CAL_STATUS_POLL_MS * 1000u);
+}
+
+int mc_kth71_cal_start(void)
+{
+  motor_handle_t *m = motor_get_handler();
+
+  if (m == NULL)
+  {
+    return MC_ERR_STATE;
+  }
+
+  if (s_kth71_cal.phase != MC_KTH71_CAL_PHASE_IDLE)
+  {
+    return MC_ERR_CALIBRATING;
+  }
+
+  if (motor_fault_is_latched(m) || (m->fsm == STATE_FAULT))
+  {
+    return MC_ERR_FAULT;
+  }
+
+  s_kth71_cal.anlc_status = KTH71_ANLC_STATUS_IDLE;
+  s_kth71_cal.anlc_status_valid = 1u;
+  s_kth71_cal.last_anlc_poll_us = 0u;
+  s_kth71_cal.phase = MC_KTH71_CAL_PHASE_SPINUP;
+  return MC_OK;
+}
+
+int mc_kth71_cal_trigger(void)
+{
+  if (s_kth71_cal.phase != MC_KTH71_CAL_PHASE_SPINUP)
+  {
+    return MC_ERR_STATE;
+  }
+
+  if (KTH71_StartCalibration() != 0)
+  {
+    return MC_ERR_STATE;
+  }
+
+  s_kth71_cal.phase = MC_KTH71_CAL_PHASE_ANLC;
+  s_kth71_cal.anlc_status = KTH71_ANLC_STATUS_RUNNING;
+  s_kth71_cal.anlc_status_valid = 1u;
+  s_kth71_cal.last_anlc_poll_us = 0u;
+
+  if (KTH71_GetCalibrationStatus(&s_kth71_cal.anlc_status) == 0)
+  {
+    s_kth71_cal.anlc_status_valid = 1u;
+  }
+
+  return MC_OK;
+}
+
+int mc_kth71_cal_stop(void)
+{
+  int8_t chip_ret = 0;
+
+  if (s_kth71_cal.phase != MC_KTH71_CAL_PHASE_IDLE)
+  {
+    if (s_kth71_cal.phase == MC_KTH71_CAL_PHASE_ANLC)
+    {
+      chip_ret = KTH71_StopCalibration();
+    }
+    mc_kth71_cal_reset();
+  }
+
+  return (chip_ret == 0) ? MC_OK : MC_ERR_STATE;
+}
+
+int mc_kth71_cal_get_status(uint8_t *status)
+{
+  if (status == NULL)
+  {
+    return MC_ERR_STATE;
+  }
+
+  *status = s_kth71_cal.anlc_status;
   return MC_OK;
 }

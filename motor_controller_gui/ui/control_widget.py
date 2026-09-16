@@ -1,10 +1,12 @@
 """单电机运动控制面板。"""
 
+from typing import Optional
+
 from PyQt5.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
+    QGridLayout,
     QGroupBox,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QSpinBox,
@@ -30,13 +32,13 @@ class MotorControlWidget(QGroupBox):
         super().__init__("运动控制", parent)
         self.motor_id = motor_id
         self.client = client
+        self._reported_mode: Optional[int] = None
         self._build_ui()
         self.apply_protocol_version(self.client.protocol_version)
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout()
 
-        row1 = QHBoxLayout()
         self.enable_btn = QPushButton("广播使能")
         self.disable_btn = QPushButton("广播失能")
         self.fault_reset_btn = QPushButton("异常复位")
@@ -45,57 +47,67 @@ class MotorControlWidget(QGroupBox):
         self.origin_btn = QPushButton("广播设原点")
         self.align_btn = QPushButton("广播电角度对齐")
         self.sync_btn = QPushButton("同步信号")
-        row1.addWidget(self.enable_btn)
-        row1.addWidget(self.disable_btn)
-        row1.addWidget(self.fault_reset_btn)
-        row1.addWidget(QLabel("模式:"))
-        row1.addWidget(self.mode_combo)
-        row1.addWidget(self.set_mode_btn)
-        row1.addWidget(self.origin_btn)
-        row1.addWidget(self.align_btn)
-        row1.addWidget(self.sync_btn)
-        layout.addLayout(row1)
 
-        row2 = QHBoxLayout()
         self.pos_label = QLabel("目标位置:")
         self.target_pos = QDoubleSpinBox()
         self.target_pos.setRange(-256.0, 256.0)
         self.target_pos.setDecimals(4)
         self.target_pos.setSingleStep(0.01)
         self.send_pos_btn = QPushButton("发送位置")
-        row2.addWidget(self.pos_label)
-        row2.addWidget(self.target_pos)
-        row2.addWidget(self.send_pos_btn)
 
         self.vel_label = QLabel("目标速度(RPM):")
         self.target_vel = QSpinBox()
         self.target_vel.setRange(-32768, 32767)
         self.send_vel_btn = QPushButton("发送速度")
-        row2.addWidget(self.vel_label)
-        row2.addWidget(self.target_vel)
-        row2.addWidget(self.send_vel_btn)
 
         self.curr_label = QLabel("目标电流(mA):")
         self.target_curr = QSpinBox()
         self.target_curr.setRange(-32768, 32767)
         self.send_curr_btn = QPushButton("发送电流")
-        row2.addWidget(self.curr_label)
-        row2.addWidget(self.target_curr)
-        row2.addWidget(self.send_curr_btn)
-        layout.addLayout(row2)
 
-        row3 = QHBoxLayout()
         self.kth71_cal_start_btn = QPushButton("KTH71 开始校准")
+        self.kth71_cal_trigger_btn = QPushButton("KTH71 触发 ANLC")
         self.kth71_cal_stop_btn = QPushButton("KTH71 停止校准")
         self.kth71_cal_status_btn = QPushButton("KTH71 查询状态")
         self.kth71_cal_hint = QLabel(
-            "手动校准：点击开始后，以 100~1000 RPM 匀速转动至少一圈，再查询状态。"
+            "先设模式（速度开环或电流/速度闭环）、发送目标并使能；再：开始校准 → 触发 ANLC → 查询状态 → 停止。"
         )
         self.kth71_cal_hint.setWordWrap(True)
-        row3.addWidget(self.kth71_cal_start_btn)
-        row3.addWidget(self.kth71_cal_stop_btn)
-        row3.addWidget(self.kth71_cal_status_btn)
-        layout.addLayout(row3)
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(6)
+        grid.setVerticalSpacing(4)
+
+        grid.addWidget(self.enable_btn, 0, 0)
+        grid.addWidget(self.disable_btn, 0, 1)
+        grid.addWidget(self.fault_reset_btn, 0, 2)
+
+        grid.addWidget(QLabel("模式:"), 1, 0)
+        grid.addWidget(self.mode_combo, 1, 1, 1, 2)
+        grid.addWidget(self.set_mode_btn, 2, 0, 1, 3)
+
+        grid.addWidget(self.origin_btn, 3, 0)
+        grid.addWidget(self.align_btn, 3, 1)
+        grid.addWidget(self.sync_btn, 3, 2)
+
+        grid.addWidget(self.pos_label, 4, 0)
+        grid.addWidget(self.target_pos, 4, 1)
+        grid.addWidget(self.send_pos_btn, 4, 2)
+
+        grid.addWidget(self.vel_label, 5, 0)
+        grid.addWidget(self.target_vel, 5, 1)
+        grid.addWidget(self.send_vel_btn, 5, 2)
+
+        grid.addWidget(self.curr_label, 6, 0)
+        grid.addWidget(self.target_curr, 6, 1)
+        grid.addWidget(self.send_curr_btn, 6, 2)
+
+        grid.addWidget(self.kth71_cal_start_btn, 7, 0)
+        grid.addWidget(self.kth71_cal_trigger_btn, 7, 1)
+        grid.addWidget(self.kth71_cal_stop_btn, 7, 2)
+        grid.addWidget(self.kth71_cal_status_btn, 8, 0, 1, 3)
+
+        layout.addLayout(grid)
         layout.addWidget(self.kth71_cal_hint)
 
         self.mode_hint = QLabel("")
@@ -111,8 +123,9 @@ class MotorControlWidget(QGroupBox):
         self.origin_btn.clicked.connect(self.client.broadcast_set_origin)
         self.align_btn.clicked.connect(self.client.broadcast_align_angle)
         self.sync_btn.clicked.connect(self.client.broadcast_sync)
-        self.kth71_cal_start_btn.clicked.connect(
-            lambda: self.client.kth71_cal_start(self.motor_id)
+        self.kth71_cal_start_btn.clicked.connect(self._start_kth71_cal)
+        self.kth71_cal_trigger_btn.clicked.connect(
+            lambda: self.client.kth71_cal_trigger(self.motor_id)
         )
         self.kth71_cal_stop_btn.clicked.connect(
             lambda: self.client.kth71_cal_stop(self.motor_id)
@@ -125,7 +138,27 @@ class MotorControlWidget(QGroupBox):
         self.send_curr_btn.clicked.connect(self._send_current)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
 
+    def apply_reported_mode(self, wire: int) -> None:
+        """设备模式变化时同步下拉框；用户本地改选但未下发时不覆盖。"""
+        if self._reported_mode is not None and wire == self._reported_mode:
+            return
+
+        idx = self.mode_combo.findData(wire)
+        if idx < 0:
+            self._reported_mode = wire
+            return
+
+        self._reported_mode = wire
+        if self.mode_combo.currentIndex() == idx:
+            return
+
+        self.mode_combo.blockSignals(True)
+        self.mode_combo.setCurrentIndex(idx)
+        self.mode_combo.blockSignals(False)
+        self._on_mode_changed()
+
     def apply_protocol_version(self, version: ProtocolVersion, preserve_wire: bool = True) -> None:
+        self._reported_mode = None
         prev_wire = self.mode_combo.currentData() if preserve_wire else None
         self.mode_combo.blockSignals(True)
         self.mode_combo.clear()
@@ -190,6 +223,9 @@ class MotorControlWidget(QGroupBox):
         cb = getattr(self, "_target_callback", None)
         if cb:
             cb(pos=pos, vel=vel, curr=curr)
+
+    def _start_kth71_cal(self) -> None:
+        self.client.kth71_cal_start(self.motor_id)
 
     def _send_mode(self) -> None:
         wire = self._current_mode_wire()

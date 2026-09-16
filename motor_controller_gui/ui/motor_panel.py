@@ -49,6 +49,9 @@ class MotorPanel(QWidget):
 
     def update_status(self, data: Dict) -> None:
         self.status_widget.update_status(data)
+        mode = data.get("mode")
+        if mode is not None:
+            self.control_widget.apply_reported_mode(int(mode))
 
     def apply_pid(self, kind: str, values: Dict) -> None:
         self.param_widget.apply_pid(kind, values)

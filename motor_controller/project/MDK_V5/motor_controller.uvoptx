@@ -152,34 +152,82 @@
         <Bp>
           <Number>0</Number>
           <Type>0</Type>
-          <LineNumber>260</LineNumber>
+          <LineNumber>445</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134230066</Address>
+          <Address>134248062</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
           <BreakIfRCount>1</BreakIfRCount>
-          <Filename>..\APP\comm\protocol\custom\can_fd_custom.c</Filename>
+          <Filename>..\APP\mc_interface.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\motor_controller\../APP/comm/protocol/custom/can_fd_custom.c\260</Expression>
+          <Expression>\\motor_controller\../APP/mc_interface.c\445</Expression>
         </Bp>
         <Bp>
           <Number>1</Number>
           <Type>0</Type>
-          <LineNumber>155</LineNumber>
+          <LineNumber>438</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134240758</Address>
+          <Address>134248040</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
           <BreakIfRCount>1</BreakIfRCount>
+          <Filename>..\APP\mc_interface.c</Filename>
+          <ExecCommand></ExecCommand>
+          <Expression>\\motor_controller\../APP/mc_interface.c\438</Expression>
+        </Bp>
+        <Bp>
+          <Number>2</Number>
+          <Type>0</Type>
+          <LineNumber>155</LineNumber>
+          <EnabledFlag>1</EnabledFlag>
+          <Address>0</Address>
+          <ByteObject>0</ByteObject>
+          <HtxType>0</HtxType>
+          <ManyObjects>0</ManyObjects>
+          <SizeOfObject>0</SizeOfObject>
+          <BreakByAccess>0</BreakByAccess>
+          <BreakIfRCount>0</BreakIfRCount>
           <Filename>..\APP\FOC\foc.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\motor_controller\../APP/FOC/foc.c\155</Expression>
+          <Expression></Expression>
+        </Bp>
+        <Bp>
+          <Number>3</Number>
+          <Type>0</Type>
+          <LineNumber>444</LineNumber>
+          <EnabledFlag>1</EnabledFlag>
+          <Address>0</Address>
+          <ByteObject>0</ByteObject>
+          <HtxType>0</HtxType>
+          <ManyObjects>0</ManyObjects>
+          <SizeOfObject>0</SizeOfObject>
+          <BreakByAccess>0</BreakByAccess>
+          <BreakIfRCount>0</BreakIfRCount>
+          <Filename>..\APP\mc_interface.c</Filename>
+          <ExecCommand></ExecCommand>
+          <Expression></Expression>
+        </Bp>
+        <Bp>
+          <Number>4</Number>
+          <Type>0</Type>
+          <LineNumber>460</LineNumber>
+          <EnabledFlag>1</EnabledFlag>
+          <Address>0</Address>
+          <ByteObject>0</ByteObject>
+          <HtxType>0</HtxType>
+          <ManyObjects>0</ManyObjects>
+          <SizeOfObject>0</SizeOfObject>
+          <BreakByAccess>0</BreakByAccess>
+          <BreakIfRCount>0</BreakIfRCount>
+          <Filename>..\APP\mc_interface.c</Filename>
+          <ExecCommand></ExecCommand>
+          <Expression></Expression>
         </Bp>
       </Breakpoint>
       <WatchWindow1>
@@ -192,6 +240,21 @@
           <count>1</count>
           <WinNumber>1</WinNumber>
           <ItemText>wire_mode</ItemText>
+        </Ww>
+        <Ww>
+          <count>2</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>s_kth71_cal.last_anlc_poll_ms</ItemText>
+        </Ww>
+        <Ww>
+          <count>3</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>now_ms</ItemText>
+        </Ww>
+        <Ww>
+          <count>4</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>min_interval_ms</ItemText>
         </Ww>
       </WatchWindow1>
       <Tracepoint>

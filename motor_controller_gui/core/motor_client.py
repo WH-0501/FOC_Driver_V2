@@ -263,6 +263,9 @@ class MotorClient:
     def kth71_cal_start(self, motor_id: int) -> bool:
         return self._send(motor_id, CMD.KTH71_CAL_START)
 
+    def kth71_cal_trigger(self, motor_id: int) -> bool:
+        return self._send(motor_id, CMD.KTH71_CAL_TRIGGER)
+
     def kth71_cal_stop(self, motor_id: int) -> bool:
         return self._send(motor_id, CMD.KTH71_CAL_STOP)
 

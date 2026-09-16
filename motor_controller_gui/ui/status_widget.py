@@ -25,14 +25,14 @@ class MotorStatusWidget(QGroupBox):
 
         layout.addWidget(self.enable_label, 0, 0)
         layout.addWidget(self.mode_label, 0, 1)
-        layout.addWidget(self.error_label, 0, 2)
-        layout.addWidget(self.pos_label, 1, 0)
-        layout.addWidget(self.vel_label, 1, 1)
-        layout.addWidget(self.iq_label, 1, 2)
-        layout.addWidget(self.id_label, 2, 0)
-        layout.addWidget(self.ia_label, 2, 1)
-        layout.addWidget(self.ib_label, 2, 2)
-        layout.addWidget(self.ic_label, 3, 0)
+        layout.addWidget(self.error_label, 1, 0, 1, 2)
+        layout.addWidget(self.pos_label, 2, 0, 1, 2)
+        layout.addWidget(self.vel_label, 3, 0)
+        layout.addWidget(self.iq_label, 3, 1)
+        layout.addWidget(self.id_label, 4, 0)
+        layout.addWidget(self.ia_label, 4, 1)
+        layout.addWidget(self.ib_label, 5, 0)
+        layout.addWidget(self.ic_label, 5, 1)
         self.setLayout(layout)
 
     def _format_current(self, data: Dict[str, Any], key: str) -> str:
@@ -50,7 +50,12 @@ class MotorStatusWidget(QGroupBox):
         enable = "是" if self._enabled else "否"
         self.enable_label.setText(f"使能: {enable}")
         self.mode_label.setText(f"模式: {data.get('mode_name', '--')}")
+        error_code = data.get("error_code", 0)
         self.error_label.setText(f"错误: {data.get('error_name', '--')}")
+        if error_code:
+            self.error_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        else:
+            self.error_label.setStyleSheet("")
         self.pos_label.setText(
             f"位置: {data.get('position_deg', 0):.2f}° ({data.get('position_raw', 0)})"
         )

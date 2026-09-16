@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 
 from core.waveform_curves import WAVEFORM_CURVES
 
-SELECTOR_MIN_WIDTH = 210
+SELECTOR_MIN_WIDTH = 180
 
 PANEL_STYLE = """
 QFrame#curveSelector {
@@ -43,11 +43,11 @@ def _checkbox_style(rgb: tuple, checked: bool) -> str:
         color = _rgb_css(rgb)
     else:
         color = _rgb_css(tuple(int(c * 0.45) for c in rgb))
-    return f"color: {color}; font-size: 14px; spacing: 6px;"
+    return f"color: {color}; font-size: 13px; spacing: 6px;"
 
 
 class CurveSelectorWidget(QFrame):
-    """右侧曲线勾选面板，与波形图并排组成一体。"""
+    """波形图右侧曲线勾选面板。"""
 
     selection_changed = pyqtSignal()
 

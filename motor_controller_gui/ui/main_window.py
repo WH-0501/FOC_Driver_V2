@@ -62,12 +62,14 @@ class MainWindow(QMainWindow):
         self._scan_pending = False
         self._status_latest: Dict[int, dict] = {}
         self._status_last_ui: Dict[int, float] = {}
+        self._status_displayed: Dict[int, dict] = {}
+        self._status_pending: Dict[int, bool] = {}
         self._init_ui()
         self._init_connections()
 
     def _init_ui(self) -> None:
         self.setWindowTitle(self._window_title())
-        self.setMinimumSize(1280, 900)
+        self.setMinimumSize(1000, 720)
 
         central = QWidget()
         root = QVBoxLayout()
@@ -99,6 +101,7 @@ class MainWindow(QMainWindow):
         body_splitter.addWidget(self.waveform_widget)
 
         right_panel = QWidget()
+        right_panel.setMaximumWidth(340)
         right_layout = QVBoxLayout()
         right_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -110,9 +113,9 @@ class MainWindow(QMainWindow):
         right_panel.setLayout(right_layout)
         body_splitter.addWidget(right_panel)
 
-        body_splitter.setStretchFactor(0, 3)
-        body_splitter.setStretchFactor(1, 2)
-        body_splitter.setSizes([780, 420])
+        body_splitter.setStretchFactor(0, 7)
+        body_splitter.setStretchFactor(1, 3)
+        body_splitter.setSizes([900, 300])
         root.addWidget(body_splitter, 1)
 
         log_group = QGroupBox("通信日志")
@@ -140,6 +143,41 @@ class MainWindow(QMainWindow):
         self.can_thread.scan_finished.connect(self._on_scan_finished)
         self.can_thread.scan_failed.connect(self._on_scan_failed)
         self.can_thread.msg_received.connect(self._handle_can_message)
+
+        self._status_flush_timer = QTimer(self)
+        self._status_flush_timer.setInterval(int(STATUS_UI_INTERVAL * 1000))
+        self._status_flush_timer.timeout.connect(self._flush_pending_status)
+        self._status_flush_timer.start()
+
+    def _status_force_update(self, motor_id: int, report: dict) -> bool:
+        """错误码、使能、模式变化时立即刷新 UI。"""
+        prev = self._status_displayed.get(motor_id)
+        if prev is None:
+            return True
+        for key in ("error_code", "enable", "mode"):
+            if report.get(key) != prev.get(key):
+                return True
+        return False
+
+    def _apply_status_ui(self, motor_id: int, report: dict) -> None:
+        if self.motor_panel is None or motor_id != self._motor_id:
+            return
+        self.motor_panel.update_status(report)
+        self._status_last_ui[motor_id] = time.perf_counter()
+        self._status_displayed[motor_id] = {
+            "error_code": report.get("error_code"),
+            "enable": report.get("enable"),
+            "mode": report.get("mode"),
+        }
+        self._status_pending[motor_id] = False
+
+    def _flush_pending_status(self) -> None:
+        motor_id = self._motor_id
+        if not self._status_pending.get(motor_id):
+            return
+        report = self._status_latest.get(motor_id)
+        if report is not None:
+            self._apply_status_ui(motor_id, report)
 
     def _make_target_callback(self, motor_id: int):
         def _cb(pos=None, vel=None, curr=None):
@@ -275,6 +313,8 @@ class MainWindow(QMainWindow):
 
     def _on_motor_id_changed(self, motor_id: int) -> None:
         self._motor_id = motor_id
+        self._status_displayed.pop(motor_id, None)
+        self._status_pending.pop(motor_id, None)
         if self.motor_panel is not None:
             self.motor_panel.motor_id = motor_id
             self.motor_panel.control_widget.motor_id = motor_id
@@ -320,12 +360,13 @@ class MainWindow(QMainWindow):
         if motor_id != self._motor_id or self.motor_panel is None:
             return
         self._status_latest[motor_id] = report
+        force = self._status_force_update(motor_id, report)
         now = time.perf_counter()
         last = self._status_last_ui.get(motor_id, 0.0)
-        if now - last < STATUS_UI_INTERVAL:
+        if not force and (now - last) < STATUS_UI_INTERVAL:
+            self._status_pending[motor_id] = True
             return
-        self.motor_panel.update_status(report)
-        self._status_last_ui[motor_id] = now
+        self._apply_status_ui(motor_id, report)
 
     def _handle_can_message(self, arb_id: int, data: bytes, timestamp: float) -> None:
         parsed = parse_frame(data)
@@ -436,7 +477,13 @@ class MainWindow(QMainWindow):
             self.log(f"电机 {arb_id} 电角度对齐: {'成功' if ok else '失败'}")
         elif cmd == CMD.KTH71_CAL_START:
             ok = parse_bool_result(payload)
-            self.log(f"电机 {arb_id} KTH71 开始校准: {'成功' if ok else '失败'}")
+            self.log(
+                f"电机 {arb_id} KTH71 开始校准: "
+                f"{'成功' if ok else '失败（须已使能：速度开环或电流/速度闭环）'}"
+            )
+        elif cmd == CMD.KTH71_CAL_TRIGGER:
+            ok = parse_bool_result(payload)
+            self.log(f"电机 {arb_id} KTH71 触发 ANLC: {'成功' if ok else '失败'}")
         elif cmd == CMD.KTH71_CAL_STOP:
             ok = parse_bool_result(payload)
             self.log(f"电机 {arb_id} KTH71 停止校准: {'成功' if ok else '失败'}")

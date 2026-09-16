@@ -32,34 +32,18 @@ void VoFaDisUart(void)
     encoder_shaft_debug_t enc_dbg;
 
     __disable_irq();
-    (void)encoder_get_shaft_debug(m, &enc_dbg);
-    /* VOFA+ 通道（FireWater 浮点，建议 ch0/ch1 叠加对比）：
-     * ch0 机械角 raw | ch1 机械角 filt（PLL 时平滑，默认时与 raw 相同）
-     * ch2 角误差/PLL拒识 | ch3 电角 filt（FOC 使用）
-     * ch4 速度 raw | ch5 速度 filt（LPF 或 PLL）
-     * ch6 i_q（滤波收益：电流毛刺应减小）
-     */
-//     Send.Data[0].FloatData = enc_dbg.angle_rad_raw;
-//     Send.Data[1].FloatData = enc_dbg.angle_rad_filt;
-// #if FOC_ENCODER_USE_PLL
-//     Send.Data[2].FloatData = (float)enc_dbg.pll_innovation_rejected;
-// #else
-//     Send.Data[2].FloatData = enc_dbg.angle_error_rad;
-// #endif
-//     Send.Data[3].FloatData = enc_dbg.theta_elec_filt_rad;
-//     Send.Data[4].FloatData = enc_dbg.velocity_rad_s_raw;
-//     Send.Data[5].FloatData = enc_dbg.velocity_rad_s_filt;
-//     Send.Data[6].FloatData = m->state.i_q;
+    // (void)encoder_get_shaft_debug(m, &enc_dbg);
 
-    Send.Data[0].FloatData = m->state.shaft.raw_counts;
-    Send.Data[1].FloatData = m->state.shaft.counts;
-    // Send.Data[1].FloatData = enc_dbg.theta_elec_filt_rad;
-    Send.Data[2].FloatData = enc_dbg.angle_error_rad;
-    Send.Data[3].FloatData = enc_dbg.position_rad_raw;
-    Send.Data[4].FloatData = enc_dbg.position_rad_filt;
-    Send.Data[5].FloatData = enc_dbg.velocity_rad_s_raw;
-    Send.Data[6].FloatData = enc_dbg.velocity_rad_s_filt;
-    Send.Data[7].FloatData = m->state.i_q;
+    // Send.Data[0].FloatData = m->state.shaft.raw_counts;
+    // Send.Data[1].FloatData = m->state.shaft.counts;
+    // Send.Data[2].FloatData = m->state.theta_elec_rad;
+    Send.Data[0].FloatData = m->out.duty_a; // U 相占空比
+    Send.Data[1].FloatData = m->out.duty_b; // V 相占空比
+    Send.Data[2].FloatData = m->out.duty_c; // W 相占空比
+    Send.Data[3].FloatData = m->state.phase_current.ampere[0]; // U 相电流
+    Send.Data[4].FloatData = m->state.phase_current.ampere[1]; // V 相电流
+    Send.Data[5].FloatData = m->state.phase_current.ampere[2]; // W 相电流
+    Send.Data[6].FloatData = m->state.i_q; // Q 相电流
 
     __enable_irq();
 

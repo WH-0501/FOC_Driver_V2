@@ -27,7 +27,7 @@ extern "C" {
 #define KTH71_ANLC_EN_BIT                         (1u << 3) ///< 自校准效果使能到角度输出
 #define KTH71_REG_CAL_BIT                         (1u << 4) ///< 自校准使能. 1: 开始自校准
 
-/** 0x72 ANLC_STATUS[1:0]（datasheet §13.2） */
+/** 0x72：ANLC_STATUS[1:0] 位于 bit[5:4]（手册 Figure 26 / §12.2） */
 #define KTH71_ANLC_STATUS_MASK                  0x03u
 #define KTH71_ANLC_STATUS_SHIFT                 4u
 #define KTH71_ANLC_STATUS_IDLE                  0u ///< 自校准未开始

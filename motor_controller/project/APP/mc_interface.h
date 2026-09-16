@@ -66,4 +66,17 @@ int mc_set_joint_origin(void);
 /** 失能状态下执行电角对齐。 */
 int mc_align_electrical(void);
 
+/**
+ * KTH71 非线性自校准：须已使能（速度开环或电流/速度闭环）；不影响使能与 CAN 上报。
+ */
+int mc_kth71_cal_start(void);
+/** 开环达速后由上位机调用，触发芯片 ANLC。 */
+int mc_kth71_cal_trigger(void);
+int mc_kth71_cal_stop(void);
+/** 返回缓存的 ANLC 状态（不在 CAN 路径读寄存器）。 */
+int mc_kth71_cal_get_status(uint8_t *status);
+bool mc_kth71_cal_active(void);
+/** mc_poll 内调用：节流刷新 ANLC 状态缓存（避免与读角争用 ISR）。 */
+void mc_kth71_cal_service(void);
+
 #endif /* __MC_INTERFACE_H__ */

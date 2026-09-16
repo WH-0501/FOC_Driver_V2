@@ -2,6 +2,16 @@
 #include "wk_spi.h"
 #include "wk_system.h"
 
+static void kth71_bus_lock(void)
+{
+  __disable_irq();
+}
+
+static void kth71_bus_unlock(void)
+{
+  __enable_irq();
+}
+
 
 #define SPI_SOFT_CTRL   0
 
@@ -170,6 +180,7 @@ void KTH71_UnlockReg(void)
     unsigned char dataSend[4] = {0x20, 0x24, 0x01, 0x01};
 	unsigned char i;
 
+    kth71_bus_lock();
 #if !SPI_SOFT_CTRL
     spi_enable(SPI2,FALSE);
     spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_TX);
@@ -184,6 +195,7 @@ void KTH71_UnlockReg(void)
 	}	
 
 	CSN_SET;
+    kth71_bus_unlock();
 }
 
 /**
@@ -195,6 +207,7 @@ void KTH71_LockReg(void)
     unsigned char dataSend[4] = {0x20, 0x24, 0x12, 0x31};
 	unsigned char i;
 
+    kth71_bus_lock();
 #if !SPI_SOFT_CTRL
     spi_enable(SPI2,FALSE);
     spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_TX);
@@ -209,6 +222,7 @@ void KTH71_LockReg(void)
 	}
 
 	CSN_SET;
+    kth71_bus_unlock();
 }
 
 /**
@@ -220,6 +234,7 @@ void KTH71_WriteRegToMTP(void)
     unsigned char dataSend[3] = {0x22, 0x55, 0xAA};
 	unsigned char i;
 
+    kth71_bus_lock();
 #if !SPI_SOFT_CTRL
     spi_enable(SPI2,FALSE);
     spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_TX);
@@ -234,6 +249,7 @@ void KTH71_WriteRegToMTP(void)
 	}
 
 	CSN_SET;
+    kth71_bus_unlock();
 
 	wk_delay_ms(400);
 }
@@ -304,6 +320,7 @@ static void KTH71_SPI_TransmitReceive(unsigned char *pTxData, unsigned char *pRx
 {
 	unsigned char i; 
     
+    kth71_bus_lock();
 #if !SPI_SOFT_CTRL
     spi_enable(SPI2,FALSE);
     spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_TX);
@@ -331,6 +348,7 @@ static void KTH71_SPI_TransmitReceive(unsigned char *pTxData, unsigned char *pRx
     spi_enable(SPI2,FALSE);
 #endif
 	CSN_SET;
+    kth71_bus_unlock();
 }
 
 /**
@@ -428,7 +446,7 @@ int8_t KTH71_StartCalibration(void)
   }
   wk_delay_ms(1);
   KTH71_LockReg();
-  
+
   return 0;
 }
 
@@ -456,14 +474,21 @@ int8_t KTH71_StopCalibration(void)
 int8_t KTH71_GetCalibrationStatus(uint8_t *status)
 {
   unsigned char reg_val = 0u;
+
   if (status == NULL)
   {
     return -1;
   }
+
+  KTH71_UnlockReg();
+  wk_delay_ms(1);
   if (KTH71_ReadReg(KTH71_REG_ANLC_STATUS, &reg_val) == 0u)
   {
+    KTH71_LockReg();
     return -1;
   }
+  KTH71_LockReg();
+
   *status = (uint8_t)((reg_val >> KTH71_ANLC_STATUS_SHIFT) & KTH71_ANLC_STATUS_MASK);
   return 0;
 }

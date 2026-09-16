@@ -8,7 +8,6 @@
 #include "foc_fault.h"
 #include "board.h"
 #include "common.h"
-#include "encoder/kth71xx.h"
 
 static uint16_t s_node_id;
 static bool (*s_send)(const comm_frame_t *frame);
@@ -488,29 +487,30 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       break;
 
     case CAN_FD_CMD_KTH71_CAL_START:
-      reply_payload[0] = (KTH71_StartCalibration() == 0) ? 1u : 0u;
-      can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_START, reply_payload, 1u);
+      if (!mc_kth71_cal_active())
+      {
+        reply_payload[0] = (mc_kth71_cal_start() == MC_OK) ? 1u : 0u;
+        can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_START, reply_payload, 1u);
+      }
       break;
 
     case CAN_FD_CMD_KTH71_CAL_STOP:
-      reply_payload[0] = (KTH71_StopCalibration() == 0) ? 1u : 0u;
+      reply_payload[0] = (mc_kth71_cal_stop() == MC_OK) ? 1u : 0u;
       can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_STOP, reply_payload, 1u);
+      break;
+
+    case CAN_FD_CMD_KTH71_CAL_TRIGGER:
+      reply_payload[0] = (mc_kth71_cal_trigger() == MC_OK) ? 1u : 0u;
+      can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_TRIGGER, reply_payload, 1u);
       break;
 
     case CAN_FD_CMD_KTH71_CAL_STATUS:
     {
-      uint8_t anlc_status = KTH71_ANLC_STATUS_IDLE;
+      uint8_t anlc_status = 0u;
 
-      if (KTH71_GetCalibrationStatus(&anlc_status) == 0)
-      {
-        reply_payload[0] = anlc_status;
-        can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_STATUS, reply_payload, 1u);
-      }
-      else
-      {
-        reply_payload[0] = 0xFFu;
-        can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_STATUS, reply_payload, 1u);
-      }
+      (void)mc_kth71_cal_get_status(&anlc_status);
+      reply_payload[0] = anlc_status;
+      can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_STATUS, reply_payload, 1u);
       break;
     }
 
