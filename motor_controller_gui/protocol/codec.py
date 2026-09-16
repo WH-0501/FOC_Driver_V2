@@ -592,6 +592,12 @@ def parse_bool_result(payload: bytes) -> bool:
     return len(payload) >= 1 and payload[0] == 1
 
 
+def parse_kth71_anlc_status(payload: bytes) -> Optional[int]:
+    if len(payload) < 1:
+        return None
+    return int(payload[0])
+
+
 def parse_node_id_response(payload: bytes) -> Optional[int]:
     if len(payload) < 2:
         return None

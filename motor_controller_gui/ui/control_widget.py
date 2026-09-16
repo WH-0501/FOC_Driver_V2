@@ -84,6 +84,20 @@ class MotorControlWidget(QGroupBox):
         row2.addWidget(self.send_curr_btn)
         layout.addLayout(row2)
 
+        row3 = QHBoxLayout()
+        self.kth71_cal_start_btn = QPushButton("KTH71 开始校准")
+        self.kth71_cal_stop_btn = QPushButton("KTH71 停止校准")
+        self.kth71_cal_status_btn = QPushButton("KTH71 查询状态")
+        self.kth71_cal_hint = QLabel(
+            "手动校准：点击开始后，以 100~1000 RPM 匀速转动至少一圈，再查询状态。"
+        )
+        self.kth71_cal_hint.setWordWrap(True)
+        row3.addWidget(self.kth71_cal_start_btn)
+        row3.addWidget(self.kth71_cal_stop_btn)
+        row3.addWidget(self.kth71_cal_status_btn)
+        layout.addLayout(row3)
+        layout.addWidget(self.kth71_cal_hint)
+
         self.mode_hint = QLabel("")
         self.mode_hint.setWordWrap(True)
         layout.addWidget(self.mode_hint)
@@ -97,6 +111,15 @@ class MotorControlWidget(QGroupBox):
         self.origin_btn.clicked.connect(self.client.broadcast_set_origin)
         self.align_btn.clicked.connect(self.client.broadcast_align_angle)
         self.sync_btn.clicked.connect(self.client.broadcast_sync)
+        self.kth71_cal_start_btn.clicked.connect(
+            lambda: self.client.kth71_cal_start(self.motor_id)
+        )
+        self.kth71_cal_stop_btn.clicked.connect(
+            lambda: self.client.kth71_cal_stop(self.motor_id)
+        )
+        self.kth71_cal_status_btn.clicked.connect(
+            lambda: self.client.kth71_cal_status(self.motor_id)
+        )
         self.send_pos_btn.clicked.connect(self._send_position)
         self.send_vel_btn.clicked.connect(self._send_velocity)
         self.send_curr_btn.clicked.connect(self._send_current)

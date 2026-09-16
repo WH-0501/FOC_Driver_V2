@@ -204,6 +204,7 @@ typedef struct
  */
 typedef struct
 {
+  uint32_t raw_counts;    ///< 单圈原始计数（传感器系）
   uint32_t counts;        ///< 单圈原始计数（传感器系）
   int32_t turn_count;     ///< 累计整圈数（传感器系，由 raw angle 跨圈检测）
   float angle_rad;        ///< 单圈机械角 [0, 2π) [rad]（控制系）

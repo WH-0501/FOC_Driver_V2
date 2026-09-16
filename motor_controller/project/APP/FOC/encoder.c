@@ -343,7 +343,8 @@ static bool encoder_observer_update_legacy(encoder_observer_t *obs,
   }
 
   sensor_rad = (float)obs->sample.turn_count * _2PI + angle;
-  obs->sample.counts = (uint32_t)counts;
+  obs->sample.raw_counts = raw_u16;
+  obs->sample.counts = counts;
   /* 观测量统一为控制坐标系：direction 在此一次性施加，turn 解包仍用 raw angle */
   obs->sample.angle_rad = angle_normalize(angle * dir);
   obs->sample.position_rad = dir * (sensor_rad - zero_rad);

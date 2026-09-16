@@ -35,6 +35,9 @@ class CMD(IntEnum):
     CLEAR_FAULT = 0x4F
     SET_ORIGIN = 0x50
     ALIGN_ELECTRIC_ANGLE = 0xAB
+    KTH71_CAL_START = 0xAD
+    KTH71_CAL_STATUS = 0xAE
+    KTH71_CAL_STOP = 0xAF
 
     # IAP（仲裁 ID = 0x7FF 或 Node-ID）
     IAP_ENTER = 0xF8
@@ -128,6 +131,14 @@ class MotorError(IntEnum):
     PHASE_LOSS_ERR = 7
 
 
+KTH71_ANLC_STATUS_NAMES = {
+    0: "未开始",
+    1: "校准中",
+    2: "失败",
+    3: "完成",
+    0xFF: "读取失败",
+}
+
 ERROR_NAMES = {
     MotorError.NORMAL: "正常",
     MotorError.OTP_ERR: "过温",
@@ -173,6 +184,9 @@ CMD_DATA_LEN = {
     CMD.FAULT_RESET: 0,
     CMD.SET_ORIGIN: 0,
     CMD.ALIGN_ELECTRIC_ANGLE: 0,
+    CMD.KTH71_CAL_START: 0,
+    CMD.KTH71_CAL_STATUS: 0,
+    CMD.KTH71_CAL_STOP: 0,
     CMD.IAP_ENTER: 0,
     CMD.IAP_END: 0,
     CMD.IAP_STATUS: 0,

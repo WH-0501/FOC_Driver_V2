@@ -260,6 +260,15 @@ class MotorClient:
     def broadcast_align_angle(self) -> bool:
         return self._send(CAN_BROADCAST_ID, CMD.ALIGN_ELECTRIC_ANGLE)
 
+    def kth71_cal_start(self, motor_id: int) -> bool:
+        return self._send(motor_id, CMD.KTH71_CAL_START)
+
+    def kth71_cal_stop(self, motor_id: int) -> bool:
+        return self._send(motor_id, CMD.KTH71_CAL_STOP)
+
+    def kth71_cal_status(self, motor_id: int) -> bool:
+        return self._send(motor_id, CMD.KTH71_CAL_STATUS)
+
     def broadcast_set_pos_pid(self, p: float, i: float, d: float) -> bool:
         return self._send(CAN_BROADCAST_ID, CMD.SET_POS_PID, pack_pid_params(p, i, d))
 

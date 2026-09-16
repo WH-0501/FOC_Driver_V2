@@ -27,9 +27,11 @@ from canbus.interface import CanThread
 from core.motor_client import MotorClient
 from protocol import (
     CMD,
+    KTH71_ANLC_STATUS_NAMES,
     format_bytes_binary,
     format_bytes_hex,
     parse_bool_result,
+    parse_kth71_anlc_status,
     parse_frame,
     parse_fw_version_payload,
     parse_iap_status_payload,
@@ -432,6 +434,19 @@ class MainWindow(QMainWindow):
         elif cmd == CMD.ALIGN_ELECTRIC_ANGLE:
             ok = parse_bool_result(payload)
             self.log(f"电机 {arb_id} 电角度对齐: {'成功' if ok else '失败'}")
+        elif cmd == CMD.KTH71_CAL_START:
+            ok = parse_bool_result(payload)
+            self.log(f"电机 {arb_id} KTH71 开始校准: {'成功' if ok else '失败'}")
+        elif cmd == CMD.KTH71_CAL_STOP:
+            ok = parse_bool_result(payload)
+            self.log(f"电机 {arb_id} KTH71 停止校准: {'成功' if ok else '失败'}")
+        elif cmd == CMD.KTH71_CAL_STATUS:
+            status = parse_kth71_anlc_status(payload)
+            if status is None:
+                self.log(f"电机 {arb_id} KTH71 校准状态: 应答无效")
+            else:
+                name = KTH71_ANLC_STATUS_NAMES.get(status, f"未知({status})")
+                self.log(f"电机 {arb_id} KTH71 校准状态: {name} (anlc={status})")
         elif cmd == CMD.SET_NODE_ID:
             new_id = parse_node_id_response(payload)
             if new_id is not None:

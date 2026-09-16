@@ -8,6 +8,7 @@
 #include "foc_fault.h"
 #include "board.h"
 #include "common.h"
+#include "encoder/kth71xx.h"
 
 static uint16_t s_node_id;
 static bool (*s_send)(const comm_frame_t *frame);
@@ -485,6 +486,33 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         can_fd_custom_reply(CAN_FD_CMD_MCU_TEMP_CALIB, reply_payload, 1u);
       }
       break;
+
+    case CAN_FD_CMD_KTH71_CAL_START:
+      reply_payload[0] = (KTH71_StartCalibration() == 0) ? 1u : 0u;
+      can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_START, reply_payload, 1u);
+      break;
+
+    case CAN_FD_CMD_KTH71_CAL_STOP:
+      reply_payload[0] = (KTH71_StopCalibration() == 0) ? 1u : 0u;
+      can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_STOP, reply_payload, 1u);
+      break;
+
+    case CAN_FD_CMD_KTH71_CAL_STATUS:
+    {
+      uint8_t anlc_status = KTH71_ANLC_STATUS_IDLE;
+
+      if (KTH71_GetCalibrationStatus(&anlc_status) == 0)
+      {
+        reply_payload[0] = anlc_status;
+        can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_STATUS, reply_payload, 1u);
+      }
+      else
+      {
+        reply_payload[0] = 0xFFu;
+        can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_STATUS, reply_payload, 1u);
+      }
+      break;
+    }
 
     default:
       break;

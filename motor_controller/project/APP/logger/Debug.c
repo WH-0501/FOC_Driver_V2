@@ -51,8 +51,9 @@ void VoFaDisUart(void)
 //     Send.Data[5].FloatData = enc_dbg.velocity_rad_s_filt;
 //     Send.Data[6].FloatData = m->state.i_q;
 
-    Send.Data[0].FloatData = m->state.shaft.counts;
-    Send.Data[1].FloatData = enc_dbg.theta_elec_filt_rad;
+    Send.Data[0].FloatData = m->state.shaft.raw_counts;
+    Send.Data[1].FloatData = m->state.shaft.counts;
+    // Send.Data[1].FloatData = enc_dbg.theta_elec_filt_rad;
     Send.Data[2].FloatData = enc_dbg.angle_error_rad;
     Send.Data[3].FloatData = enc_dbg.position_rad_raw;
     Send.Data[4].FloatData = enc_dbg.position_rad_filt;

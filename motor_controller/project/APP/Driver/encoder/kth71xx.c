@@ -333,28 +333,30 @@ static void KTH71_SPI_TransmitReceive(unsigned char *pTxData, unsigned char *pRx
 	CSN_SET;
 }
 
-
-// 第一次使用KTH7111芯片需执行以下代码
+/**
+ * @brief 初始化KTH7111芯片
+ * 
+ */
 static void SetKTH71(void)
 {
-    unsigned char Test_temp = 0xAC;
-	KTH71_ReadReg(0x11,&Test_temp);
-	wk_delay_ms(1);
-	if(Test_temp == 0xAC)
+  unsigned char gain_trim_value = KTH71_REG_GAINTRIM_DEFAULT;
+  KTH71_ReadReg(KTH71_REG_GAINTRIM, &gain_trim_value);
+  wk_delay_ms(1);
+  if(gain_trim_value != 0) // or = KTH71_REG_GAINTRIM_DEFAULT
 	{
-        KTH71_UnlockReg();
-        wk_delay_ms(1);
-        KTH71_WriteReg(0x11,0x00);
-        wk_delay_ms(1);
-        KTH71_WriteRegToMTP();
-        wk_delay_ms(1);
-	}
     KTH71_UnlockReg();
     wk_delay_ms(1);
-    KTH71_WriteReg(0x16,0x00);
+    KTH71_WriteReg(KTH71_REG_GAINTRIM, 0x00); // 写入0x00表示在轴使用
     wk_delay_ms(1);
-    KTH71_LockReg();
+    KTH71_WriteRegToMTP();
     wk_delay_ms(1);
+	}
+  KTH71_UnlockReg();
+  wk_delay_ms(1);
+  KTH71_WriteReg(KTH71_REG_CAL_CTRL, KTH71_REG_CAL_CTRL_DEFAULT);
+  wk_delay_ms(1);
+  KTH71_LockReg();
+  wk_delay_ms(1);
 }
 
 void KTH71_Init(void)
@@ -399,4 +401,69 @@ void KTH71_Init(void)
 }
 
 
+/**
+ * @brief 开始自校准
+ * 
+ */
+int8_t KTH71_StartCalibration(void)
+{
+  unsigned char reg_val = 0;
 
+  KTH71_UnlockReg();
+  wk_delay_ms(1);
+  if (KTH71_ReadReg(KTH71_REG_CAL_CTRL, &reg_val) == 0u)
+  {
+    KTH71_LockReg();
+    return -1;
+  }
+
+  /* 设置自校准使能 */
+  reg_val = (unsigned char)((reg_val | KTH71_ANLC_EN_BIT | KTH71_REG_CAL_BIT) &
+                            (unsigned char)(~(0xFFu & ~0x1Fu)));
+  reg_val = (unsigned char)((reg_val & 0xF8u) | KTH71_ANLC_EN_BIT | KTH71_REG_CAL_BIT);
+  if (KTH71_WriteReg(KTH71_REG_CAL_CTRL, reg_val) != reg_val)
+  {
+    KTH71_LockReg();
+    return -1;
+  }
+  wk_delay_ms(1);
+  KTH71_LockReg();
+  
+  return 0;
+}
+
+int8_t KTH71_StopCalibration(void)
+{
+  unsigned char reg_val = 0u;
+  KTH71_UnlockReg();
+  wk_delay_ms(1);
+  if (KTH71_ReadReg(KTH71_REG_CAL_CTRL, &reg_val) == 0u)
+  {
+    KTH71_LockReg();
+    return -1;
+  }
+  reg_val = (unsigned char)((reg_val & (unsigned char)(~KTH71_REG_CAL_BIT)) | KTH71_ANLC_EN_BIT);
+  if (KTH71_WriteReg(KTH71_REG_CAL_CTRL, reg_val) != reg_val)
+  {
+    KTH71_LockReg();
+    return -1;
+  }
+  wk_delay_ms(1);
+  KTH71_LockReg();
+  return 0;
+}
+
+int8_t KTH71_GetCalibrationStatus(uint8_t *status)
+{
+  unsigned char reg_val = 0u;
+  if (status == NULL)
+  {
+    return -1;
+  }
+  if (KTH71_ReadReg(KTH71_REG_ANLC_STATUS, &reg_val) == 0u)
+  {
+    return -1;
+  }
+  *status = (uint8_t)((reg_val >> KTH71_ANLC_STATUS_SHIFT) & KTH71_ANLC_STATUS_MASK);
+  return 0;
+}
