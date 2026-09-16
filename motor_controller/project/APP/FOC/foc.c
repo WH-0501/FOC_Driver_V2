@@ -441,15 +441,18 @@ static void foc_speed_open_control(motor_handle_t *m, float target_speed)
       (fabsf(rt->open_loop_omega) < OPEN_LOOP_OMEGA_EPS_RAD_S))
   {
     rt->open_loop_uq = 0.0f;
-  } 
-  else 
-  {
-    rt->open_loop_uq = OPEN_LOOP_UQ_MAX;
-    rt->open_loop_shaft_angle = angle_normalize(
-        rt->open_loop_shaft_angle + (float)m->config.param.pole_pairs * rt->open_loop_omega * dt);
+    rt->open_loop_iq = 0.0f;
   }
-  
-  foc_voltage(m, rt->open_loop_uq, 0.0f, rt->open_loop_shaft_angle);
+  else
+  {
+    // rt->open_loop_uq = OPEN_LOOP_UQ_MAX;
+    rt->open_loop_iq = OPEN_LOOP_IQ_MAX;
+    rt->open_loop_elec_angle_rad = angle_normalize(
+        rt->open_loop_elec_angle_rad + (float)m->config.param.pole_pairs * rt->open_loop_omega * dt);
+  }
+
+  // foc_voltage(m, rt->open_loop_uq, 0.0f, rt->open_loop_elec_angle_rad);
+  foc_current(m, 0.0f, rt->open_loop_iq, rt->open_loop_elec_angle_rad, 0.0f);
 }
 
 static void foc_speed_closed_control(motor_handle_t *m, float target_speed)

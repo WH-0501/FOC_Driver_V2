@@ -13,9 +13,10 @@ typedef struct
   uint32_t offset_cnt;
   uint8_t offset_active;
 
-  float open_loop_uq;           ///< 开环 Uq 参考值
-  float open_loop_omega;        ///< 开环转速参考值 [rad/s]
-  float open_loop_shaft_angle;  ///< 开环转子机械角参考值 [rad]
+  float open_loop_uq;              ///< 开环 Uq 参考值 VF
+  float open_loop_iq;              ///< 开环 Iq 参考值 IF
+  float open_loop_omega;           ///< 开环速度参考 [rad/s]（与 ref.speed_rad_s 同系）
+  float open_loop_elec_angle_rad;  ///< 开环合成电角 [rad]（逆 Park 用，须与 theta_elec_rad 同步）
 
   uint8_t fsm_enter_pending;    ///< FSM 进入等待标志
   bool electrical_align_done;   ///< 电气对齐完成标志

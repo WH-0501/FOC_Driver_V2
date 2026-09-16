@@ -45,6 +45,10 @@ static void foc_fsm_on_enter(motor_handle_t *m, fsm_state_t state)
     case STATE_RUNNING:
       (void)foc_pid_clear(&m->id_pid);
       (void)foc_pid_clear(&m->iq_pid);
+      rt->open_loop_elec_angle_rad = m->state.theta_elec_rad;
+      rt->open_loop_omega = 0.0f;
+      rt->open_loop_uq = 0.0f;
+      rt->open_loop_iq = 0.0f;
       break;
     case STATE_FAULT:
       break;

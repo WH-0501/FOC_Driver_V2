@@ -318,7 +318,6 @@ int mc_try_recover_from_fault(void)
 int mc_reset_from_exception(void)
 {
   motor_handle_t *m = motor_get_handler();
-  motor_runtime_t *rt = motor_runtime(m);
 
   if (m == NULL)
   {
@@ -349,13 +348,6 @@ int mc_reset_from_exception(void)
   m->ref.torque_nm = 0.f;
   m->ref.speed_rad_s = 0.f;
   m->ref.position_rad = m->state.joint.position_rad;
-
-  if (rt != NULL)
-  {
-    rt->open_loop_uq = 0.f;
-    rt->open_loop_omega = 0.f;
-    rt->open_loop_shaft_angle = m->state.shaft.position_rad;
-  }
 
   return MC_OK;
 }
