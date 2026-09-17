@@ -147,9 +147,8 @@ void motor_config_set_defaults(motor_config_t *config)
   config->limits.sw_ocp_hold_ms = DEF_SW_OCP_HOLD_MS;
   config->limits.id_limit = DEF_OCP_CURRENT;
   config->limits.iq_limit = DEF_OCP_CURRENT;
-  /// 电流环调试，临时限制为 4
-  config->limits.vd_limit =  4.0f; // BUS_VOLTAGE * ONE_DIV_SQRT_3; // 0.5f;
-  config->limits.vq_limit =  4.0f; // BUS_VOLTAGE * ONE_DIV_SQRT_3; // 0.5f;
+  config->limits.vd_limit = 4.0f; // BUS_VOLTAGE * 0.5f;
+  config->limits.vq_limit = 4.0f; // BUS_VOLTAGE * 0.5f;
   config->limits.temp_limit = DEF_TEMP_LIMIT;
 
   config->motion.max_speed_rad_s = MAX_VELOCITY_RAD_S;
