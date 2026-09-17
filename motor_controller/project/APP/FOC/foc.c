@@ -286,8 +286,9 @@ static float foc_align_probe_iq(motor_handle_t *m, float uq, float angle_el, uin
 }
 
 
-void foc_align_electrical(motor_handle_t *m)
+error_t foc_align_electrical(motor_handle_t *m)
 {
+  error_t ret = ERR_NONE;
   motor_runtime_t *rt;
   const float align_angle = ALIGN_ELECTRICAL_ANGLE_RAD;
   const float ud = ALIGN_ELECTRICAL_VOLTAGE_D_V;
@@ -299,13 +300,13 @@ void foc_align_electrical(motor_handle_t *m)
 
   if (m == NULL)
   {
-    return;
+    return ERR_NULL;
   }
 
   rt = motor_runtime(m);
   if (rt == NULL)
   {
-    return;
+    return ERR_NULL;
   }
 
   dir = m->config.param.direction;
@@ -341,7 +342,8 @@ void foc_align_electrical(motor_handle_t *m)
   {
     motor_fault_raise(m, FAULT_ALIGN_FAILED);
     // foc_align_finish(m, rt, align_angle);
-    return;
+    ret = ERR_ALIGIN_SPREAD_OUT;
+    goto exit;
   }
   rt->align_raw_elec_rad = raw_locked; // 采样均值
   foc_align_set_offset_from_raw(m, raw_locked, align_angle);
@@ -373,7 +375,8 @@ void foc_align_electrical(motor_handle_t *m)
     {
       motor_fault_raise(m, FAULT_ALIGN_FAILED);
       // foc_align_finish(m, rt, align_angle);
-      return;
+      ret = ERR_ALIGIN_SPREAD_OUT;
+      goto exit;
     }
     foc_align_set_offset_from_raw(m, raw_locked, align_angle);
     foc_sense_update(m);
@@ -391,7 +394,8 @@ void foc_align_electrical(motor_handle_t *m)
   {
     motor_fault_raise(m, FAULT_ALIGN_FAILED);
     // foc_align_finish(m, rt, align_angle);
-    return;
+    ret = ERR_ALIGIN_ROTOR_NOT_ENGAGED;
+    goto exit;
   }
 
   rt->align_polarity_test_iq = iq_probe;
@@ -414,8 +418,12 @@ void foc_align_electrical(motor_handle_t *m)
   if (!rt->align_ok)
   {
     motor_fault_raise(m, FAULT_ALIGN_FAILED);
+    ret = ERR_ALIGIN_FAILED;
   }
+
+exit:
   motor_disarm(m);
+  return ret;
 }
 
 static void foc_speed_open_control(motor_handle_t *m, float target_speed)
@@ -445,14 +453,19 @@ static void foc_speed_open_control(motor_handle_t *m, float target_speed)
   }
   else
   {
-    // rt->open_loop_uq = OPEN_LOOP_UQ_MAX;
+    rt->open_loop_uq = OPEN_LOOP_UQ_MAX;
     rt->open_loop_iq = OPEN_LOOP_IQ_MAX;
-    rt->open_loop_elec_angle_rad = angle_normalize(
-        rt->open_loop_elec_angle_rad + (float)m->config.param.pole_pairs * rt->open_loop_omega * dt);
+    /* ref.speed / open_loop_omega 为关节端 [rad/s]；电角速率 = pp × ω_shaft = pp × ω_joint × gear_ratio */
+    {
+      float gear_ratio = (m->config.param.gear_ratio > 0.0f) ? m->config.param.gear_ratio : 1.0f;
+      rt->open_loop_elec_angle_rad = angle_normalize(
+          rt->open_loop_elec_angle_rad
+          + (float)m->config.param.pole_pairs * rt->open_loop_omega * gear_ratio * dt);
+    }
   }
 
-  // foc_voltage(m, rt->open_loop_uq, 0.0f, rt->open_loop_elec_angle_rad);
-  foc_current(m, 0.0f, rt->open_loop_iq, rt->open_loop_elec_angle_rad, 0.0f);
+  foc_voltage(m, rt->open_loop_uq, 0.0f, rt->open_loop_elec_angle_rad);
+  // foc_current(m, 0.0f, rt->open_loop_iq, rt->open_loop_elec_angle_rad, 0.0f);
 }
 
 static void foc_speed_closed_control(motor_handle_t *m, float target_speed)

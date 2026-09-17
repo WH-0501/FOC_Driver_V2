@@ -43,53 +43,53 @@ static void mc_kth71_cal_reset(void)
   s_kth71_cal.last_anlc_poll_us = 0u;
 }
 
-static mc_error_t mc_platform_init(void)
+static error_t mc_platform_init(void)
 {
   board_init();
-  return MC_OK;
+  return ERR_NONE;
 }
 
-static mc_error_t mc_runtime_start(void)
+static error_t mc_runtime_start(void)
 {
   board_register_current_loop_callback(mc_current_loop_isr);
   if (current_hw_init() != ERR_NONE)
   {
-    return MC_INIT_ERR_CURRENT_LOOP;
+    return ERR_SENSOR;
   }
-  return MC_OK;
+  return ERR_NONE;
 }
 
-mc_error_t mc_init(const motor_config_t *config)
+error_t mc_init(const motor_config_t *config)
 {
-  mc_error_t ret;
+  error_t ret;
   motor_handle_t *m;
 
   if (config == NULL)
   {
-    return MC_INIT_ERR_CONFIG;
+    return ERR_NULL;
   }
 
   ret = mc_platform_init();
-  if (ret != MC_OK)
+  if (ret != ERR_NONE)
   {
     return ret;
   }
 
   if (motor_hw_init() != ERR_NONE)
   {
-    return MC_INIT_ERR_GATE_HW;
+    return ERR_FAIL;
   }
 
   m = motor_get_handler();
   foc_init(m, config);
 
   ret = mc_runtime_start();
-  if (ret != MC_OK)
+  if (ret != ERR_NONE)
   {
     return ret;
   }
 
-  return MC_OK;
+  return ERR_NONE;
 }
 
 void mc_poll(void)
@@ -125,42 +125,42 @@ void mc_set_ctrl_mode(control_mode_t mode)
   }
 }
 
-mc_error_t mc_enable(void)
+error_t mc_enable(void)
 {
   motor_handle_t *m = motor_get_handler();
 
   if (motor_fault_is_latched(m) || (m->fsm == STATE_FAULT))
   {
-    return MC_ERR_FAULT;
+    return ERR_FAULT_LATCHED;
   }
 
   if (!m->current_offset_cal_done)
   {
-    return MC_ERR_OFFSET_CAL;
+    return ERR_OFFSET_CAL;
   }
 
   if (!control_mode_needs_pwm(m->ctrl_mode))
   {
-    return MC_ERR_CTRL_MODE;
+    return ERR_CTRL_MODE;
   }
 
   if (m->fsm == STATE_RUNNING)
   {
-    return MC_OK;
+    return ERR_NONE;
   }
 
   if (foc_fsm_is_calibrating(m->fsm))
   {
-    return MC_ERR_CALIBRATING;
+    return ERR_CALIBRATING;
   }
 
   if (m->fsm != STATE_IDLE)
   {
-    return MC_ERR_STATE;
+    return ERR_STATE;
   }
 
   foc_fsm_request_running(m);
-  return (m->fsm == STATE_RUNNING) ? MC_OK : MC_ERR_STATE;
+  return (m->fsm == STATE_RUNNING) ? ERR_NONE : ERR_STATE;
 }
 
 static fsm_state_t mc_cal_type_to_fsm_entry(mc_calibration_type_t type)
@@ -203,29 +203,29 @@ static mc_calibration_type_t mc_fsm_state_to_cal_type(fsm_state_t state)
   }
 }
 
-int mc_start_calibration(mc_calibration_type_t type)
+error_t mc_start_calibration(mc_calibration_type_t type)
 {
   motor_handle_t *m = motor_get_handler();
   fsm_state_t entry;
 
   if (motor_fault_is_latched(m) || (m->fsm == STATE_FAULT))
   {
-    return MC_ERR_FAULT;
+    return ERR_FAULT_LATCHED;
   }
 
   if (m->fsm != STATE_IDLE)
   {
-    return MC_ERR_STATE;
+    return ERR_STATE;
   }
 
   entry = mc_cal_type_to_fsm_entry(type);
   if (entry >= STATE_MAX)
   {
-    return MC_ERR_CAL_TYPE;
+    return ERR_CAL_TYPE;
   }
 
   foc_fsm_request_calibration(m, entry);
-  return foc_fsm_is_calibrating(m->fsm) ? MC_OK : MC_ERR_STATE;
+  return foc_fsm_is_calibrating(m->fsm) ? ERR_NONE : ERR_STATE;
 }
 
 void mc_stop_calibration(void)
@@ -253,7 +253,7 @@ mc_calibration_type_t mc_get_calibration_type(void)
   return mc_fsm_state_to_cal_type(motor_get_handler()->fsm);
 }
 
-mc_error_t mc_disable(void)
+error_t mc_disable(void)
 {
   motor_handle_t *m = motor_get_handler();
 
@@ -269,7 +269,7 @@ mc_error_t mc_disable(void)
   if (foc_fsm_is_calibrating(m->fsm))
   {
     mc_stop_calibration();
-    return MC_ERR_CALIBRATING;
+    return ERR_CALIBRATING;
   }
 
   if ((m->fsm != STATE_FAULT) || !motor_fault_is_latched(m))
@@ -280,7 +280,7 @@ mc_error_t mc_disable(void)
 
   motor_disarm(m);
   m->out.pwm_enable = 0u;
-  return MC_OK;
+  return ERR_NONE;
 }
 
 bool mc_is_enabled(void)
@@ -300,28 +300,28 @@ fsm_state_t mc_get_fsm_state(void)
   return foc_fsm_get_state(motor_get_handler());
 }
 
-int mc_try_recover_from_fault(void)
+error_t mc_try_recover_from_fault(void)
 {
   motor_handle_t *m = motor_get_handler();
 
   if (!motor_fault_is_latched(m))
   {
-    return MC_ERR_NO_FAULT;
+    return ERR_NO_FAULT;
   }
 
   motor_fault_clear_latched(m, (fault_t)0xFFFFFFFFu);
   motor_fault_clear_status(m, (fault_t)0xFFFFFFFFu);
   foc_fsm_next_state(m, STATE_IDLE);
-  return MC_OK;
+  return ERR_NONE;
 }
 
-int mc_reset_from_exception(void)
+error_t mc_reset_from_exception(void)
 {
   motor_handle_t *m = motor_get_handler();
 
   if (m == NULL)
   {
-    return MC_ERR_STATE;
+    return ERR_NULL;
   }
 
   if (foc_fsm_is_calibrating(m->fsm))
@@ -349,16 +349,16 @@ int mc_reset_from_exception(void)
   m->ref.speed_rad_s = 0.f;
   m->ref.position_rad = m->state.joint.position_rad;
 
-  return MC_OK;
+  return ERR_NONE;
 }
 
-int mc_set_joint_origin(void)
+error_t mc_set_joint_origin(void)
 {
   motor_handle_t *m = motor_get_handler();
 
   if (mc_is_enabled())
   {
-    return MC_ERR_STATE;
+    return ERR_STATE;
   }
 
   {
@@ -367,10 +367,10 @@ int mc_set_joint_origin(void)
     /* position 为控制系；theta_offset 存传感器系零偏：zero += position * dir */
     m->config.param.theta_offset_rad += m->state.shaft.position_rad * dir_f;
   }
-  return MC_OK;
+  return ERR_NONE;
 }
 
-int mc_align_electrical(void)
+error_t mc_align_electrical(void)
 {
   motor_handle_t *m = motor_get_handler();
 
@@ -381,16 +381,15 @@ int mc_align_electrical(void)
 
   if (motor_fault_is_latched(m) || (m->fsm == STATE_FAULT))
   {
-    return MC_ERR_FAULT;
+    return ERR_FAULT_LATCHED;
   }
 
   if (m->fsm != STATE_IDLE)
   {
-    return MC_ERR_STATE;
+    return ERR_STATE;
   }
 
-  foc_align_electrical(m);
-  return MC_OK;
+  return foc_align_electrical(m);
 }
 
 bool mc_kth71_cal_active(void)
@@ -448,42 +447,42 @@ void mc_kth71_cal_service(void)
       MC_KTH71_CAL_STATUS_POLL_MS * 1000u);
 }
 
-int mc_kth71_cal_start(void)
+error_t mc_kth71_cal_start(void)
 {
   motor_handle_t *m = motor_get_handler();
 
   if (m == NULL)
   {
-    return MC_ERR_STATE;
+    return ERR_NULL;
   }
 
   if (s_kth71_cal.phase != MC_KTH71_CAL_PHASE_IDLE)
   {
-    return MC_ERR_CALIBRATING;
+    return ERR_CALIBRATING;
   }
 
   if (motor_fault_is_latched(m) || (m->fsm == STATE_FAULT))
   {
-    return MC_ERR_FAULT;
+    return ERR_FAULT_LATCHED;
   }
 
   s_kth71_cal.anlc_status = KTH71_ANLC_STATUS_IDLE;
   s_kth71_cal.anlc_status_valid = 1u;
   s_kth71_cal.last_anlc_poll_us = 0u;
   s_kth71_cal.phase = MC_KTH71_CAL_PHASE_SPINUP;
-  return MC_OK;
+  return ERR_NONE;
 }
 
-int mc_kth71_cal_trigger(void)
+error_t mc_kth71_cal_trigger(void)
 {
   if (s_kth71_cal.phase != MC_KTH71_CAL_PHASE_SPINUP)
   {
-    return MC_ERR_STATE;
+    return ERR_STATE;
   }
 
   if (KTH71_StartCalibration() != 0)
   {
-    return MC_ERR_STATE;
+    return ERR_SENSOR;
   }
 
   s_kth71_cal.phase = MC_KTH71_CAL_PHASE_ANLC;
@@ -496,10 +495,10 @@ int mc_kth71_cal_trigger(void)
     s_kth71_cal.anlc_status_valid = 1u;
   }
 
-  return MC_OK;
+  return ERR_NONE;
 }
 
-int mc_kth71_cal_stop(void)
+error_t mc_kth71_cal_stop(void)
 {
   int8_t chip_ret = 0;
 
@@ -512,16 +511,16 @@ int mc_kth71_cal_stop(void)
     mc_kth71_cal_reset();
   }
 
-  return (chip_ret == 0) ? MC_OK : MC_ERR_STATE;
+  return (chip_ret == 0) ? ERR_NONE : ERR_SENSOR;
 }
 
-int mc_kth71_cal_get_status(uint8_t *status)
+error_t mc_kth71_cal_get_status(uint8_t *status)
 {
   if (status == NULL)
   {
-    return MC_ERR_STATE;
+    return ERR_NULL;
   }
 
   *status = s_kth71_cal.anlc_status;
-  return MC_OK;
+  return ERR_NONE;
 }

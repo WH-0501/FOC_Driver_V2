@@ -12,7 +12,7 @@ typedef union
 
 typedef struct  
 {
-  FLOATtoByet Data[7];
+  FLOATtoByet Data[8];
 }SENDDATA;
 
 void VoFaDisUart(void);

@@ -122,6 +122,8 @@ def mode_needs_current(mode: ControlMode) -> bool:
 
 
 class MotorError(IntEnum):
+    """周期上报错误字节（fault_t 经 can_fd_codec_fault_to_error 压缩，非 error_t）。"""
+
     NORMAL = 0
     OTP_ERR = 1
     OCP_ERR = 2
@@ -130,6 +132,67 @@ class MotorError(IntEnum):
     NFAULT_ERR = 5
     ENCODER_ERR = 6
     PHASE_LOSS_ERR = 7
+
+
+class ErrorCode(IntEnum):
+    """与固件 error_types.h error_t 一致（API 返回值 / MC 命令应答）。"""
+
+    ERR_NONE = 0
+    ERR_NULL = 1
+    ERR_PARAM = 2
+    ERR_STATE = 3
+    ERR_TIMEOUT = 4
+    ERR_NOT_IMPL = 5
+    ERR_COMM = 6
+    ERR_STORAGE = 7
+    ERR_SENSOR = 8
+    ERR_FAIL = 9
+
+    ERR_ALIGIN_SPREAD_OUT = 10
+    ERR_ALIGIN_ROTOR_NOT_ENGAGED = 11
+    ERR_ALIGIN_FAILED = 12
+
+    ERR_FAULT_LATCHED = 20
+    ERR_OFFSET_CAL = 21
+    ERR_CTRL_MODE = 22
+    ERR_CALIBRATING = 23
+    ERR_CAL_TYPE = 24
+    ERR_NO_FAULT = 25
+
+
+API_ERROR_NAMES = {
+    ErrorCode.ERR_NONE: "成功",
+    ErrorCode.ERR_NULL: "空指针",
+    ErrorCode.ERR_PARAM: "参数非法",
+    ErrorCode.ERR_STATE: "状态不允许",
+    ErrorCode.ERR_TIMEOUT: "超时",
+    ErrorCode.ERR_NOT_IMPL: "未实现",
+    ErrorCode.ERR_COMM: "通讯错误",
+    ErrorCode.ERR_STORAGE: "存储错误",
+    ErrorCode.ERR_SENSOR: "传感器错误",
+    ErrorCode.ERR_FAIL: "未分类错误",
+    ErrorCode.ERR_ALIGIN_SPREAD_OUT: "对齐采样分散度过大",
+    ErrorCode.ERR_ALIGIN_ROTOR_NOT_ENGAGED: "转子未吸合",
+    ErrorCode.ERR_ALIGIN_FAILED: "对齐失败",
+    ErrorCode.ERR_FAULT_LATCHED: "故障已锁存",
+    ErrorCode.ERR_OFFSET_CAL: "电流零偏未校准",
+    ErrorCode.ERR_CTRL_MODE: "控制模式不允许",
+    ErrorCode.ERR_CALIBRATING: "正在校准",
+    ErrorCode.ERR_CAL_TYPE: "校准类型非法",
+    ErrorCode.ERR_NO_FAULT: "无锁存故障",
+}
+
+
+def api_error_name(code: int) -> str:
+    try:
+        return API_ERROR_NAMES[ErrorCode(code)]
+    except (ValueError, KeyError):
+        return f"未知错误码"
+
+
+def format_api_error_detail(code: int) -> str:
+    """格式化 API 错误，含 error_t 数值便于对照固件 error_types.h。"""
+    return f"{api_error_name(code)} (error_t={code})"
 
 
 KTH71_ANLC_STATUS_NAMES = {

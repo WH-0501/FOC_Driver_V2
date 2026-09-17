@@ -27,9 +27,12 @@ from canbus.interface import CanThread
 from core.motor_client import MotorClient
 from protocol import (
     CMD,
+    ErrorCode,
     KTH71_ANLC_STATUS_NAMES,
+    format_api_error_detail,
     format_bytes_binary,
     format_bytes_hex,
+    parse_api_result,
     parse_bool_result,
     parse_kth71_anlc_status,
     parse_frame,
@@ -191,6 +194,23 @@ class MainWindow(QMainWindow):
     def log(self, msg: str) -> None:
         """线程安全：任意线程可调用，实际写入在主线程执行。"""
         self._log_signal.emit(msg)
+
+    def _log_api_result(
+        self,
+        arb_id: int,
+        action: str,
+        payload: bytes,
+        *,
+        no_fault_label: Optional[str] = None,
+    ) -> None:
+        ok, code = parse_api_result(payload)
+        if ok:
+            self.log(f"电机 {arb_id} {action}: 成功")
+            return
+        if no_fault_label and code == int(ErrorCode.ERR_NO_FAULT):
+            self.log(f"电机 {arb_id} {action}: {no_fault_label} (error_t={code})")
+            return
+        self.log(f"电机 {arb_id} {action}: {format_api_error_detail(code)}")
 
     def _append_log(self, msg: str) -> None:
         from protocol.time_util import format_log_timestamp
@@ -462,37 +482,42 @@ class MainWindow(QMainWindow):
             )
         elif cmd == CMD.SAVE_PARAMS:
             ok = parse_bool_result(payload)
-            self.log(f"电机 {arb_id} 保存参数: {'成功' if ok else '失败'}")
+            if ok:
+                self.log(f"电机 {arb_id} 保存参数: 成功")
+            else:
+                raw = payload[0] if payload else None
+                self.log(
+                    f"电机 {arb_id} 保存参数: 存储失败"
+                    + (f" (应答={raw})" if raw is not None else " (无应答)")
+                )
         elif cmd == CMD.RESET_TO_FACTORY:
             ok = parse_bool_result(payload)
-            self.log(f"电机 {arb_id} 恢复出厂: {'成功' if ok else '失败'}")
+            if ok:
+                self.log(f"电机 {arb_id} 恢复出厂: 成功")
+            else:
+                raw = payload[0] if payload else None
+                self.log(
+                    f"电机 {arb_id} 恢复出厂: 恢复失败"
+                    + (f" (应答={raw})" if raw is not None else " (无应答)")
+                )
         elif cmd == CMD.CLEAR_FAULT:
-            ok = parse_bool_result(payload)
-            self.log(f"电机 {arb_id} 清除故障: {'成功' if ok else '无锁存故障'}")
+            self._log_api_result(arb_id, "清除故障", payload, no_fault_label="无锁存故障")
         elif cmd == CMD.FAULT_RESET:
-            ok = parse_bool_result(payload)
-            self.log(f"电机 {arb_id} 异常复位: {'成功' if ok else '失败'}")
+            self._log_api_result(arb_id, "异常复位", payload)
         elif cmd == CMD.ALIGN_ELECTRIC_ANGLE:
-            ok = parse_bool_result(payload)
-            self.log(f"电机 {arb_id} 电角度对齐: {'成功' if ok else '失败'}")
+            self._log_api_result(arb_id, "电角度对齐", payload)
         elif cmd == CMD.KTH71_CAL_START:
-            ok = parse_bool_result(payload)
-            self.log(
-                f"电机 {arb_id} KTH71 开始校准: "
-                f"{'成功' if ok else '失败（须已使能：速度开环或电流/速度闭环）'}"
-            )
+            self._log_api_result(arb_id, "KTH71 开始校准", payload)
         elif cmd == CMD.KTH71_CAL_TRIGGER:
-            ok = parse_bool_result(payload)
-            self.log(f"电机 {arb_id} KTH71 触发 ANLC: {'成功' if ok else '失败'}")
+            self._log_api_result(arb_id, "KTH71 触发 ANLC", payload)
         elif cmd == CMD.KTH71_CAL_STOP:
-            ok = parse_bool_result(payload)
-            self.log(f"电机 {arb_id} KTH71 停止校准: {'成功' if ok else '失败'}")
+            self._log_api_result(arb_id, "KTH71 停止校准", payload)
         elif cmd == CMD.KTH71_CAL_STATUS:
             status = parse_kth71_anlc_status(payload)
             if status is None:
-                self.log(f"电机 {arb_id} KTH71 校准状态: 应答无效")
+                self.log(f"电机 {arb_id} KTH71 校准状态: 应答无效 (payload={payload.hex()})")
             else:
-                name = KTH71_ANLC_STATUS_NAMES.get(status, f"未知({status})")
+                name = KTH71_ANLC_STATUS_NAMES.get(status, f"未知状态")
                 self.log(f"电机 {arb_id} KTH71 校准状态: {name} (anlc={status})")
         elif cmd == CMD.SET_NODE_ID:
             new_id = parse_node_id_response(payload)

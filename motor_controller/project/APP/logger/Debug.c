@@ -4,7 +4,7 @@
 #include "common.h"
 #include "../../Board/board.h"
 
-unsigned char UartTemp[32];
+unsigned char UartTemp[36];
 SENDDATA Send;
 
 void VoFaDisUart(void)
@@ -44,6 +44,7 @@ void VoFaDisUart(void)
     Send.Data[4].FloatData = m->state.phase_current.ampere[1]; // V 相电流
     Send.Data[5].FloatData = m->state.phase_current.ampere[2]; // W 相电流
     Send.Data[6].FloatData = m->state.i_q; // Q 相电流
+    Send.Data[7].FloatData = m->state.i_d; // D 相电流
 
     __enable_irq();
 
@@ -81,11 +82,16 @@ void VoFaDisUart(void)
     UartTemp[25] = Send.Data[6].ByteData[1]; //
     UartTemp[26] = Send.Data[6].ByteData[2]; //
     UartTemp[27] = Send.Data[6].ByteData[3]; //
-        
-    UartTemp[28] = 0x00;
-    UartTemp[29] = 0x00;
-    UartTemp[30] = 0x80;
-    UartTemp[31] = 0x7f;
 
-    (void)board_uart_tx_try(UartTemp, 32u);
+    UartTemp[28] = Send.Data[7].ByteData[0]; //The eighth data
+    UartTemp[29] = Send.Data[7].ByteData[1]; //
+    UartTemp[30] = Send.Data[7].ByteData[2]; //
+    UartTemp[31] = Send.Data[7].ByteData[3]; //
+        
+    UartTemp[32] = 0x00;
+    UartTemp[33] = 0x00;
+    UartTemp[34] = 0x80;
+    UartTemp[35] = 0x7f;
+
+    (void)board_uart_tx_try(UartTemp, 36u);
 }

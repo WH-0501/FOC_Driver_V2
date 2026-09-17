@@ -16,6 +16,7 @@ from .constants import (
     IAP_V5_FRAME_SIZE,
     IAP_V5_PAD_BYTE,
     IAP_V5_MIN_START_PAYLOAD,
+    ErrorCode,
     MotorError,
     PID_FORMAT,
     PID_RAW_MAX,
@@ -589,7 +590,16 @@ def parse_protect_response(payload: bytes) -> Dict[str, Any]:
 
 
 def parse_bool_result(payload: bytes) -> bool:
+    """解析布尔应答（保存参数等）：1 成功，0 失败。"""
     return len(payload) >= 1 and payload[0] == 1
+
+
+def parse_api_result(payload: bytes) -> tuple[bool, int]:
+    """解析 MC API 应答：payload[0] 为 error_t，0 表示成功。"""
+    if not payload:
+        return False, int(ErrorCode.ERR_FAIL)
+    code = int(payload[0])
+    return code == int(ErrorCode.ERR_NONE), code
 
 
 def parse_kth71_anlc_status(payload: bytes) -> Optional[int]:

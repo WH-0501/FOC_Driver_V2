@@ -52,6 +52,18 @@ typedef enum
   ERR_STORAGE       = 7, ///< 存储错误
   ERR_SENSOR        = 8, ///< 传感器错误
   ERR_FAIL          = 9, ///< 失败，未定义错误
+
+  ERR_ALIGIN_SPREAD_OUT = 10, ///< 对齐采样分散度过大
+  ERR_ALIGIN_ROTOR_NOT_ENGAGED = 11, ///< 转子未吸合
+  ERR_ALIGIN_FAILED = 12, ///< 对齐失败
+
+  ERR_FAULT_LATCHED = 20, ///< 故障已锁存，操作被拒绝
+  ERR_OFFSET_CAL = 21,    ///< 电流零偏未校准
+  ERR_CTRL_MODE = 22,     ///< 当前控制模式不允许该操作
+  ERR_CALIBRATING = 23,   ///< 正在校准中
+  ERR_CAL_TYPE = 24,      ///< 校准类型非法
+  ERR_NO_FAULT = 25,      ///< 无故障可清除
+
 } error_t;
 
 /** 由测量与 limits 周期性自动刷新的瞬时故障位（不含仅由应用/驱动引脚置位的位） */

@@ -180,7 +180,7 @@ int main(void)
 
   // 2. 电机控制器初始化
   motor_config_set_defaults(&motor_cfg); // 强制更新参数,避免改动不生效
-  if (mc_init(&motor_cfg) != MC_OK)
+  if (mc_init(&motor_cfg) != ERR_NONE)
   {
     while (1)
     {

@@ -245,7 +245,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
   uint16_t hz;
   int16_t temp_cal_raw;
   uint8_t node_id_be[2];
-  int result;
+  error_t result;
 
   if (m == NULL)
   {
@@ -293,7 +293,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
 
     case CAN_FD_CMD_FAULT_RESET:
       result = mc_reset_from_exception();
-      reply_payload[0] = (result == MC_OK) ? 1u : 0u;
+      reply_payload[0] = (uint8_t)result;
       can_fd_custom_reply(CAN_FD_CMD_FAULT_RESET, reply_payload, 1u);
       break;
 
@@ -440,7 +440,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
 
     case CAN_FD_CMD_CLEAR_FAULT:
       result = mc_try_recover_from_fault();
-      reply_payload[0] = (result == MC_OK) ? 1u : 0u;
+      reply_payload[0] = (uint8_t)result;
       can_fd_custom_reply(CAN_FD_CMD_CLEAR_FAULT, reply_payload, 1u);
       break;
 
@@ -471,7 +471,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       if (can_fd_custom_require_disabled())
       {
         result = mc_align_electrical();
-        reply_payload[0] = (result == MC_OK) ? 1u : 0u;
+        reply_payload[0] = (uint8_t)result;
         can_fd_custom_reply(CAN_FD_CMD_ALIGN_ELECTRIC_ANGLE, reply_payload, 1u);
       }
       break;
@@ -489,18 +489,18 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
     case CAN_FD_CMD_KTH71_CAL_START:
       if (!mc_kth71_cal_active())
       {
-        reply_payload[0] = (mc_kth71_cal_start() == MC_OK) ? 1u : 0u;
+        reply_payload[0] = (uint8_t)mc_kth71_cal_start();
         can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_START, reply_payload, 1u);
       }
       break;
 
     case CAN_FD_CMD_KTH71_CAL_STOP:
-      reply_payload[0] = (mc_kth71_cal_stop() == MC_OK) ? 1u : 0u;
+      reply_payload[0] = (uint8_t)mc_kth71_cal_stop();
       can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_STOP, reply_payload, 1u);
       break;
 
     case CAN_FD_CMD_KTH71_CAL_TRIGGER:
-      reply_payload[0] = (mc_kth71_cal_trigger() == MC_OK) ? 1u : 0u;
+      reply_payload[0] = (uint8_t)mc_kth71_cal_trigger();
       can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_TRIGGER, reply_payload, 1u);
       break;
 

@@ -45,9 +45,9 @@ void foc_sense_update(motor_handle_t *m)
     return;
   }
 
-  encoder_update(m);
   board_get_phase_current(m);
   current_sense_process_sample(m);
+  encoder_update(m);
 
   clarke_transform(m->state.phase_current.ampere[0],
                    m->state.phase_current.ampere[1],
