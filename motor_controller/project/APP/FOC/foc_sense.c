@@ -18,7 +18,7 @@ void foc_sense_poll_vbus(motor_handle_t *m)
     return;
   }
 
-  now = board_time_us();
+  now = (uint32_t)dwt_get_ticks_us();
   if ((now - s_last_us) < FOC_VBUS_POLL_MIN_INTERVAL_US)
   {
     return;
