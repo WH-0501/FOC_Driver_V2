@@ -386,17 +386,17 @@ error_t foc_align_electrical(motor_handle_t *m)
   }
 
   /* 5) 转子吸合验证 */
-  // rt->align_engaged = foc_align_check_rotor_engaged(m, dir, ud, align_angle, raw_locked, 
-  //                                                   (uint8_t)ALIGN_SAMPLE_COUNT, 
-  //                                                   &raw_engage_out, &spread_out);
-  // rt->align_raw_engage_rad = raw_engage_out; // 转子吸合采样 raw 电角（未减 offset）
-  // if (!rt->align_engaged)
-  // {
-  //   motor_fault_raise(m, FAULT_ALIGN_FAILED);
-  //   // foc_align_finish(m, rt, align_angle);
-  //   ret = ERR_ALIGIN_ROTOR_NOT_ENGAGED;
-  //   goto exit;
-  // }
+  rt->align_engaged = foc_align_check_rotor_engaged(m, dir, ud, align_angle, raw_locked, 
+                                                    (uint8_t)ALIGN_SAMPLE_COUNT, 
+                                                    &raw_engage_out, &spread_out);
+  rt->align_raw_engage_rad = raw_engage_out; // 转子吸合采样 raw 电角（未减 offset）
+  if (!rt->align_engaged)
+  {
+    motor_fault_raise(m, FAULT_ALIGN_FAILED);
+    // foc_align_finish(m, rt, align_angle);
+    ret = ERR_ALIGIN_ROTOR_NOT_ENGAGED;
+    goto exit;
+  }
 
   rt->align_polarity_test_iq = iq_probe;
   if (fabsf(iq_probe) >= ALIGN_POLARITY_IQ_MIN_A && iq_probe > 0.0f)
@@ -454,7 +454,7 @@ static void foc_speed_open_control(motor_handle_t *m, float target_speed)
   else
   {
     rt->open_loop_uq = OPEN_LOOP_UQ_MAX;
-    rt->open_loop_iq = OPEN_LOOP_IQ_MAX;
+    // rt->open_loop_iq = OPEN_LOOP_IQ_MAX;
     /* ref.speed / open_loop_omega 为关节端 [rad/s]；电角速率 = pp × ω_shaft = pp × ω_joint × gear_ratio */
     {
       float gear_ratio = (m->config.param.gear_ratio > 0.0f) ? m->config.param.gear_ratio : 1.0f;

@@ -11,7 +11,7 @@
 /* V / . / _ 为 ASCII，主/次/修订为数值字节 */
 #define FOC_SOFT_VERSION_MAJOR 2u
 #define FOC_SOFT_VERSION_MINOR 0u
-#define FOC_SOFT_VERSION_PATCH 0u
+#define FOC_SOFT_VERSION_PATCH 1u
 
 #define BUILD_YEAR ((((uint32_t)__DATE__[9] - '0') * 10u) + ((uint32_t)__DATE__[10] - '0'))
 #define BUILD_DAY                                                                                  \
