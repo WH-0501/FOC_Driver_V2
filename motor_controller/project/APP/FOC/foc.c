@@ -152,14 +152,6 @@ static float foc_align_raw_elec_rad(const motor_handle_t *m, int8_t dir)
   return m->state.shaft.angle_rad * pole_pairs;
 }
 
-static void foc_align_set_offset_from_raw(motor_handle_t *m, float raw_elec, float align_angle)
-{
-  if (m == NULL) return;
-
-  /* theta_elec = normalize(raw - offset)；锁定时应等于 align_angle */
-  m->config.param.theta_elec_offset_rad = angle_normalize(raw_elec - align_angle);
-}
-
 static void foc_align_hold_voltage(motor_handle_t *m, float ud, float uq, float angle_el, uint32_t hold_ms)
 {
   uint32_t elapsed = 0u;
@@ -210,12 +202,11 @@ static float foc_align_sample_raw_elec(motor_handle_t *m,
   return sum / (float)count;
 }
 
-static float foc_align_probe_iq(motor_handle_t *m, float uq, float angle_el, uint16_t hold_ms)
+static float foc_align_probe_iq(motor_handle_t *m, float uq, float ud, float angle_el, uint16_t hold_ms)
 {
   if (m == NULL) return 0.0f;
 
-  foc_voltage(m, uq, 0.0f, angle_el);
-  delay_ms(hold_ms);
+  foc_align_hold_voltage(m, ud, uq, angle_el, hold_ms);
   foc_sense_update(m);
   return m->state.i_q;
 }
@@ -341,17 +332,13 @@ error_t foc_align_electrical(motor_handle_t *m)
   if (spread_out > ALIGN_ROTOR_SPREAD_MAX_RAD)
   {
     motor_fault_raise(m, FAULT_ALIGN_FAILED);
-    // foc_align_finish(m, rt, align_angle);
     ret = ERR_ALIGIN_SPREAD_OUT;
     goto exit;
   }
-  rt->align_raw_elec_rad = raw_locked; // 采样均值
-  foc_align_set_offset_from_raw(m, raw_locked, align_angle);
-  foc_sense_update(m);
-  rt->align_theta_after_rad = m->state.theta_elec_rad;
+  rt->align_raw_elec_rad = raw_locked;
 
   /* 3) +Vq 极性探针：正 Vq 应产生正 i_q（仍保持 d 轴锁定角 align_angle 作 Park 角） */
-  iq_probe = foc_align_probe_iq(m, ALIGN_POLARITY_TEST_UQ_V, align_angle, ALIGN_POLARITY_TEST_MS);
+  iq_probe = foc_align_probe_iq(m, ALIGN_POLARITY_TEST_UQ_V, ud, align_angle, ALIGN_POLARITY_TEST_MS);
 
   if (fabsf(iq_probe) >= ALIGN_POLARITY_IQ_MIN_A && iq_probe < 0.0f)
   {
@@ -374,18 +361,25 @@ error_t foc_align_electrical(motor_handle_t *m)
     if (spread_out > ALIGN_ROTOR_SPREAD_MAX_RAD)
     {
       motor_fault_raise(m, FAULT_ALIGN_FAILED);
-      // foc_align_finish(m, rt, align_angle);
       ret = ERR_ALIGIN_SPREAD_OUT;
       goto exit;
     }
-    foc_align_set_offset_from_raw(m, raw_locked, align_angle);
-    foc_sense_update(m);
-    rt->align_theta_after_rad = m->state.theta_elec_rad;
-
-    iq_probe = foc_align_probe_iq(m, ALIGN_POLARITY_TEST_UQ_V, align_angle, ALIGN_POLARITY_TEST_MS);
+    iq_probe = foc_align_probe_iq(m, ALIGN_POLARITY_TEST_UQ_V, ud, align_angle, ALIGN_POLARITY_TEST_MS);
   }
 
-  /* 5) 转子吸合验证 */
+  /* 5) 极性探针可能扰动转子：吸合验证前重新 d 轴锁定并采样 baseline */
+  foc_align_hold_voltage(m, ud, 0.0f, align_angle, ALIGN_RELOCK_MS);
+  raw_locked = foc_align_sample_raw_elec(m, dir, ud, 0.0f, align_angle,
+                                         (uint8_t)ALIGN_SAMPLE_COUNT, &spread_out);
+  if (spread_out > ALIGN_ROTOR_SPREAD_MAX_RAD)
+  {
+    motor_fault_raise(m, FAULT_ALIGN_FAILED);
+    ret = ERR_ALIGIN_SPREAD_OUT;
+    goto exit;
+  }
+  rt->align_raw_elec_rad = raw_locked;
+
+  /* 6) 转子吸合验证 */
   rt->align_engaged = foc_align_check_rotor_engaged(m, dir, ud, align_angle, raw_locked, 
                                                     (uint8_t)ALIGN_SAMPLE_COUNT, 
                                                     &raw_engage_out, &spread_out);
@@ -393,7 +387,6 @@ error_t foc_align_electrical(motor_handle_t *m)
   if (!rt->align_engaged)
   {
     motor_fault_raise(m, FAULT_ALIGN_FAILED);
-    // foc_align_finish(m, rt, align_angle);
     ret = ERR_ALIGIN_ROTOR_NOT_ENGAGED;
     goto exit;
   }
@@ -415,6 +408,18 @@ error_t foc_align_electrical(motor_handle_t *m)
   (void)foc_pid_clear(&m->id_pid);
   (void)foc_pid_clear(&m->iq_pid);
   rt->electrical_align_done = rt->align_ok;
+  if (rt->align_ok)
+  {
+    /* theta_elec = normalize(raw - offset)；锁定时应等于 align_angle */
+    m->config.param.theta_elec_offset_rad = angle_normalize(rt->align_raw_elec_rad - align_angle);
+    if ((m->config.param.direction != DIR_CW) && (m->config.param.direction != DIR_CCW))
+    {
+      m->config.param.direction = DIR_CW;
+    }
+    foc_sense_update(m);
+    rt->align_theta_after_rad = m->state.theta_elec_rad;
+    rt->open_loop_elec_angle_rad = m->state.theta_elec_rad;
+  }
   if (!rt->align_ok)
   {
     motor_fault_raise(m, FAULT_ALIGN_FAILED);
