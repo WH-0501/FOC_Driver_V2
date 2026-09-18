@@ -44,7 +44,7 @@ void VoFaDisUart(void)
     Send.Data[4].FloatData = m->state.phase_current.ampere[1]; // V 相电流
     Send.Data[5].FloatData = m->state.phase_current.ampere[2]; // W 相电流
     Send.Data[6].FloatData = m->state.i_q; // Q 相电流
-    Send.Data[7].FloatData = m->state.i_d; // D 相电流
+    Send.Data[7].FloatData = m->state.shaft.counts; // m->state.i_d; // D 相电流
 
     __enable_irq();
 

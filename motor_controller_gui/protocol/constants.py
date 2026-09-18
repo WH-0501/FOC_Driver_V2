@@ -290,4 +290,4 @@ IAP_POST_VERIFY_QUERY_S = 5.0
 IAP_DATA_FRAME_INTERVAL_S = 0.001  # DATA 帧间隔
 IAP_START_MIN_FIRMWARE_CHUNK = 25  # 8 + 25 > 32（协议文档 IAP_START 载荷 >32）
 IAP_ASIX_SIGNATURE = b"ASIX"
-IAP_ASIX_HEADER_SIZE = 32  # 与 iap_upgrade.h / Bootloader 一致，VERIFY 时由设备写入
+IAP_ASIX_HEADER_SIZE = 32  # 与 iap.c / Bootloader 一致；START 起整包写入 staging

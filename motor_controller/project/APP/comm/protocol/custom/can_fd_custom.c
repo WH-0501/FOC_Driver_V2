@@ -14,6 +14,7 @@ static bool (*s_send)(const comm_frame_t *frame);
 static uint32_t s_last_report_us;
 static uint8_t s_tx_cnt;
 static uint32_t s_report_interval_us = 1000u;
+static uint32_t s_saved_report_interval_us;
 static float s_mcu_temp_cal_c;
 static motor_handle_t *s_motor;
 static uint8_t s_tx_buf[COMM_FRAME_MAX_LEN];
@@ -123,6 +124,26 @@ static bool can_fd_custom_is_for_this_node(uint32_t id)
   }
 
   return (id == (uint32_t)s_node_id);
+}
+
+static void can_fd_custom_cycle_set(uint8_t enable)
+{
+  if (enable == 0u)
+  {
+    if (s_report_interval_us != 0u)
+    {
+      s_saved_report_interval_us = s_report_interval_us;
+    }
+    s_report_interval_us = 0u;
+  }
+  else
+  {
+    if (s_saved_report_interval_us == 0u)
+    {
+      s_saved_report_interval_us = 1000000u / (uint32_t)CAN_FD_REPORT_HZ_DEFAULT;
+    }
+    s_report_interval_us = s_saved_report_interval_us;
+  }
 }
 
 static void can_fd_custom_apply_pos(motor_handle_t *m, int16_t pos_raw)
@@ -463,6 +484,10 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         if (hz <= CAN_FD_REPORT_HZ_MAX)
         {
           s_report_interval_us = (hz == 0u) ? 0u : (1000000u / (uint32_t)hz);
+          if (s_report_interval_us != 0u)
+          {
+            s_saved_report_interval_us = s_report_interval_us;
+          }
         }
       }
       break;
@@ -598,7 +623,9 @@ static bool can_fd_custom_init(uint16_t node_id)
   s_last_report_us = board_time_us();
   s_tx_cnt = 0u;
   s_report_interval_us = 1000000u / (uint32_t)CAN_FD_REPORT_HZ_DEFAULT;
+  s_saved_report_interval_us = s_report_interval_us;
   s_mcu_temp_cal_c = 0.0f;
+  can_fd_iap_setup(can_fd_custom_send_frame, &s_node_id, can_fd_custom_cycle_set);
   return (node_id <= 0x7FFu);
 }
 
@@ -631,14 +658,14 @@ static void can_fd_custom_on_rx(const comm_frame_t *frame)
   {
     if (cmd >= CAN_FD_CMD_IAP_ENTER)
     {
-      can_fd_iap_on_rx(frame->id, cmd, payload, payload_len, s_send, s_node_id, &s_tx_cnt);
+      can_fd_iap_on_rx(frame);
     }
     return;
   }
 
   if (cmd >= CAN_FD_CMD_IAP_ENTER)
   {
-    can_fd_iap_on_rx(frame->id, cmd, payload, payload_len, s_send, s_node_id, &s_tx_cnt);
+    can_fd_iap_on_rx(frame);
     return;
   }
 
@@ -647,13 +674,16 @@ static void can_fd_custom_on_rx(const comm_frame_t *frame)
 
 static void can_fd_custom_poll(void)
 {
-  uint32_t now = board_time_us();
+  uint32_t now;
+
+  can_fd_iap_poll();
 
   if (s_report_interval_us == 0u)
   {
     return;
   }
 
+  now = board_time_us();
   if ((now - s_last_report_us) >= s_report_interval_us)
   {
     s_last_report_us = now;

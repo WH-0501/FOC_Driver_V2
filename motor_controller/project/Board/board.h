@@ -22,6 +22,7 @@
 #include "datatypes.h"
 #include "error_types.h"
 #include "gate_hw_binding.h"
+#include "dwt_profile_delay.h"
 
 typedef void (*board_current_loop_cb_t)(void);
 

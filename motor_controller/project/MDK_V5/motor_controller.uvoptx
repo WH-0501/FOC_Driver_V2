@@ -152,25 +152,25 @@
         <Bp>
           <Number>0</Number>
           <Type>0</Type>
-          <LineNumber>282</LineNumber>
+          <LineNumber>321</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134240810</Address>
+          <Address>134239006</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
           <BreakIfRCount>1</BreakIfRCount>
-          <Filename>..\APP\FOC\foc.c</Filename>
+          <Filename>..\APP\FOC\encoder.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\motor_controller\../APP/FOC/foc.c\282</Expression>
+          <Expression>\\motor_controller\../APP/FOC/encoder.c\321</Expression>
         </Bp>
         <Bp>
           <Number>1</Number>
           <Type>0</Type>
           <LineNumber>378</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134241240</Address>
+          <Address>134241008</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
@@ -186,7 +186,7 @@
           <Type>0</Type>
           <LineNumber>345</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134241044</Address>
+          <Address>134240812</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
@@ -196,22 +196,6 @@
           <Filename>..\APP\FOC\foc.c</Filename>
           <ExecCommand></ExecCommand>
           <Expression>\\motor_controller\../APP/FOC/foc.c\345</Expression>
-        </Bp>
-        <Bp>
-          <Number>3</Number>
-          <Type>0</Type>
-          <LineNumber>274</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>134240774</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
-          <Filename>..\APP\FOC\foc.c</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression>\\motor_controller\../APP/FOC/foc.c\274</Expression>
         </Bp>
       </Breakpoint>
       <WatchWindow1>
@@ -234,6 +218,11 @@
           <count>3</count>
           <WinNumber>1</WinNumber>
           <ItemText>delta</ItemText>
+        </Ww>
+        <Ww>
+          <count>4</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>obs-&gt;sample.counts</ItemText>
         </Ww>
       </WatchWindow1>
       <Tracepoint>
@@ -283,7 +272,7 @@
 
   <Group>
     <GroupName>user</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -619,7 +608,7 @@
 
   <Group>
     <GroupName>Board</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -915,7 +904,7 @@
 
   <Group>
     <GroupName>Logger</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>

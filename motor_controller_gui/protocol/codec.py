@@ -314,17 +314,20 @@ def parse_fw_version_payload(payload: bytes) -> str:
     """解析 IAP 0xFD 固件版本应答（兼容 ASCII 与协议二进制两种格式）。"""
     if not payload:
         return ""
+    if _is_binary_fw_version(payload):
+        major = payload[1]
+        minor = payload[3]
+        patch = payload[5]
+        date_bytes = payload[7:]
+        while date_bytes and date_bytes[-1] == 0:
+            date_bytes = date_bytes[:-1]
+        date_str = "".join(f"{b:02d}" for b in date_bytes)
+        return f"V{major}.{minor}.{patch}_{date_str}"
     end = payload.find(b"\x00")
     if end >= 0:
         payload = payload[:end]
     if not payload:
         return ""
-    if _is_binary_fw_version(payload):
-        major = payload[1]
-        minor = payload[3]
-        patch = payload[5]
-        date_str = "".join(f"{b:02d}" for b in payload[7:])
-        return f"V{major}.{minor}.{patch}_{date_str}"
     return payload.decode("ascii", errors="replace")
 
 
