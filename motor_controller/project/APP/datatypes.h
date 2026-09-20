@@ -87,7 +87,8 @@ typedef struct
 {
   uint16_t adc_raw[3];   ///< 三相电流 ADC 原始计数值
   uint16_t adc_offset[3]; ///< 三相零电流平均 ADC（零漂）
-  float ampere[3];       ///< 三相电流实测值 [A]
+  float ampere[3];       ///< 三相电流实测值 [A]（已去共模，满足 ia+ib+ic≈0）
+  float kcl_residual;    ///< 去共模前 ia+ib+ic [A]，用于观测采样/接线误差
 } motor_phase_current_t;
 
 /**

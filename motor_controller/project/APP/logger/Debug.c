@@ -1,15 +1,19 @@
 #include "Debug.h"
 #include "motor.h"
-#include "encoder.h"
 #include "common.h"
 #include "../../Board/board.h"
 
-unsigned char UartTemp[36];
+#define VOFA_FRAME_TAIL_SIZE 4u
+#define VOFA_FRAME_SIZE      (VOFA_CHANNEL_COUNT * 4u + VOFA_FRAME_TAIL_SIZE)
+
+unsigned char UartTemp[VOFA_FRAME_SIZE];
 SENDDATA Send;
 
 void VoFaDisUart(void)
 {
     static uint8_t s_vofa_stream_enabled = 0u;
+    uint32_t i;
+    uint32_t offset;
 
     if (s_vofa_stream_enabled == 0u)
     {
@@ -29,69 +33,35 @@ void VoFaDisUart(void)
         return;
     }
 
-    encoder_shaft_debug_t enc_dbg;
-
     __disable_irq();
-    // (void)encoder_get_shaft_debug(m, &enc_dbg);
-
-    // Send.Data[0].FloatData = m->state.shaft.raw_counts;
-    // Send.Data[1].FloatData = m->state.shaft.counts;
-    // Send.Data[2].FloatData = m->state.theta_elec_rad;
-    Send.Data[0].FloatData = m->out.duty_a; // U 相占空比
-    Send.Data[1].FloatData = m->out.duty_b; // V 相占空比
-    Send.Data[2].FloatData = m->out.duty_c; // W 相占空比
-    Send.Data[3].FloatData = m->state.phase_current.ampere[0]; // U 相电流
-    Send.Data[4].FloatData = m->state.phase_current.ampere[1]; // V 相电流
-    Send.Data[5].FloatData = m->state.phase_current.ampere[2]; // W 相电流
-    Send.Data[6].FloatData = m->state.i_q; // Q 相电流
-    Send.Data[7].FloatData = m->state.shaft.counts; // m->state.i_d; // D 相电流
-
+    Send.Data[0].FloatData = m->out.duty_a;
+    Send.Data[1].FloatData = m->out.duty_b;
+    Send.Data[2].FloatData = m->out.duty_c;
+    Send.Data[3].FloatData = m->out.duty_a - 0.5f;
+    Send.Data[4].FloatData = m->out.duty_b - 0.5f;
+    Send.Data[5].FloatData = m->out.duty_c - 0.5f;
+    Send.Data[6].FloatData = m->state.phase_current.ampere[0];
+    Send.Data[7].FloatData = m->state.phase_current.ampere[1];
+    Send.Data[8].FloatData = m->state.phase_current.ampere[2];
+    Send.Data[9].FloatData = m->state.phase_current.kcl_residual;
+    Send.Data[10].FloatData = m->state.i_q;
+    Send.Data[11].FloatData = m->state.shaft.counts;
     __enable_irq();
 
-    UartTemp[0] = Send.Data[0].ByteData[0]; //The first data
-    UartTemp[1] = Send.Data[0].ByteData[1]; //
-    UartTemp[2] = Send.Data[0].ByteData[2]; //
-    UartTemp[3] = Send.Data[0].ByteData[3]; //
+    for (i = 0u; i < VOFA_CHANNEL_COUNT; i++)
+    {
+        offset = i * 4u;
+        UartTemp[offset] = Send.Data[i].ByteData[0];
+        UartTemp[offset + 1u] = Send.Data[i].ByteData[1];
+        UartTemp[offset + 2u] = Send.Data[i].ByteData[2];
+        UartTemp[offset + 3u] = Send.Data[i].ByteData[3];
+    }
 
-    UartTemp[4] = Send.Data[1].ByteData[0]; //The second data
-    UartTemp[5] = Send.Data[1].ByteData[1]; //
-    UartTemp[6] = Send.Data[1].ByteData[2]; //
-    UartTemp[7] = Send.Data[1].ByteData[3]; //
+    offset = VOFA_CHANNEL_COUNT * 4u;
+    UartTemp[offset] = 0x00;
+    UartTemp[offset + 1u] = 0x00;
+    UartTemp[offset + 2u] = 0x80;
+    UartTemp[offset + 3u] = 0x7f;
 
-    UartTemp[8] =  Send.Data[2].ByteData[0]; //The third data
-    UartTemp[9] =  Send.Data[2].ByteData[1]; //
-    UartTemp[10] = Send.Data[2].ByteData[2]; //
-    UartTemp[11] = Send.Data[2].ByteData[3]; //
-
-    UartTemp[12] = Send.Data[3].ByteData[0]; //The fourth data
-    UartTemp[13] = Send.Data[3].ByteData[1]; //
-    UartTemp[14] = Send.Data[3].ByteData[2]; //
-    UartTemp[15] = Send.Data[3].ByteData[3]; //
-        
-    UartTemp[16] = Send.Data[4].ByteData[0]; //The fifth data
-    UartTemp[17] = Send.Data[4].ByteData[1]; //
-    UartTemp[18] = Send.Data[4].ByteData[2]; //
-    UartTemp[19] = Send.Data[4].ByteData[3]; //
-
-    UartTemp[20] = Send.Data[5].ByteData[0]; //The sixth data
-    UartTemp[21] = Send.Data[5].ByteData[1]; //
-    UartTemp[22] = Send.Data[5].ByteData[2]; //
-    UartTemp[23] = Send.Data[5].ByteData[3]; //
-
-    UartTemp[24] = Send.Data[6].ByteData[0]; //The seventh data
-    UartTemp[25] = Send.Data[6].ByteData[1]; //
-    UartTemp[26] = Send.Data[6].ByteData[2]; //
-    UartTemp[27] = Send.Data[6].ByteData[3]; //
-
-    UartTemp[28] = Send.Data[7].ByteData[0]; //The eighth data
-    UartTemp[29] = Send.Data[7].ByteData[1]; //
-    UartTemp[30] = Send.Data[7].ByteData[2]; //
-    UartTemp[31] = Send.Data[7].ByteData[3]; //
-        
-    UartTemp[32] = 0x00;
-    UartTemp[33] = 0x00;
-    UartTemp[34] = 0x80;
-    UartTemp[35] = 0x7f;
-
-    (void)board_uart_tx_try(UartTemp, 36u);
+    (void)board_uart_tx_try(UartTemp, VOFA_FRAME_SIZE);
 }

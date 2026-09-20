@@ -10,10 +10,12 @@ typedef union
   unsigned char  ByteData[4];
 }FLOATtoByet;
 
-typedef struct  
+#define VOFA_CHANNEL_COUNT 12u
+
+typedef struct
 {
-  FLOATtoByet Data[8];
-}SENDDATA;
+  FLOATtoByet Data[VOFA_CHANNEL_COUNT];
+} SENDDATA;
 
 void VoFaDisUart(void);
 
