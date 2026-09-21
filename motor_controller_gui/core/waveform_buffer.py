@@ -28,6 +28,7 @@ class WaveformBuffer:
         self.times: Deque[float] = deque(maxlen=max_points)
         self.channels: Dict[str, Deque[float]] = {key: deque(maxlen=max_points) for key in CURVE_KEYS}
         self._last_target = {"pos": 0.0, "vel": 0.0, "iq": 0.0}
+        self.generation = 0
 
     def set_target(self, pos: Optional[float] = None, vel: Optional[float] = None, iq: Optional[float] = None) -> None:
         if pos is not None:
@@ -88,6 +89,7 @@ class WaveformBuffer:
         self.channels["ic"].append(sample.get("ic_ma", 0.0))
 
         self._trim_window()
+        self.generation += 1
 
     def _trim_window(self) -> None:
         if not self.times:
@@ -104,6 +106,7 @@ class WaveformBuffer:
         self.times.clear()
         for ch in self.channels.values():
             ch.clear()
+        self.generation = 0
 
     def snapshot(self) -> Dict[str, Tuple]:
         result = {"times": tuple(self.times)}

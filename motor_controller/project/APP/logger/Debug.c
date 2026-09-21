@@ -44,7 +44,7 @@ void VoFaDisUart(void)
     Send.Data[7].FloatData = m->state.phase_current.ampere[1];
     Send.Data[8].FloatData = m->state.phase_current.ampere[2];
     Send.Data[9].FloatData = m->state.phase_current.kcl_residual;
-    Send.Data[10].FloatData = m->state.i_q;
+    Send.Data[10].FloatData = m->inv_clarke_result.u_a; // m->state.i_q;
     Send.Data[11].FloatData = m->state.shaft.counts;
     __enable_irq();
 

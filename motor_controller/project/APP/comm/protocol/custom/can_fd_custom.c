@@ -495,7 +495,22 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
     case CAN_FD_CMD_ALIGN_ELECTRIC_ANGLE:
       if (can_fd_custom_require_disabled())
       {
-        result = mc_align_electrical();
+        if (payload_len >= 1u)
+        {
+          uint8_t method = payload[0];
+          if (method <= (uint8_t)CAL_ELEC_ALIGN_HFI)
+          {
+            result = mc_align_electrical_method((cal_elec_align_method_t)method);
+          }
+          else
+          {
+            result = ERR_PARAM;
+          }
+        }
+        else
+        {
+          result = mc_align_electrical();
+        }
         reply_payload[0] = (uint8_t)result;
         can_fd_custom_reply(CAN_FD_CMD_ALIGN_ELECTRIC_ANGLE, reply_payload, 1u);
       }

@@ -40,8 +40,11 @@
 /* 电角度对齐时的电压参数 */
 #define ALIGN_ELECTRICAL_ANGLE_RAD     (_3PI_2)
 #define ALIGN_ELECTRICAL_VOLTAGE_D_V   (5.0f)
-#define ALIGN_ELECTRICAL_VOLTAGE_Q_V   (0.0f)
+/** Uq 锁定拖拽电压；Ud 模式在代码中固定 Uq=0 */
+#define ALIGN_ELECTRICAL_VOLTAGE_Q_V   (1.5f)
 #define ALIGN_HOLD_MS                  (700u)
+/** dex-con Uq 对齐稳定等待时间 [ms]：SetPhaseVoltage(1,0,_3PI_2) 后等待 */
+#define ALIGN_HOLD_MS_DEX              (300u)
 #define ALIGN_SAMPLE_COUNT             (16u)
 #define ALIGN_SAMPLE_INTERVAL_MS       (5u)
 #define ALIGN_RELOCK_MS                (200u)

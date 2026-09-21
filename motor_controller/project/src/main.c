@@ -43,8 +43,8 @@
 #include "dwt_profile_delay.h"
 #include "storage/eeprom.h"
 #include "storage/flash.h"
-#include "motor_config.h"
 #include "motor_config_storage_ops.h"
+#include "motor.h"
 #include "comm/comm.h"
 /* add user code end private includes */
 
@@ -174,13 +174,8 @@ int main(void)
   (void)motor_config_register_storage_ops_by_mode(MOTOR_CFG_STORAGE_MODE_DEFAULT,
                                                    &motor_cfg_adapter);
 
-  // 1. 读取电机配置
-  static motor_config_t motor_cfg;
-  (void)motor_config_init(&motor_cfg);
-
-  // 2. 电机控制器初始化
-  // motor_config_set_defaults(&motor_cfg); // 强制更新参数,避免改动不生效
-  if (mc_init(&motor_cfg) != ERR_NONE)
+  // 1. 电机控制器初始化（内部从存储加载 config 至 s_motor_handle.config）
+  if (mc_init() != ERR_NONE)
   {
     while (1)
     {
@@ -188,11 +183,11 @@ int main(void)
     }
   }
 
-  // 3. 通信初始化（在 mc_init 之后，协议可安全调用 mc_interface）
+  // 2. 通信初始化（在 mc_init 之后，协议可安全调用 mc_interface）
   {
     comm_config_t comm_cfg = {
       .protocol = COMM_PROTOCOL_CAN_FD_CUSTOM,
-      .node_id = motor_cfg.comm.can_id,
+      .node_id = motor_get_handler()->config.comm.can_id,
       .rx_queue_depth = COMM_RX_QUEUE_DEPTH_DEFAULT,
     };
     (void)comm_init(&comm_cfg);

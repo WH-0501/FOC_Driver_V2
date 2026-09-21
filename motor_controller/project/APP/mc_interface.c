@@ -1,5 +1,6 @@
 #include "mc_interface.h"
 #include "foc.h"
+#include "foc_calibration.h"
 #include "foc_fsm.h"
 #include "foc_fault.h"
 #include "foc_pid.h"
@@ -59,15 +60,20 @@ static error_t mc_runtime_start(void)
   return ERR_NONE;
 }
 
-error_t mc_init(const motor_config_t *config)
+error_t mc_init(void)
 {
   error_t ret;
   motor_handle_t *m;
+  motor_config_t cfg;
 
-  if (config == NULL)
-  {
-    return ERR_NULL;
-  }
+  /*
+   * 必须先载入独立 cfg，再 foc_init 拷贝进 m->config。
+   * 不可 motor_config_init(&m->config) 后调 foc_init(m,&m->config)：
+   * foc_init 开头 memset(m,0) 会清零刚载入的 config，且 *config 读到的也是全 0。
+   */
+  (void)motor_config_init(&cfg);
+  cfg.param.theta_elec_offset_rad = 3.19311523f;
+  cfg.param.direction = DIR_CW;
 
   ret = mc_platform_init();
   if (ret != ERR_NONE)
@@ -81,7 +87,7 @@ error_t mc_init(const motor_config_t *config)
   }
 
   m = motor_get_handler();
-  foc_init(m, config);
+  foc_init(m, &cfg);
 
   ret = mc_runtime_start();
   if (ret != ERR_NONE)
@@ -390,6 +396,28 @@ error_t mc_align_electrical(void)
   }
 
   return foc_align_electrical(m);
+}
+
+error_t mc_align_electrical_method(cal_elec_align_method_t method)
+{
+  motor_handle_t *m = motor_get_handler();
+
+  if (mc_is_enabled())
+  {
+    (void)mc_disable();
+  }
+
+  if (motor_fault_is_latched(m) || (m->fsm == STATE_FAULT))
+  {
+    return ERR_FAULT_LATCHED;
+  }
+
+  if (m->fsm != STATE_IDLE)
+  {
+    return ERR_STATE;
+  }
+
+  return cal_elec_align_method(m, method);
 }
 
 bool mc_kth71_cal_active(void)

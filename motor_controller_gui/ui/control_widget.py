@@ -44,8 +44,6 @@ class MotorControlWidget(QGroupBox):
         self.fault_reset_btn = QPushButton("异常复位")
         self.mode_combo = QComboBox()
         self.set_mode_btn = QPushButton("广播设置模式")
-        self.origin_btn = QPushButton("广播设原点")
-        self.align_btn = QPushButton("广播电角度对齐")
         self.sync_btn = QPushButton("同步信号")
 
         self.pos_label = QLabel("目标位置:")
@@ -65,15 +63,6 @@ class MotorControlWidget(QGroupBox):
         self.target_curr.setRange(-32768, 32767)
         self.send_curr_btn = QPushButton("发送电流")
 
-        self.kth71_cal_start_btn = QPushButton("KTH71 开始校准")
-        self.kth71_cal_trigger_btn = QPushButton("KTH71 触发 ANLC")
-        self.kth71_cal_stop_btn = QPushButton("KTH71 停止校准")
-        self.kth71_cal_status_btn = QPushButton("KTH71 查询状态")
-        self.kth71_cal_hint = QLabel(
-            "先设模式（速度开环或电流/速度闭环）、发送目标并使能；再：开始校准 → 触发 ANLC → 查询状态 → 停止。"
-        )
-        self.kth71_cal_hint.setWordWrap(True)
-
         grid = QGridLayout()
         grid.setHorizontalSpacing(6)
         grid.setVerticalSpacing(4)
@@ -86,9 +75,7 @@ class MotorControlWidget(QGroupBox):
         grid.addWidget(self.mode_combo, 1, 1, 1, 2)
         grid.addWidget(self.set_mode_btn, 2, 0, 1, 3)
 
-        grid.addWidget(self.origin_btn, 3, 0)
-        grid.addWidget(self.align_btn, 3, 1)
-        grid.addWidget(self.sync_btn, 3, 2)
+        grid.addWidget(self.sync_btn, 3, 0, 1, 3)
 
         grid.addWidget(self.pos_label, 4, 0)
         grid.addWidget(self.target_pos, 4, 1)
@@ -102,13 +89,7 @@ class MotorControlWidget(QGroupBox):
         grid.addWidget(self.target_curr, 6, 1)
         grid.addWidget(self.send_curr_btn, 6, 2)
 
-        grid.addWidget(self.kth71_cal_start_btn, 7, 0)
-        grid.addWidget(self.kth71_cal_trigger_btn, 7, 1)
-        grid.addWidget(self.kth71_cal_stop_btn, 7, 2)
-        grid.addWidget(self.kth71_cal_status_btn, 8, 0, 1, 3)
-
         layout.addLayout(grid)
-        layout.addWidget(self.kth71_cal_hint)
 
         self.mode_hint = QLabel("")
         self.mode_hint.setWordWrap(True)
@@ -120,19 +101,7 @@ class MotorControlWidget(QGroupBox):
         self.disable_btn.clicked.connect(lambda: self.client.broadcast_enable(False))
         self.fault_reset_btn.clicked.connect(lambda: self.client.fault_reset(self.motor_id))
         self.set_mode_btn.clicked.connect(self._send_mode)
-        self.origin_btn.clicked.connect(self.client.broadcast_set_origin)
-        self.align_btn.clicked.connect(self.client.broadcast_align_angle)
         self.sync_btn.clicked.connect(self.client.broadcast_sync)
-        self.kth71_cal_start_btn.clicked.connect(self._start_kth71_cal)
-        self.kth71_cal_trigger_btn.clicked.connect(
-            lambda: self.client.kth71_cal_trigger(self.motor_id)
-        )
-        self.kth71_cal_stop_btn.clicked.connect(
-            lambda: self.client.kth71_cal_stop(self.motor_id)
-        )
-        self.kth71_cal_status_btn.clicked.connect(
-            lambda: self.client.kth71_cal_status(self.motor_id)
-        )
         self.send_pos_btn.clicked.connect(self._send_position)
         self.send_vel_btn.clicked.connect(self._send_velocity)
         self.send_curr_btn.clicked.connect(self._send_current)
@@ -223,9 +192,6 @@ class MotorControlWidget(QGroupBox):
         cb = getattr(self, "_target_callback", None)
         if cb:
             cb(pos=pos, vel=vel, curr=curr)
-
-    def _start_kth71_cal(self) -> None:
-        self.client.kth71_cal_start(self.motor_id)
 
     def _send_mode(self) -> None:
         wire = self._current_mode_wire()

@@ -63,7 +63,7 @@ static void current_sense_apply_raw_to_physical(motor_handle_t *m)
 {
   uint32_t i;
   const float kv = CURRENT_SENSE_ADC_VOLTS_PER_LSB;
-  const float gain = CURRENT_SENSE_SO_AMPS_PER_VOLT;
+  const float gain = CURRENT_SENSE_SO_AMPS_PER_VOLT * CURRENT_SENSE_PHASE_POLARITY;
   motor_state_t *state;
 
   if (m == NULL)

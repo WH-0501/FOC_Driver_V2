@@ -3,8 +3,10 @@
 
 #include "datatypes.h"
 #include "motor_config.h"
+#include "FOC/foc_calibration.h"
 
-error_t mc_init(const motor_config_t *config);
+/** 从存储加载配置并初始化电机控制器（配置写入 motor_get_handler()->config）。 */
+error_t mc_init(void);
 void mc_poll(void);
 void mc_current_loop_isr(void);
 
@@ -40,8 +42,11 @@ error_t mc_reset_from_exception(void);
 /** 失能状态下将当前轴端位置设为零点（更新 theta_offset_rad）。 */
 error_t mc_set_joint_origin(void);
 
-/** 失能状态下执行电角对齐。 */
+/** 失能状态下执行电角对齐（默认方案见 CAL_ELEC_ALIGN_METHOD_DEFAULT）。 */
 error_t mc_align_electrical(void);
+
+/** 失能状态下按指定方案执行电角对齐。 */
+error_t mc_align_electrical_method(cal_elec_align_method_t method);
 
 /**
  * KTH71 非线性自校准：须已使能（速度开环或电流/速度闭环）；不影响使能与 CAN 上报。

@@ -54,6 +54,33 @@ class CMD(IntEnum):
     PERIOD_REPORT = 0x00
 
 
+class ElecAlignMethod(IntEnum):
+    """与固件 foc_calibration.h cal_elec_align_method_t 一致。"""
+
+    UD = 0
+    UQ = 1
+    DUAL_POINT = 2
+    DUAL_POINT_UQ = 3
+    HFI = 4
+
+
+ELEC_ALIGN_METHOD_NAMES = {
+    ElecAlignMethod.UD: "Ud 单点 (d轴电压锁定)",
+    ElecAlignMethod.UQ: "Uq 单点 (dex-con)",
+    ElecAlignMethod.DUAL_POINT: "Ud 双点 (静摩擦对消)",
+    ElecAlignMethod.DUAL_POINT_UQ: "Uq 双点",
+    ElecAlignMethod.HFI: "HFI 高频注入",
+}
+
+ELEC_ALIGN_METHOD_HINTS = {
+    ElecAlignMethod.UD: "d 轴锁定：offset = raw − θ_open；可与 Ud 双点对照。",
+    ElecAlignMethod.UQ: "q 轴锁定（dex-con）：offset = raw；与 Ud 是两套零位，数值不同是正常的。",
+    ElecAlignMethod.DUAL_POINT: "Ud 双点静摩擦对消，offset 公式同 Ud 单点。",
+    ElecAlignMethod.DUAL_POINT_UQ: "Uq 双点，offset = raw − (θ_open − π/2)。",
+    ElecAlignMethod.HFI: "HFI 扫角后按 Ud 公式写 offset。",
+}
+
+
 class ControlMode(IntEnum):
     """与固件 datatypes.h control_mode_t 一致。"""
 
@@ -247,7 +274,7 @@ CMD_DATA_LEN = {
     CMD.CLEAR_FAULT: 0,
     CMD.FAULT_RESET: 0,
     CMD.SET_ORIGIN: 0,
-    CMD.ALIGN_ELECTRIC_ANGLE: 0,
+    CMD.ALIGN_ELECTRIC_ANGLE: 1,
     CMD.KTH71_CAL_START: 0,
     CMD.KTH71_CAL_STATUS: 0,
     CMD.KTH71_CAL_STOP: 0,

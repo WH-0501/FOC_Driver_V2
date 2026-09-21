@@ -2,6 +2,7 @@
 
 from typing import Dict, List, Optional, Sequence, Tuple
 
+import numpy as np
 import pyqtgraph as pg
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QWheelEvent
@@ -99,7 +100,8 @@ class WaveformWidget(QGroupBox):
 
         self._curves = {}
         for key, name, color, line_style, _default, _group in WAVEFORM_CURVES:
-            pen = pg.mkPen(color=color, width=1.5, style=line_style)
+            # 笔宽=1 避免 pyqtgraph 0.13.x 在分段 drawLines + 点数<2 时崩溃
+            pen = pg.mkPen(color=color, width=1, style=line_style)
             curve = self._plot.plot([], [], pen=pen, name=name, clipToView=True)
             self._curves[key] = curve
 
@@ -257,6 +259,9 @@ class WaveformWidget(QGroupBox):
 
         buf = self._buffers[self._motor_id]
         if not buf.times:
+            for key, curve in self._curves.items():
+                curve.setData([], [])
+                curve.setVisible(key in visible)
             return
 
         t_max = buf.times[-1]
@@ -274,8 +279,11 @@ class WaveformWidget(QGroupBox):
             curve.setVisible(show)
             if show and key in window:
                 xs, ys = self._downsample_peak(times, window[key], max_pts)
-                curve.setData(xs, ys, connect="finite")
-                visible_vals.extend(ys)
+                if len(xs) >= 2:
+                    curve.setData(np.asarray(xs, dtype=np.float64), np.asarray(ys, dtype=np.float64))
+                    visible_vals.extend(ys)
+                else:
+                    curve.setData([], [])
             else:
                 curve.setData([], [])
 

@@ -569,6 +569,11 @@
               <FilePath>..\APP\FOC\foc.c</FilePath>
             </File>
             <File>
+              <FileName>foc_calibration.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\FOC\foc_calibration.c</FilePath>
+            </File>
+            <File>
               <FileName>foc_fault.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\FOC\foc_fault.c</FilePath>

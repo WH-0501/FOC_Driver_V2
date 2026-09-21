@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 from core.motor_client import MotorClient
 from protocol import ProtocolVersion
+from ui.cal_widget import MotorCalWidget
 from ui.control_widget import MotorControlWidget
 from ui.iap_widget import IapWidget
 from ui.param_widget import MotorParamWidget
@@ -35,6 +36,7 @@ class MotorPanel(QWidget):
             log_fn,
             is_enabled_fn=lambda: self.status_widget.is_enabled(),
         )
+        self.cal_widget = MotorCalWidget(motor_id, client)
         self.iap_widget = IapWidget(motor_id, client, log_fn=log_fn)
 
         layout = QVBoxLayout()
@@ -42,6 +44,7 @@ class MotorPanel(QWidget):
 
         tabs = QTabWidget()
         tabs.addTab(self.control_widget, "运动控制")
+        tabs.addTab(self.cal_widget, "校准")
         tabs.addTab(self.param_widget, "参数配置")
         tabs.addTab(self.iap_widget, "固件升级")
         layout.addWidget(tabs)
