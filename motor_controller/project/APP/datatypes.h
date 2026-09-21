@@ -105,7 +105,7 @@ typedef struct
   int8_t direction;               ///< 控制正方向：1=CW，-1=CCW；在 encoder 观测层统一施加
   float gear_ratio;               ///< 电机到关节减速比（直驱填 1.0）
   uint32_t encoder_counts_per_rev; ///< 机械旋转一圈编码器计数（分辨率定义依传感器）
-  float theta_elec_offset_rad;    ///< FOC 电角零偏 [rad]（对齐流程写入，见 foc_align_electrical）
+  float theta_elec_offset_rad;    ///< FOC 电角零偏 [rad]（对齐流程写入，见 cal_elec_align）
   float theta_offset_rad;         ///< SHAFT 机械零偏 [rad]（传感器系；bind.zero_rad 为 0 时使用）
 } motor_param_t;
 

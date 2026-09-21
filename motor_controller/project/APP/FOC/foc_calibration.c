@@ -56,19 +56,6 @@ void cal_elec_align_cfg_default(cal_elec_align_cfg_t *cfg)
   cfg->hfi_scan_steps = 36u;
 }
 
-static float cal_raw_elec_rad(const motor_handle_t *m)
-{
-  float pole_pairs;
-
-  if (m == NULL)
-  {
-    return 0.0f;
-  }
-
-  pole_pairs = (m->config.param.pole_pairs > 0u) ? (float)m->config.param.pole_pairs : 1.0f;
-  return m->state.shaft.angle_rad * pole_pairs;
-}
-
 static void cal_hold_voltage(cal_ctx_t *ctx, float ud, float uq, float angle_el, uint32_t hold_ms)
 {
   uint32_t elapsed = 0u;
@@ -111,7 +98,7 @@ static float cal_sample_raw_at_lock(cal_ctx_t *ctx,
   {
     foc_voltage(ctx->m, uq, ud, angle_el);
     foc_sense_update(ctx->m);
-    raw = cal_raw_elec_rad(ctx->m);
+    raw = ctx->m->state.theta_elec_rad;
     sum += raw;
     if (raw < raw_min)
     {
@@ -139,10 +126,7 @@ static float cal_sample_raw_at_lock(cal_ctx_t *ctx,
 
 static float cal_probe_iq(cal_ctx_t *ctx, float uq, float ud, float angle_el, uint16_t hold_ms)
 {
-  if (ctx == NULL)
-  {
-    return 0.0f;
-  }
+  if (ctx == NULL) return 0.0f;
 
   cal_hold_voltage(ctx, ud, uq, angle_el, hold_ms);
   foc_sense_update(ctx->m);
@@ -156,10 +140,7 @@ static float cal_probe_id_uq_lock(cal_ctx_t *ctx,
                                   float angle_el,
                                   uint16_t hold_ms)
 {
-  if (ctx == NULL)
-  {
-    return 0.0f;
-  }
+  if (ctx == NULL) return 0.0f;
 
   cal_hold_voltage(ctx, ud_pulse, uq_lock, angle_el, hold_ms);
   foc_sense_update(ctx->m);
@@ -243,7 +224,7 @@ static void cal_setup_lock_axes(cal_ctx_t *ctx)
     return;
   }
 
-  ctx->align_angle = ctx->cfg.align_angle_rad;
+  ctx->align_angle = ctx->cfg.align_angle_rad; // 针对 HFI 方案,扫角后会改写 align_angle, 因此不能直接替换
 
   switch (ctx->method)
   {
@@ -267,6 +248,12 @@ static void cal_setup_lock_axes(cal_ctx_t *ctx)
   }
 }
 
+/**
+ * @brief 对齐准备: 初始化对齐上下文, 设置锁定轴, 更新传感器状态, 记录初始电角。
+ * 
+ * @param ctx 
+ * @return error_t 
+ */
 static error_t cal_prepare(cal_ctx_t *ctx)
 {
   if ((ctx == NULL) || (ctx->m == NULL) || (ctx->rt == NULL))
@@ -274,6 +261,7 @@ static error_t cal_prepare(cal_ctx_t *ctx)
     return ERR_NULL;
   }
 
+  /* 清零 offset 后 theta_elec_rad 即未补偿 raw 电角，对齐采样可直接使用 */
   ctx->m->config.param.theta_elec_offset_rad = 0.0f;
   ctx->dir = ctx->m->config.param.direction;
   ctx->raw_locked = 0.0f;
@@ -296,6 +284,15 @@ static error_t cal_prepare(cal_ctx_t *ctx)
   return ERR_NONE;
 }
 
+/**
+ * @brief 锁定采样: 保持电压, 采样电流, 检查分散度。
+ * 
+ * @param ctx 
+ * @param angle_el 
+ * @param hold_ms 保持时间
+ * @param spread_out 分散度输出
+ * @return error_t 
+ */
 static error_t cal_lock_sample_hold(cal_ctx_t *ctx,
                                     float angle_el,
                                     uint32_t hold_ms,
@@ -326,6 +323,16 @@ static error_t cal_lock_sample(cal_ctx_t *ctx, float angle_el, float *spread_out
   return cal_lock_sample_hold(ctx, angle_el, ctx->cfg.hold_ms, spread_out);
 }
 
+/**
+ * @brief 检查转子是否吸合
+ *   原理: 在转子期望电角θ_align + π处施加电压, 如果转子吸合, 则电流会上升, 否则会下降。
+ * 
+ * @param ctx 
+ * @param raw_locked 
+ * @param raw_engage_out 
+ * @param spread_out 
+ * @return uint8_t 
+ */
 static uint8_t cal_check_rotor_engaged(cal_ctx_t *ctx,
                                        float raw_locked,
                                        float *raw_engage_out,
@@ -364,6 +371,14 @@ static uint8_t cal_check_rotor_engaged(cal_ctx_t *ctx,
   return 1u;
 }
 
+/**
+ * @brief 极性校正: 校正极性, 检查极性, 计算 offset。
+ *   原理: +Vq 极性探针检测正电流, -Vq 极性探针检测负电流。
+ * 
+ * @param ctx 
+ * @param iq_probe_out 
+ * @return error_t 
+ */
 static error_t cal_polarity_correct(cal_ctx_t *ctx, float *iq_probe_out)
 {
   float iq_probe;
@@ -394,6 +409,7 @@ static error_t cal_polarity_correct(cal_ctx_t *ctx, float *iq_probe_out)
                             ctx->cfg.polarity_test_ms);
   }
 
+  /* 若探测到方向反了,则翻转方向,并重新探测确认方向 */
   if ((fabsf(iq_probe) >= ctx->cfg.polarity_iq_min_a) && (iq_probe < 0.0f))
   {
     if (ctx->m->config.param.direction == DIR_CCW)
@@ -510,7 +526,7 @@ static error_t cal_method_uq_dex(cal_ctx_t *ctx)
 
   cal_hold_voltage(ctx, ctx->lock_ud, ctx->lock_uq, ctx->align_angle, ALIGN_HOLD_MS_DEX);
   foc_sense_update(ctx->m);
-  raw = angle_normalize(cal_raw_elec_rad(ctx->m));
+  raw = ctx->m->state.theta_elec_rad;
 
   ctx->raw_locked = raw;
   ctx->offset_rad = cal_offset_uq_dex(raw);
@@ -520,6 +536,13 @@ static error_t cal_method_uq_dex(cal_ctx_t *ctx)
   return ERR_NONE;
 }
 
+/**
+ * @brief 强拖对齐
+ * 
+ * @param ctx 
+ * @param dual_point 
+ * @return error_t 
+ */
 static error_t cal_method_drag(cal_ctx_t *ctx, bool dual_point)
 {
   error_t ret;
@@ -527,6 +550,7 @@ static error_t cal_method_drag(cal_ctx_t *ctx, bool dual_point)
   float raw_engage = 0.0f;
   float iq_probe = 0.0f;
 
+  /* 1. 锁定采样: 锁定转子, 采样电流, 检查分散度。 */
   ret = cal_lock_sample(ctx, ctx->align_angle, &spread);
   if (ret != ERR_NONE)
   {
@@ -564,6 +588,7 @@ static error_t cal_method_drag(cal_ctx_t *ctx, bool dual_point)
   {
     ctx->rt->align_raw_elec_rad = ctx->raw_locked;
 
+    /* 3. 极性校正: 校正极性, 检查极性, 计算 offset。 */
     ret = cal_polarity_correct(ctx, &iq_probe);
     if (ret != ERR_NONE)
     {
@@ -691,7 +716,7 @@ static error_t cal_method_hfi(cal_ctx_t *ctx)
   foc_voltage(ctx->m, 0.0f, 0.0f, ctx->align_angle);
   delay_ms(ctx->cfg.relock_ms);
   foc_sense_update(ctx->m);
-  ctx->raw_locked = cal_raw_elec_rad(ctx->m);
+  ctx->raw_locked = ctx->m->state.theta_elec_rad;
   ctx->rt->align_raw_elec_rad = ctx->raw_locked;
   ctx->rt->align_engaged = true;
 
@@ -794,18 +819,13 @@ error_t cal_elec_align_ex(motor_handle_t *m,
   cal_ctx_t ctx;
   cal_elec_align_cfg_t local_cfg;
 
-  if (m == NULL)
-  {
-    return ERR_NULL;
-  }
+  if (m == NULL) return ERR_NULL;
 
   memset(&ctx, 0, sizeof(ctx));
   ctx.m = m;
   ctx.rt = motor_runtime(m);
-  if (ctx.rt == NULL)
-  {
-    return ERR_NULL;
-  }
+
+  if (ctx.rt == NULL) return ERR_NULL;
 
   if (cfg != NULL)
   {
@@ -821,12 +841,7 @@ error_t cal_elec_align_ex(motor_handle_t *m,
   return cal_elec_align_run(&ctx);
 }
 
-error_t cal_elec_align_method(motor_handle_t *m, cal_elec_align_method_t method)
-{
-  return cal_elec_align_ex(m, method, NULL);
-}
-
 error_t cal_elec_align(motor_handle_t *m)
 {
-  return cal_elec_align_method(m, CAL_ELEC_ALIGN_METHOD_DEFAULT);
+  return cal_elec_align_ex(m, CAL_ELEC_ALIGN_METHOD_DEFAULT, NULL);
 }

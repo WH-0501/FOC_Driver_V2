@@ -376,9 +376,13 @@ error_t mc_set_joint_origin(void)
   return ERR_NONE;
 }
 
-error_t mc_align_electrical(void)
+
+
+error_t mc_align_electrical(cal_elec_align_method_t method)
 {
   motor_handle_t *m = motor_get_handler();
+  
+  if (m == NULL) return ERR_PARAM;
 
   if (mc_is_enabled())
   {
@@ -390,34 +394,9 @@ error_t mc_align_electrical(void)
     return ERR_FAULT_LATCHED;
   }
 
-  if (m->fsm != STATE_IDLE)
-  {
-    return ERR_STATE;
-  }
+  if (m->fsm != STATE_IDLE) return ERR_STATE;
 
-  return foc_align_electrical(m);
-}
-
-error_t mc_align_electrical_method(cal_elec_align_method_t method)
-{
-  motor_handle_t *m = motor_get_handler();
-
-  if (mc_is_enabled())
-  {
-    (void)mc_disable();
-  }
-
-  if (motor_fault_is_latched(m) || (m->fsm == STATE_FAULT))
-  {
-    return ERR_FAULT_LATCHED;
-  }
-
-  if (m->fsm != STATE_IDLE)
-  {
-    return ERR_STATE;
-  }
-
-  return cal_elec_align_method(m, method);
+  return cal_elec_align_ex(m, method, NULL);
 }
 
 bool mc_kth71_cal_active(void)

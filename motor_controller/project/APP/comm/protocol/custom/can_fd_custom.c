@@ -500,7 +500,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
           uint8_t method = payload[0];
           if (method <= (uint8_t)CAL_ELEC_ALIGN_HFI)
           {
-            result = mc_align_electrical_method((cal_elec_align_method_t)method);
+            result = mc_align_electrical((cal_elec_align_method_t)method);
           }
           else
           {
@@ -509,7 +509,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         }
         else
         {
-          result = mc_align_electrical();
+          result = mc_align_electrical(CAL_ELEC_ALIGN_METHOD_DEFAULT);
         }
         reply_payload[0] = (uint8_t)result;
         can_fd_custom_reply(CAN_FD_CMD_ALIGN_ELECTRIC_ANGLE, reply_payload, 1u);

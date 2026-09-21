@@ -140,11 +140,6 @@ static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, f
   }
 }
 
-error_t foc_align_electrical(motor_handle_t *m)
-{
-  return cal_elec_align(m);
-}
-
 static void foc_speed_open_control(motor_handle_t *m, float target_speed)
 {
   motor_runtime_t *rt;
@@ -343,7 +338,7 @@ void foc_init(motor_handle_t *m, const motor_config_t *config)
 
   if (m->config.auto_align_electrical)
   {
-    foc_align_electrical(m);
+    cal_elec_align(m);
   }
 }
 

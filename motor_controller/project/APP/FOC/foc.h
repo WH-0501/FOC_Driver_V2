@@ -14,7 +14,4 @@ void foc_control_loop(motor_handle_t *m);
 /** 开环电压输出（校准/对齐等慢路径使用）。 */
 void foc_voltage(motor_handle_t *m, float uq, float ud, float angle_el);
 
-/** 失能状态下执行电角对齐，结果写入 config.param.theta_elec_offset_rad。 */
-error_t foc_align_electrical(motor_handle_t *m);
-
 #endif /* __FOC_H__ */

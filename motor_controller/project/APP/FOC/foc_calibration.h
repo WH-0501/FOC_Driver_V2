@@ -65,10 +65,7 @@ void cal_elec_align_cfg_default(cal_elec_align_cfg_t *cfg);
  */
 error_t cal_elec_align(motor_handle_t *m);
 
-/** @brief 指定对齐方案 */
-error_t cal_elec_align_method(motor_handle_t *m, cal_elec_align_method_t method);
-
-/** @brief 指定方案与参数 */
+/** @brief 指定方案与参数（cfg 为 NULL 时使用默认参数） */
 error_t cal_elec_align_ex(motor_handle_t *m,
                           cal_elec_align_method_t method,
                           const cal_elec_align_cfg_t *cfg);
