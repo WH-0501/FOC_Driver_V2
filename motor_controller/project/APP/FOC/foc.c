@@ -300,6 +300,8 @@ error_t foc_align_electrical(motor_handle_t *m)
     return ERR_NULL;
   }
 
+  m->config.param.theta_elec_offset_rad = 0.0f;
+
   dir = m->config.param.direction;
   rt->align_direction_flipped = false;
   rt->align_ok = false;

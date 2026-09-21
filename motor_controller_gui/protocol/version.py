@@ -338,7 +338,7 @@ def mode_needs_position(version: ProtocolVersion, wire: int) -> bool:
 
 def mode_needs_velocity(version: ProtocolVersion, wire: int) -> bool:
     if version == ProtocolVersion.V1_0_0:
-        return wire in (ControlModeV1.CSV, ControlModeV1.MIT)
+        return wire in (ControlModeV1.CSV, ControlModeV1.CST, ControlModeV1.MIT)
     try:
         return _v2_needs_velocity(ControlMode(wire))
     except ValueError:
