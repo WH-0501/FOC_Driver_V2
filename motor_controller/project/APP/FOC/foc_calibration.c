@@ -1,6 +1,7 @@
 #include "foc_calibration.h"
 #include "foc.h"
 #include "foc_sense.h"
+#include "current_sense.h"
 #include "foc_fault.h"
 #include "foc_pid.h"
 #include "motor.h"
@@ -56,6 +57,73 @@ void cal_elec_align_cfg_default(cal_elec_align_cfg_t *cfg)
   cfg->hfi_scan_steps = 36u;
 }
 
+/** 与旧 foc_align_raw_elec_rad / encoder 一致：angle_rad × pole_pairs，未减 offset */
+static float cal_encoder_raw_elec_rad(const motor_handle_t *m)
+{
+  float pole_pairs;
+
+  if (m == NULL)
+  {
+    return 0.0f;
+  }
+
+  pole_pairs = (m->config.param.pole_pairs > 0u) ? (float)m->config.param.pole_pairs : 1.0f;
+  return m->state.shaft.angle_rad * pole_pairs;
+}
+
+static void cal_flip_direction(cal_ctx_t *ctx)
+{
+  if ((ctx == NULL) || (ctx->m == NULL) || (ctx->rt == NULL))
+  {
+    return;
+  }
+
+  if (ctx->m->config.param.direction == DIR_CCW)
+  {
+    ctx->m->config.param.direction = DIR_CW;
+  }
+  else
+  {
+    ctx->m->config.param.direction = DIR_CCW;
+  }
+  ctx->dir = ctx->m->config.param.direction;
+  ctx->rt->align_direction_flipped = true;
+}
+
+/**
+ * MP6540 相电流极性取反后：+Vq 探针下方向正确时 i_q 为负，错误时为正。
+ * 与旧版（极性 +1）下「iq<0 则翻转」在物理上等价。
+ */
+static bool cal_polarity_probe_needs_flip(float iq_probe, float iq_min_a)
+{
+  if (fabsf(iq_probe) < iq_min_a)
+  {
+    return false;
+  }
+
+  if (CURRENT_SENSE_PHASE_POLARITY < 0.0f)
+  {
+    return (iq_probe > 0.0f);
+  }
+
+  return (iq_probe < 0.0f);
+}
+
+static bool cal_polarity_probe_aligned(float iq_probe, float iq_min_a)
+{
+  if (fabsf(iq_probe) < iq_min_a)
+  {
+    return true;
+  }
+
+  if (CURRENT_SENSE_PHASE_POLARITY < 0.0f)
+  {
+    return (iq_probe < 0.0f);
+  }
+
+  return (iq_probe > 0.0f);
+}
+
 static void cal_hold_voltage(cal_ctx_t *ctx, float ud, float uq, float angle_el, uint32_t hold_ms)
 {
   uint32_t elapsed = 0u;
@@ -98,7 +166,7 @@ static float cal_sample_raw_at_lock(cal_ctx_t *ctx,
   {
     foc_voltage(ctx->m, uq, ud, angle_el);
     foc_sense_update(ctx->m);
-    raw = ctx->m->state.theta_elec_rad;
+    raw = cal_encoder_raw_elec_rad(ctx->m);
     sum += raw;
     if (raw < raw_min)
     {
@@ -261,7 +329,6 @@ static error_t cal_prepare(cal_ctx_t *ctx)
     return ERR_NULL;
   }
 
-  /* 清零 offset 后 theta_elec_rad 即未补偿 raw 电角，对齐采样可直接使用 */
   ctx->m->config.param.theta_elec_offset_rad = 0.0f;
   ctx->dir = ctx->m->config.param.direction;
   ctx->raw_locked = 0.0f;
@@ -334,6 +401,7 @@ static error_t cal_lock_sample(cal_ctx_t *ctx, float angle_el, float *spread_out
  * @return uint8_t 
  */
 static uint8_t cal_check_rotor_engaged(cal_ctx_t *ctx,
+                                       float ud,
                                        float raw_locked,
                                        float *raw_engage_out,
                                        float *spread_out)
@@ -343,10 +411,11 @@ static uint8_t cal_check_rotor_engaged(cal_ctx_t *ctx,
   float spread;
   float delta;
 
-  cal_hold_voltage(ctx, ctx->lock_ud, ctx->lock_uq, engage_angle, ctx->cfg.relock_ms);
+  /* 与旧 foc_align_check_rotor_engaged 一致：反相点仅 Ud，Uq=0；π 步进需更长保持 */
+  cal_hold_voltage(ctx, ud, 0.0f, engage_angle, ctx->cfg.hold_ms);
   raw_engage = cal_sample_raw_at_lock(ctx,
-                                      ctx->lock_ud,
-                                      ctx->lock_uq,
+                                      ud,
+                                      0.0f,
                                       engage_angle,
                                       &spread);
 
@@ -373,7 +442,7 @@ static uint8_t cal_check_rotor_engaged(cal_ctx_t *ctx,
 
 /**
  * @brief 极性校正: 校正极性, 检查极性, 计算 offset。
- *   原理: +Vq 极性探针检测正电流, -Vq 极性探针检测负电流。
+ *   原理: +Vq 极性探针期望 i_q > 0（相电流极性已在 current_sense 中修正）。
  * 
  * @param ctx 
  * @param iq_probe_out 
@@ -409,19 +478,9 @@ static error_t cal_polarity_correct(cal_ctx_t *ctx, float *iq_probe_out)
                             ctx->cfg.polarity_test_ms);
   }
 
-  /* 若探测到方向反了,则翻转方向,并重新探测确认方向 */
-  if ((fabsf(iq_probe) >= ctx->cfg.polarity_iq_min_a) && (iq_probe < 0.0f))
+  if (cal_polarity_probe_needs_flip(iq_probe, ctx->cfg.polarity_iq_min_a))
   {
-    if (ctx->m->config.param.direction == DIR_CCW)
-    {
-      ctx->m->config.param.direction = DIR_CW;
-    }
-    else
-    {
-      ctx->m->config.param.direction = DIR_CCW;
-    }
-    ctx->dir = ctx->m->config.param.direction;
-    ctx->rt->align_direction_flipped = true;
+    cal_flip_direction(ctx);
 
     cal_hold_voltage(ctx, ud_polarity, uq_lock, ctx->align_angle, ctx->cfg.relock_ms);
     ctx->raw_locked = cal_sample_raw_at_lock(ctx,
@@ -457,24 +516,6 @@ static error_t cal_polarity_correct(cal_ctx_t *ctx, float *iq_probe_out)
   return ERR_NONE;
 }
 
-static bool cal_polarity_ok(const cal_ctx_t *ctx, float iq_probe)
-{
-  if (ctx == NULL)
-  {
-    return false;
-  }
-
-  if ((fabsf(iq_probe) >= ctx->cfg.polarity_iq_min_a) && (iq_probe > 0.0f))
-  {
-    return true;
-  }
-  if (fabsf(iq_probe) < ctx->cfg.polarity_iq_min_a)
-  {
-    return true;
-  }
-  return false;
-}
-
 static void cal_commit_offset(cal_ctx_t *ctx)
 {
   if ((ctx == NULL) || (ctx->m == NULL) || (ctx->rt == NULL))
@@ -508,6 +549,105 @@ static void cal_finish_hw(cal_ctx_t *ctx)
 }
 
 /**
+ * @brief Ud 单点对齐（原 foc_align_electrical 流程）。
+ *
+ * 在 θ_open 下施加 Ud 锁定转子 d 轴，采样编码器 raw 电角 raw_locked，
+ * 写 offset = normalize(raw_locked − θ_open)，使 theta_elec = θ_open。
+ */
+static error_t cal_method_ud(cal_ctx_t *ctx)
+{
+  error_t ret = ERR_NONE;
+  float spread = 0.0f;
+  float raw_engage = 0.0f;
+  float iq_probe = 0.0f;
+  const float ud = ctx->cfg.voltage_d_v;
+  const float uq_assist = ctx->cfg.voltage_q_v;
+
+  if ((ctx == NULL) || (ctx->m == NULL) || (ctx->rt == NULL))
+  {
+    return ERR_NULL;
+  }
+
+  cal_hold_voltage(ctx, ud, uq_assist, ctx->align_angle, ctx->cfg.hold_ms);
+  ctx->raw_locked = cal_sample_raw_at_lock(ctx,
+                                           ud,
+                                           uq_assist,
+                                           ctx->align_angle,
+                                           &spread);
+  if (!cal_spread_ok(ctx, spread))
+  {
+    motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
+    return ERR_ALIGIN_SPREAD_OUT;
+  }
+  ctx->rt->align_raw_elec_rad = ctx->raw_locked;
+
+  iq_probe = cal_probe_iq(ctx,
+                          ctx->cfg.polarity_test_uq_v,
+                          ud,
+                          ctx->align_angle,
+                          ctx->cfg.polarity_test_ms);
+
+  if (cal_polarity_probe_needs_flip(iq_probe, ctx->cfg.polarity_iq_min_a))
+  {
+    cal_flip_direction(ctx);
+
+    cal_hold_voltage(ctx, ud, 0.0f, ctx->align_angle, ctx->cfg.relock_ms);
+    ctx->raw_locked = cal_sample_raw_at_lock(ctx,
+                                             ud,
+                                             0.0f,
+                                             ctx->align_angle,
+                                             &spread);
+    if (!cal_spread_ok(ctx, spread))
+    {
+      motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
+      return ERR_ALIGIN_SPREAD_OUT;
+    }
+    ctx->rt->align_raw_elec_rad = ctx->raw_locked;
+    iq_probe = cal_probe_iq(ctx,
+                            ctx->cfg.polarity_test_uq_v,
+                            ud,
+                            ctx->align_angle,
+                            ctx->cfg.polarity_test_ms);
+  }
+
+  cal_hold_voltage(ctx, ud, 0.0f, ctx->align_angle, ctx->cfg.relock_ms);
+  ctx->raw_locked = cal_sample_raw_at_lock(ctx,
+                                           ud,
+                                           0.0f,
+                                           ctx->align_angle,
+                                           &spread);
+  if (!cal_spread_ok(ctx, spread))
+  {
+    motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
+    return ERR_ALIGIN_SPREAD_OUT;
+  }
+  ctx->rt->align_raw_elec_rad = ctx->raw_locked;
+
+  ctx->rt->align_engaged = cal_check_rotor_engaged(ctx,
+                                                   ud,
+                                                   ctx->raw_locked,
+                                                   &raw_engage,
+                                                   &spread);
+  ctx->rt->align_raw_engage_rad = raw_engage;
+  /* offset 仅由 θ_open 锁定采样决定；吸合验证为诊断项，不阻断 Ud 对齐 */
+
+  ctx->rt->align_polarity_test_iq = iq_probe;
+  if (cal_polarity_probe_aligned(iq_probe, ctx->cfg.polarity_iq_min_a))
+  {
+    ctx->rt->align_ok = true;
+  }
+  else
+  {
+    motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
+    ret = ERR_ALIGIN_FAILED;
+    return ret;
+  }
+
+  ctx->offset_rad = angle_normalize(ctx->raw_locked - ctx->align_angle);
+  return ERR_NONE;
+}
+
+/**
  * @brief Uq 单点对齐（dex-con）：Uq 锁定 → 等待 → offset = raw。
  * 与 Ud 的 offset = raw − θ_open 是两套不同零位定义，结果不同是预期行为。
  */
@@ -526,7 +666,7 @@ static error_t cal_method_uq_dex(cal_ctx_t *ctx)
 
   cal_hold_voltage(ctx, ctx->lock_ud, ctx->lock_uq, ctx->align_angle, ALIGN_HOLD_MS_DEX);
   foc_sense_update(ctx->m);
-  raw = ctx->m->state.theta_elec_rad;
+  raw = cal_encoder_raw_elec_rad(ctx->m);
 
   ctx->raw_locked = raw;
   ctx->offset_rad = cal_offset_uq_dex(raw);
@@ -536,113 +676,54 @@ static error_t cal_method_uq_dex(cal_ctx_t *ctx)
   return ERR_NONE;
 }
 
-/**
- * @brief 强拖对齐
- * 
- * @param ctx 
- * @param dual_point 
- * @return error_t 
- */
-static error_t cal_method_drag(cal_ctx_t *ctx, bool dual_point)
+/** @brief 双点强拖对齐（静摩擦对消） */
+static error_t cal_method_dual_point(cal_ctx_t *ctx)
 {
   error_t ret;
   float spread = 0.0f;
-  float raw_engage = 0.0f;
+  float raw_second = 0.0f;
   float iq_probe = 0.0f;
+  const float angle_second = angle_normalize(ctx->align_angle + ctx->cfg.dual_point_delta_rad);
 
-  /* 1. 锁定采样: 锁定转子, 采样电流, 检查分散度。 */
   ret = cal_lock_sample(ctx, ctx->align_angle, &spread);
   if (ret != ERR_NONE)
   {
     return ret;
   }
 
-  if (dual_point)
+  ret = cal_lock_sample(ctx, angle_second, &spread);
+  if (ret != ERR_NONE)
   {
-    float raw_second;
-    const float angle_second = angle_normalize(ctx->align_angle + ctx->cfg.dual_point_delta_rad);
-
-    ret = cal_lock_sample(ctx, angle_second, &spread);
-    if (ret != ERR_NONE)
-    {
-      return ret;
-    }
-    raw_second = ctx->raw_locked;
-    ret = cal_lock_sample(ctx, ctx->align_angle, &spread);
-    if (ret != ERR_NONE)
-    {
-      return ret;
-    }
-
-    ctx->offset_rad = cal_offset_dual_friction_avg(ctx,
-                                                 ctx->raw_locked,
-                                                 ctx->align_angle,
-                                                 raw_second,
-                                                 angle_second);
-    ctx->raw_locked =
-        angle_normalize(cal_rotor_d_axis_ref_rad(ctx, ctx->align_angle) + ctx->offset_rad);
-    ctx->rt->align_raw_elec_rad = ctx->raw_locked;
-    ctx->rt->align_engaged = true;
+    return ret;
   }
-  else
+  raw_second = ctx->raw_locked;
+
+  ret = cal_lock_sample(ctx, ctx->align_angle, &spread);
+  if (ret != ERR_NONE)
   {
-    ctx->rt->align_raw_elec_rad = ctx->raw_locked;
-
-    /* 3. 极性校正: 校正极性, 检查极性, 计算 offset。 */
-    ret = cal_polarity_correct(ctx, &iq_probe);
-    if (ret != ERR_NONE)
-    {
-      return ret;
-    }
-
-    cal_hold_voltage(ctx, ctx->lock_ud, ctx->lock_uq, ctx->align_angle, ctx->cfg.relock_ms);
-    ctx->raw_locked = cal_sample_raw_at_lock(ctx,
-                                             ctx->lock_ud,
-                                             ctx->lock_uq,
-                                             ctx->align_angle,
-                                             &spread);
-    if (!cal_spread_ok(ctx, spread))
-    {
-      motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
-      return ERR_ALIGIN_SPREAD_OUT;
-    }
-    ctx->rt->align_raw_elec_rad = ctx->raw_locked;
-
-    ctx->rt->align_engaged = cal_check_rotor_engaged(ctx,
-                                                     ctx->raw_locked,
-                                                     &raw_engage,
-                                                     &spread);
-    ctx->rt->align_raw_engage_rad = raw_engage;
-    if (ctx->rt->align_engaged == 0u)
-    {
-      motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
-      return ERR_ALIGIN_ROTOR_NOT_ENGAGED;
-    }
-
-    ctx->rt->align_polarity_test_iq = iq_probe;
-    if (!cal_polarity_ok(ctx, iq_probe))
-    {
-      motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
-      return ERR_ALIGIN_FAILED;
-    }
-
-    ctx->offset_rad =
-        cal_offset_from_sample(ctx, ctx->raw_locked, ctx->align_angle);
+    return ret;
   }
 
-  if (dual_point)
+  ctx->offset_rad = cal_offset_dual_friction_avg(ctx,
+                                               ctx->raw_locked,
+                                               ctx->align_angle,
+                                               raw_second,
+                                               angle_second);
+  ctx->raw_locked =
+      angle_normalize(cal_rotor_d_axis_ref_rad(ctx, ctx->align_angle) + ctx->offset_rad);
+  ctx->rt->align_raw_elec_rad = ctx->raw_locked;
+  ctx->rt->align_engaged = true;
+
+  ret = cal_polarity_correct(ctx, &iq_probe);
+  if (ret != ERR_NONE)
   {
-    ret = cal_polarity_correct(ctx, &iq_probe);
-    if (ret != ERR_NONE)
-    {
-      return ret;
-    }
-    ctx->rt->align_polarity_test_iq = iq_probe;
-    if (!cal_polarity_ok(ctx, iq_probe))
-    {
-      motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
-      return ERR_ALIGIN_FAILED;
-    }
+    return ret;
+  }
+  ctx->rt->align_polarity_test_iq = iq_probe;
+  if (!cal_polarity_probe_aligned(iq_probe, ctx->cfg.polarity_iq_min_a))
+  {
+    motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
+    return ERR_ALIGIN_FAILED;
   }
 
   ctx->rt->align_ok = true;
@@ -716,7 +797,7 @@ static error_t cal_method_hfi(cal_ctx_t *ctx)
   foc_voltage(ctx->m, 0.0f, 0.0f, ctx->align_angle);
   delay_ms(ctx->cfg.relock_ms);
   foc_sense_update(ctx->m);
-  ctx->raw_locked = ctx->m->state.theta_elec_rad;
+  ctx->raw_locked = cal_encoder_raw_elec_rad(ctx->m);
   ctx->rt->align_raw_elec_rad = ctx->raw_locked;
   ctx->rt->align_engaged = true;
 
@@ -740,7 +821,7 @@ static error_t cal_method_hfi(cal_ctx_t *ctx)
   }
   ctx->rt->align_raw_elec_rad = ctx->raw_locked;
 
-  if (!cal_polarity_ok(ctx, iq_probe))
+  if (!cal_polarity_probe_aligned(iq_probe, ctx->cfg.polarity_iq_min_a))
   {
     motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
     return ERR_ALIGIN_FAILED;
@@ -769,7 +850,7 @@ static error_t cal_elec_align_run(cal_ctx_t *ctx)
   switch (ctx->method)
   {
     case CAL_ELEC_ALIGN_UD:
-      ret = cal_method_drag(ctx, false);
+      ret = cal_method_ud(ctx);
       break;
 
     case CAL_ELEC_ALIGN_UQ:
@@ -778,7 +859,7 @@ static error_t cal_elec_align_run(cal_ctx_t *ctx)
 
     case CAL_ELEC_ALIGN_DUAL_POINT:
     case CAL_ELEC_ALIGN_DUAL_POINT_UQ:
-      ret = cal_method_drag(ctx, true);
+      ret = cal_method_dual_point(ctx);
       break;
 
     case CAL_ELEC_ALIGN_HFI:
