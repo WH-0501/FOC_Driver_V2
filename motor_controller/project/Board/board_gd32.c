@@ -81,6 +81,13 @@ error_t current_hw_deinit(void)
   return ERR_NONE;
 }
 
+/* These ports retain their previous modulation range. Their ADC timing
+ * must be qualified in the target-specific project before low-side use. */
+float pwm_hw_max_duty(void)
+{
+  return 1.0f;
+}
+
 error_t pwm_hw_init(void)
 {
   return ERR_NONE;

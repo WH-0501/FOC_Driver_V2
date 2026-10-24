@@ -53,6 +53,9 @@ uint32_t board_time_us(void);
 error_t current_hw_init(void);
 error_t current_hw_deinit(void);
 
+/** Maximum high-side duty that preserves this board's ADC sampling window. */
+float pwm_hw_max_duty(void);
+
 error_t pwm_hw_init(void);
 error_t pwm_hw_start(void);
 error_t pwm_hw_stop(void);

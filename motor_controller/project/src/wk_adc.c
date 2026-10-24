@@ -28,6 +28,7 @@
 #include "wk_adc.h"
 
 /* add user code begin 0 */
+#include "at32_foc_timing.h"
 
 /* add user code end 0 */
 
@@ -179,18 +180,20 @@ void wk_adc2_init(void)
   adc_resolution_set(ADC2, ADC_RESOLUTION_12B);
 
   /* adc_preempt_conversionmode----------------------------------------------------- */
-  adc_preempt_channel_length_set(ADC2, 4);
+  adc_preempt_channel_length_set(ADC2, AT32_FOC_ADC_SEQUENCE_LENGTH);
 
-  adc_preempt_channel_set(ADC2, ADC_CHANNEL_5, 1, ADC_SAMPLETIME_13_5);
+  /* Ia/Ib/Ic first; temperature is not allowed to delay the current aperture.
+   * ADC_SAMPLETIME_13_5 and HCLK/6 must match at32_foc_timing.h. */
+  adc_preempt_channel_set(ADC2, ADC_CHANNEL_7, 1, ADC_SAMPLETIME_13_5);
   adc_preempt_offset_value_set(ADC2, ADC_PREEMPT_CHANNEL_1, 0x0);
 
-  adc_preempt_channel_set(ADC2, ADC_CHANNEL_7, 2, ADC_SAMPLETIME_13_5);
+  adc_preempt_channel_set(ADC2, ADC_CHANNEL_8, 2, ADC_SAMPLETIME_13_5);
   adc_preempt_offset_value_set(ADC2, ADC_PREEMPT_CHANNEL_2, 0x0);
 
-  adc_preempt_channel_set(ADC2, ADC_CHANNEL_8, 3, ADC_SAMPLETIME_13_5);
+  adc_preempt_channel_set(ADC2, ADC_CHANNEL_10, 3, ADC_SAMPLETIME_13_5);
   adc_preempt_offset_value_set(ADC2, ADC_PREEMPT_CHANNEL_3, 0x0);
 
-  adc_preempt_channel_set(ADC2, ADC_CHANNEL_10, 4, ADC_SAMPLETIME_13_5);
+  adc_preempt_channel_set(ADC2, ADC_CHANNEL_5, 4, ADC_SAMPLETIME_13_5);
   adc_preempt_offset_value_set(ADC2, ADC_PREEMPT_CHANNEL_4, 0x0);
 
   /* When "ADC_PREEMPT_TRIG_EDGE_NONE" is selected, the external trigger source is invalid, and user can only use software trigger. \

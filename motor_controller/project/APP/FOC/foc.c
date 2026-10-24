@@ -1,4 +1,6 @@
 #include "foc.h"
+#include "foc_modulation.h"
+#include "board.h"
 #include "foc_calibration.h"
 #include "foc_sense.h"
 #include "foc_fsm.h"
@@ -64,13 +66,22 @@ static void foc_init_filters(motor_handle_t *m)
 
 void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
 {
-  float Ualpha, Ubeta;
-  float Ua, Ub, Uc;
-  float svm_a, svm_b, svm_c;
-  // float vbus = m->config.limits.vbus_nominal;
+  foc_modulation_t modulation;
   float vbus;
-  // float Uq_max;
-  // float u_lim;
+  float duty_max;
+
+  if (m == NULL)
+  {
+    return;
+  }
+
+  duty_max = pwm_hw_max_duty();
+  if (!(duty_max > 0.0f && duty_max <= 1.0f))
+  {
+    motor_fault_raise(m, FAULT_CURRENT_SENSOR);
+    motor_disarm(m);
+    return;
+  }
 
   vbus = m->state.vbus_filtered;
   if (vbus <= 0.0f)
@@ -82,37 +93,21 @@ void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
     vbus = BUS_VOLTAGE;
   }
 
-  // 限幅方案一
-  // u_lim = 0.5f * vbus;
-  // Uq = CLAMP(Uq, -u_lim, u_lim);
-  // Ud = CLAMP(Ud, -u_lim, u_lim);
-  // Uq_max = sqrtf(vbus * vbus - Ud * Ud);
-  // Uq = CLAMP(Uq, -Uq_max, Uq_max);
-
-  inv_park_transform(Ud, Uq, angle_el, &Ualpha, &Ubeta);
-  m->inv_park_result.u_alpha = Ualpha; // just for debug
-  m->inv_park_result.u_beta = Ubeta;
-
-  // 限幅方案二
-  float Vm, Vmax;
-  Vm = sqrtf(SQ(Ualpha) + SQ(Ubeta));
-  Vmax = vbus * ONE_DIV_SQRT_3;
-  if (Vm > Vmax)
+  if (!foc_modulate_voltage(Ud, Uq, angle_el, vbus, duty_max, &modulation))
   {
-    float k = Vmax / Vm;
-    Ualpha *= k;
-    Ubeta *= k;
+    motor_fault_raise(m, FAULT_PARAM);
+    motor_disarm(m);
+    return;
   }
 
-  inv_clarke_transform(Ualpha, Ubeta, &Ua, &Ub, &Uc);
-  m->inv_clarke_result.u_a = Ua;
-  m->inv_clarke_result.u_b = Ub;
-  m->inv_clarke_result.u_c = Uc;
-
-  svm(Ua, Ub, Uc, &svm_a, &svm_b, &svm_c);
-  m->out.duty_a = CLAMP(0.5f + svm_a / vbus, 0.0f, 1.0f);
-  m->out.duty_b = CLAMP(0.5f + svm_b / vbus, 0.0f, 1.0f);
-  m->out.duty_c = CLAMP(0.5f + svm_c / vbus, 0.0f, 1.0f);
+  m->inv_park_result.u_alpha = modulation.u_alpha;
+  m->inv_park_result.u_beta = modulation.u_beta;
+  m->inv_clarke_result.u_a = modulation.u_a;
+  m->inv_clarke_result.u_b = modulation.u_b;
+  m->inv_clarke_result.u_c = modulation.u_c;
+  m->out.duty_a = modulation.duty_a;
+  m->out.duty_b = modulation.duty_b;
+  m->out.duty_c = modulation.duty_c;
   (void)motor_apply_pwm(m, &m->out);
 }
 
@@ -345,7 +340,7 @@ void foc_init(motor_handle_t *m, const motor_config_t *config)
 #if defined(__ARMCC_VERSION)
 __weak void foc_control_loop(motor_handle_t *m)
 #elif defined(__GNUC__)
-void foc_control_loop(motor_handle_t *m) __attribute__((weak))
+__attribute__((weak)) void foc_control_loop(motor_handle_t *m)
 #else
 void foc_control_loop(motor_handle_t *m)
 #endif

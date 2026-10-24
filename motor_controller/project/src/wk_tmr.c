@@ -28,6 +28,7 @@
 #include "wk_tmr.h"
 
 /* add user code begin 0 */
+#include "at32_foc_timing.h"
 
 /* add user code end 0 */
 
@@ -87,7 +88,7 @@ void wk_tmr1_init(void)
   tmr_clock_source_div_set(TMR1, TMR_CLOCK_DIV1);
   tmr_repetition_counter_set(TMR1, 0);
   tmr_period_buffer_enable(TMR1, FALSE);
-  tmr_base_init(TMR1, 2249, 1);
+  tmr_base_init(TMR1, AT32_FOC_TIMER_ARR, AT32_FOC_TIMER_DIV_REG);
 
   /* configure primary mode settings */
   tmr_sub_sync_mode_set(TMR1, FALSE);
@@ -145,7 +146,8 @@ void wk_tmr1_init(void)
   tmr_output_struct.oc_idle_state = FALSE;
   tmr_output_struct.occ_idle_state = FALSE;
   tmr_output_channel_config(TMR1, TMR_SELECT_CHANNEL_4, &tmr_output_struct);
-  tmr_channel_value_set(TMR1, TMR_SELECT_CHANNEL_4, 2230);
+  /* Center the complete injected ADC sequence around the PWM counter peak. */
+  tmr_channel_value_set(TMR1, TMR_SELECT_CHANNEL_4, (uint16_t)AT32_FOC_ADC_TRIGGER_CCR);
   tmr_output_channel_buffer_enable(TMR1, TMR_SELECT_CHANNEL_4, FALSE);
 
   tmr_output_channel_immediately_set(TMR1, TMR_SELECT_CHANNEL_4, FALSE);

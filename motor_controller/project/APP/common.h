@@ -72,9 +72,16 @@
 /** 速度低于此阈值时不输出 Uq，避免零速堵转发热 [rad/s] */
 #define OPEN_LOOP_OMEGA_EPS_RAD_S   (0.05f)
 
-#define FOC_TMR1_CLK_HZ (180000000.0f)  
+#if defined(PLATFORM_AT32)
+#include "at32_foc_timing.h"
+#define FOC_TMR1_CLK_HZ ((float)AT32_FOC_TIMER_CLOCK_HZ)
+#define FOC_TMR1_DIV_REG AT32_FOC_TIMER_DIV_REG
+#define FOC_TMR1_PERIOD AT32_FOC_TIMER_ARR
+#else
+#define FOC_TMR1_CLK_HZ (180000000.0f)
 #define FOC_TMR1_DIV_REG (1u)
 #define FOC_TMR1_PERIOD  (2249u)
+#endif
 #define FOC_PWM_HZ (FOC_TMR1_CLK_HZ / (2u *  (FOC_TMR1_DIV_REG + 1u) * (FOC_TMR1_PERIOD + 1u)))
 #define FOC_PWM_PERIOD_TS    (1.0f / (float)FOC_PWM_HZ)
 /**
