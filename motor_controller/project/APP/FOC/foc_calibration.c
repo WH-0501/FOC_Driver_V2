@@ -101,12 +101,13 @@ static bool cal_polarity_probe_needs_flip(float iq_probe, float iq_min_a)
     return false;
   }
 
-  if (CURRENT_SENSE_PHASE_POLARITY < 0.0f)
-  {
-    return (iq_probe > 0.0f);
-  }
+  // if (CURRENT_SENSE_PHASE_POLARITY < 0.0f)
+  // {
+  //   return (iq_probe > 0.0f);
+  // }
 
-  return (iq_probe < 0.0f);
+  // return (iq_probe < 0.0f);
+  return (iq_probe > 0.0f);
 }
 
 static bool cal_polarity_probe_aligned(float iq_probe, float iq_min_a)
@@ -116,12 +117,13 @@ static bool cal_polarity_probe_aligned(float iq_probe, float iq_min_a)
     return true;
   }
 
-  if (CURRENT_SENSE_PHASE_POLARITY < 0.0f)
-  {
-    return (iq_probe < 0.0f);
-  }
+  // if (CURRENT_SENSE_PHASE_POLARITY < 0.0f)
+  // {
+  //   return (iq_probe < 0.0f);
+  // }
 
-  return (iq_probe > 0.0f);
+  // return (iq_probe > 0.0f);
+  return (iq_probe < 0.0f);
 }
 
 static void cal_hold_voltage(cal_ctx_t *ctx, float ud, float uq, float angle_el, uint32_t hold_ms)
@@ -580,13 +582,16 @@ static error_t cal_method_ud(cal_ctx_t *ctx)
     return ERR_ALIGIN_SPREAD_OUT;
   }
   ctx->rt->align_raw_elec_rad = ctx->raw_locked;
-
+#if 1
+  /** 极性校正: 检查极性, 计算 offset。 
+   *  
+   *  目的是确定：编码器电角度方向和电机磁场旋转方向是否一致
+   */
   iq_probe = cal_probe_iq(ctx,
                           ctx->cfg.polarity_test_uq_v,
-                          ud,
+                          /*ud,*/ 0.0f,
                           ctx->align_angle,
                           ctx->cfg.polarity_test_ms);
-
   if (cal_polarity_probe_needs_flip(iq_probe, ctx->cfg.polarity_iq_min_a))
   {
     cal_flip_direction(ctx);
@@ -605,11 +610,12 @@ static error_t cal_method_ud(cal_ctx_t *ctx)
     ctx->rt->align_raw_elec_rad = ctx->raw_locked;
     iq_probe = cal_probe_iq(ctx,
                             ctx->cfg.polarity_test_uq_v,
-                            ud,
+                            /*ud,*/ 0.0f,
                             ctx->align_angle,
                             ctx->cfg.polarity_test_ms);
   }
 
+  /* 重新锁定转子 */
   cal_hold_voltage(ctx, ud, 0.0f, ctx->align_angle, ctx->cfg.relock_ms);
   ctx->raw_locked = cal_sample_raw_at_lock(ctx,
                                            ud,
@@ -642,7 +648,9 @@ static error_t cal_method_ud(cal_ctx_t *ctx)
     ret = ERR_ALIGIN_FAILED;
     return ret;
   }
-
+#else
+  ctx->rt->align_ok = true;
+#endif
   ctx->offset_rad = angle_normalize(ctx->raw_locked - ctx->align_angle);
   return ERR_NONE;
 }
@@ -922,6 +930,14 @@ error_t cal_elec_align_ex(motor_handle_t *m,
   return cal_elec_align_run(&ctx);
 }
 
+/** 
+ * @brief 电角度对齐: 使用默认方法对齐电角度。
+ * 
+ *   当前只在初始化时自动对齐时用.
+ * 
+ * @param m 电机句柄
+ * @return error_t 
+ */
 error_t cal_elec_align(motor_handle_t *m)
 {
   return cal_elec_align_ex(m, CAL_ELEC_ALIGN_METHOD_DEFAULT, NULL);

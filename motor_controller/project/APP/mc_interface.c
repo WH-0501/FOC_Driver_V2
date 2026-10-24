@@ -72,8 +72,8 @@ error_t mc_init(void)
    * foc_init 开头 memset(m,0) 会清零刚载入的 config，且 *config 读到的也是全 0。
    */
   (void)motor_config_init(&cfg);
-  cfg.param.theta_elec_offset_rad = 3.19311523f;
-  cfg.param.direction = DIR_CW;
+  // cfg.param.theta_elec_offset_rad = 3.19311523f;
+  // cfg.param.direction = DIR_UNKNOWN;
 
   ret = mc_platform_init();
   if (ret != ERR_NONE)

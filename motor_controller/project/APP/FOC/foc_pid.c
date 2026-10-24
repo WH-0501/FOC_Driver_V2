@@ -73,52 +73,29 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
   }
   
   // 5. 计算积分项
-  float I = 0.0f;
+  float I = pid->last_integral;
   if (param->ki != 0.0f && pid->dt > 0.0f) {
     pid->last_integral += error * param->ki * pid->dt;
-
-    if (pid->last_integral >  param->i_limit)
-        pid->last_integral =  param->i_limit;
-    if (pid->last_integral < -param->i_limit)
-        pid->last_integral = -param->i_limit;
     I = pid->last_integral;
   }
-  // float I = pid->last_integral;
-  // if (param->ki != 0.0f && pid->dt > 0.0f) {
-  //   float new_integral = pid->last_integral + error * param->ki * pid->dt;
-
-  //   // 积分限幅
-  //   if (new_integral > param->i_limit) {
-  //     new_integral = param->i_limit;
-  //   } else if (new_integral < -param->i_limit) {
-  //     new_integral = -param->i_limit;
-  //   }
-    
-  //   // 积分抗饱和
-  //   float pre_out = P + new_integral + D;
-  //   if (fabsf(pre_out) <= param->limit) {
-  //       pid->last_integral = new_integral;
-  //   }
-  //   // 积分抗饱和. 反击算法(Back-calculation),一旦输出饱和，积分项立即被拉回，退饱和速度大大加快
-  //   // float out_unlimited = P + I + D;
-  //   // *output = out_unlimited;
-  //   // if (*output > param->limit) {
-  //   //     *output = param->limit;
-  //   //     pid->last_integral += ( *output - out_unlimited ) * param->kb; // kb 为反计算增益
-  //   // } else if (*output < -param->limit) {
-  //   //     *output = -param->limit;
-  //   //     pid->last_integral += ( *output - out_unlimited ) * param->kb;
-  //   // }
-  //   I = pid->last_integral;
-  // }
 
   // 6. 计算输出 + 限幅
-  *output = P + I + D;
-  if (*output > param->limit) {
+  float out_unlimited = P + I + D;
+  if (out_unlimited > param->limit) {
     *output = param->limit;
-  } else if (*output < -param->limit) {
+    pid->last_integral += ( *output - out_unlimited ) * /*param->kb*/ 2.0f;
+  } else if (out_unlimited < -param->limit) {
     *output = -param->limit;
+    pid->last_integral += ( *output - out_unlimited ) * /*param->kb*/ 2.0f;
+  } else {
+    *output = out_unlimited;
   }
+
+  // 积分兜底限幅
+  if (pid->last_integral >  param->i_limit)
+    pid->last_integral =  param->i_limit;
+  if (pid->last_integral < -param->i_limit)
+    pid->last_integral = -param->i_limit;
 
   // 7. 输出斜坡（限制相对上一拍的电压变化率）
   if (param->ramp > 0.0f && pid->dt > 0.0f)

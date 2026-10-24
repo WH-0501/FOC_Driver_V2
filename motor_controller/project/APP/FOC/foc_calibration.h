@@ -23,7 +23,7 @@ typedef enum
 } cal_elec_align_method_t;
 
 #ifndef CAL_ELEC_ALIGN_METHOD_DEFAULT
-#define CAL_ELEC_ALIGN_METHOD_DEFAULT CAL_ELEC_ALIGN_UQ
+#define CAL_ELEC_ALIGN_METHOD_DEFAULT CAL_ELEC_ALIGN_UD
 #endif
 
 /** 对齐流程参数（NULL 时使用 cal_elec_align_cfg_default） */

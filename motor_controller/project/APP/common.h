@@ -10,6 +10,8 @@
 #define POLE_PAIRS      (5) ///< 极对数
 #define GEAR_RATIO      (50) ///< 电机到关节减速比（直驱填 1.0）
 
+#define PID_PARAM_FACTOR (10000.0f)
+
 #define DEFAULT_TEMP    (25.0f) ///< 默认温度 [℃]
 #define DEFAULT_TEMP_ADC (1588) ///< 默认温度 ADC 值
 
@@ -82,13 +84,17 @@
  *        3. FOC_CURRENT_MEAS_PERIOD: 电流环周期
  */
 #ifndef FOC_CURRENT_LOOP_FS_HZ
-#define FOC_CURRENT_LOOP_FS_HZ (FOC_PWM_HZ)
+#define FOC_CURRENT_LOOP_FS_HZ (FOC_PWM_HZ) // 当前 20KHz
 #endif
 #ifndef FOC_MEAS_LPF_FC_HZ
 #define FOC_MEAS_LPF_FC_HZ (FOC_CURRENT_LOOP_FS_HZ / 10u)
 #endif
 #ifndef FOC_CURRENT_MEAS_PERIOD
 #define FOC_CURRENT_MEAS_PERIOD (float)(1.0f / (float)FOC_CURRENT_LOOP_FS_HZ)
+#endif
+
+#ifndef FOC_CURRENT_BANDWIDTH_HZ
+#define FOC_CURRENT_BANDWIDTH_HZ (800.0f)
 #endif
 
 /** 1=ODrive/DGM PLL；0=原始方式（raw 角 + Δangle/dt + 速度 LPF，默认） */

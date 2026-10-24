@@ -34,6 +34,7 @@ void VoFaDisUart(void)
     }
 
     __disable_irq();
+#if 0
     Send.Data[0].FloatData = m->out.duty_a;
     Send.Data[1].FloatData = m->out.duty_b;
     Send.Data[2].FloatData = m->out.duty_c;
@@ -46,6 +47,18 @@ void VoFaDisUart(void)
     Send.Data[9].FloatData = m->state.phase_current.kcl_residual;
     Send.Data[10].FloatData = m->inv_clarke_result.u_a; // m->state.i_q;
     Send.Data[11].FloatData = m->state.shaft.counts;
+#else
+    Send.Data[0].FloatData = m->ref.iq;
+    Send.Data[1].FloatData = m->ref.id;
+    Send.Data[2].FloatData = m->state.i_d;
+    Send.Data[3].FloatData = m->state.i_q;
+    Send.Data[4].FloatData = m->iq_pid.last_output;
+    Send.Data[5].FloatData = m->iq_pid.last_error;
+    Send.Data[6].FloatData = m->iq_pid.target;
+    Send.Data[7].FloatData = m->iq_pid.feedback;
+    Send.Data[8].FloatData = m->iq_pid.last_error;
+    Send.Data[9].FloatData = m->iq_pid.last_integral;
+#endif
     __enable_irq();
 
     for (i = 0u; i < VOFA_CHANNEL_COUNT; i++)

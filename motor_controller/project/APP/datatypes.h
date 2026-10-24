@@ -102,7 +102,7 @@ typedef struct
   float inductance_q;             ///< q 轴电感 Lq [H]
   float flux_linkage;             ///< 永磁磁链 ψf [Wb]（或等价常数）
   uint8_t pole_pairs;             ///< 极对数 p
-  int8_t direction;               ///< 控制正方向：1=CW，-1=CCW；在 encoder 观测层统一施加
+  int8_t direction;               ///< 控制正方向（编码器方向）：1=CW，-1=CCW；在 encoder 观测层统一施加
   float gear_ratio;               ///< 电机到关节减速比（直驱填 1.0）
   uint32_t encoder_counts_per_rev; ///< 机械旋转一圈编码器计数（分辨率定义依传感器）
   float theta_elec_offset_rad;    ///< FOC 电角零偏 [rad]（对齐流程写入，见 cal_elec_align）

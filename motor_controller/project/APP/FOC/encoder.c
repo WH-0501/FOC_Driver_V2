@@ -279,6 +279,15 @@ static float encoder_resolve_zero_rad(const encoder_bind_t *bind,
   return 0.0f;
 }
 
+/**
+ * @brief 解析编码器方向. 当 bind.dir 不为 1 或 -1 时，使用 default_dir
+ * 
+ *   优先使用绑定的方向
+ * 
+ * @param bind: 编码器绑定
+ * @param default_dir: 默认方向
+ * @return float: 方向. 1=CW，-1=CCW
+ */
 static float encoder_resolve_dir(const encoder_bind_t *bind, int8_t default_dir)
 {
   if ((bind != NULL) && (bind->dir == 1 || bind->dir == -1))

@@ -100,24 +100,24 @@ int16_t can_fd_codec_rad_s_to_vel_q7_rpm(float rad_s)
 
 void can_fd_codec_pack_pid(float kp, float ki, float kd, uint8_t out[6])
 {
-  can_fd_codec_write_u16_be(&out[0], can_fd_codec_float_to_q12(kp));
-  can_fd_codec_write_u16_be(&out[2], can_fd_codec_float_to_q12(ki));
-  can_fd_codec_write_u16_be(&out[4], can_fd_codec_float_to_q12(kd));
+  can_fd_codec_write_u16_be(&out[0], can_fd_codec_float_to_q12(kp / PID_PARAM_FACTOR));
+  can_fd_codec_write_u16_be(&out[2], can_fd_codec_float_to_q12(ki / PID_PARAM_FACTOR));
+  can_fd_codec_write_u16_be(&out[4], can_fd_codec_float_to_q12(kd / PID_PARAM_FACTOR));
 }
 
 void can_fd_codec_unpack_pid(const uint8_t in[6], float *kp, float *ki, float *kd)
 {
   if (kp != NULL)
   {
-    *kp = can_fd_codec_q12_to_float(can_fd_codec_read_u16_be(&in[0]));
+    *kp = can_fd_codec_q12_to_float(can_fd_codec_read_u16_be(&in[0])) * PID_PARAM_FACTOR;
   }
   if (ki != NULL)
   {
-    *ki = can_fd_codec_q12_to_float(can_fd_codec_read_u16_be(&in[2]));
+    *ki = can_fd_codec_q12_to_float(can_fd_codec_read_u16_be(&in[2])) * PID_PARAM_FACTOR;
   }
   if (kd != NULL)
   {
-    *kd = can_fd_codec_q12_to_float(can_fd_codec_read_u16_be(&in[4]));
+    *kd = can_fd_codec_q12_to_float(can_fd_codec_read_u16_be(&in[4])) * PID_PARAM_FACTOR;
   }
 }
 
