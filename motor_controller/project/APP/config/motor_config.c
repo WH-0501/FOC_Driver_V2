@@ -185,7 +185,7 @@ void motor_config_set_defaults(motor_config_t *config)
   config->pid.position.ki = DEF_POS_KI;
   config->pid.position.kd = DEF_POS_KD;
   config->pid.position.ramp = DEF_POS_RAMP;
-  config->pid.position.limit = config->limits.iq_limit;
+  config->pid.position.limit = config->motion.max_speed_rad_s;
   config->pid.position.d_filter = DEF_POS_D_FILTER;
   config->pid.position.i_limit = config->pid.position.limit * DEF_I_LIMIT_FACTOR;
 
