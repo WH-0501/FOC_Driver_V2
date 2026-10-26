@@ -3,6 +3,7 @@
 #include "math_compat.h"
 #include "dwt_profile_delay.h"
 #include <math.h>
+#include <float.h>
 #include <stddef.h>
 
 error_t foc_pid_init(pid_state_t *pid, uint8_t mode)
@@ -40,8 +41,14 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
     return ERR_NULL;
   }
 
-  if (param->limit <= 0.0f) {
+  if (param->limit <= 0.0f ||
+      !(param->i_limit >= 0.0f && param->i_limit <= FLT_MAX)) {
     return ERR_PARAM;
+  }
+
+  /* An explicit zero budget disables integration, including any old state. */
+  if (param->i_limit == 0.0f) {
+    pid->last_integral = 0.0f;
   }
 
   // 1. 计算 dt. 当前时间戳 - 上一次时间戳
@@ -74,8 +81,10 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
   
   // 5. 计算积分项
   float I = pid->last_integral;
-  if (param->ki != 0.0f && pid->dt > 0.0f) {
+  if (param->ki != 0.0f && param->i_limit > 0.0f && pid->dt > 0.0f) {
     pid->last_integral += error * param->ki * pid->dt;
+    /* Enforce the integral contribution budget before using it in output. */
+    pid->last_integral = CLAMP(pid->last_integral, -param->i_limit, param->i_limit);
     I = pid->last_integral;
   }
 

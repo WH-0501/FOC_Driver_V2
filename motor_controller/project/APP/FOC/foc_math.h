@@ -28,7 +28,7 @@
 #define SQRT_3 (1.732050807568877f)             /* √3 */
 #define SQRT_3_DIV_2 (0.866025403784438f)       /* √3/2 */
 #define ONE_DIV_SQRT_2 (0.7071067811865475f)    /* 1/√2 */
-#define ONE_DIV_SQRT_3 (0.57735026919f)         /* 1/√3，功率不变 Clarke 常用. = √3/3 */
+#define ONE_DIV_SQRT_3 (0.57735026919f)         /* 1/√3 = √3/3 */
 #define TWO_DIV_SQRT_3 (1.15470053838f)          /* 2/√3 */
 #define ONE_DIV_3 (0.3333333333333333f)
 #define TWO_DIV_3 (0.6666666666666666f)

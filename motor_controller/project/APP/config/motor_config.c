@@ -179,6 +179,7 @@ void motor_config_set_defaults(motor_config_t *config)
   config->pid.velocity.ramp = DEF_VEL_RAMP;
   config->pid.velocity.limit = config->limits.iq_limit;
   config->pid.velocity.d_filter = DEF_VEL_D_FILTER;
+  config->pid.velocity.i_limit = config->pid.velocity.limit * DEF_I_LIMIT_FACTOR;
 
   config->pid.position.kp = DEF_POS_KP;
   config->pid.position.ki = DEF_POS_KI;
@@ -186,6 +187,7 @@ void motor_config_set_defaults(motor_config_t *config)
   config->pid.position.ramp = DEF_POS_RAMP;
   config->pid.position.limit = config->limits.iq_limit;
   config->pid.position.d_filter = DEF_POS_D_FILTER;
+  config->pid.position.i_limit = config->pid.position.limit * DEF_I_LIMIT_FACTOR;
 
   config->comm.can_id = 0x01u;
   config->mit.stiffness = 0.0f;
