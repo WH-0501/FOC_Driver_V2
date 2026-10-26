@@ -32,6 +32,10 @@
 #define CURRENT_SENSE_PHASE_POLARITY (-1.0f)
 #endif
 
+#ifndef CURRENT_OFFSET_SETTLING_SAMPLES
+#define CURRENT_OFFSET_SETTLING_SAMPLES (128U)
+#endif
+
 /** 初始化并完成阻塞零漂校准（SimpleFOC current_sense.init 语义）。 */
 void current_sense_init(motor_handle_t *m);
 void current_sense_process_sample(motor_handle_t *m);

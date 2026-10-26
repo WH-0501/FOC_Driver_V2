@@ -330,6 +330,10 @@ void foc_init(motor_handle_t *m, const motor_config_t *config)
   }
 
   current_sense_init(m);
+  if (!m->current_offset_cal_done)
+  {
+    return; /* Never attempt electrical alignment after failed current sensing. */
+  }
 
   if (m->config.auto_align_electrical)
   {

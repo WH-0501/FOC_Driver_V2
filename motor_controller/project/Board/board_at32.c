@@ -93,6 +93,63 @@ int board_get_gate_hw(gate_hw_binding_t *hw)
   return 0;
 }
 
+
+error_t current_hw_calibration_begin(uint32_t *saved_state)
+{
+  if (saved_state == NULL) { return ERR_NULL; }
+  if (__get_IPSR() != 0U) { return ERR_STATE; }
+  /**
+   * pcceien: Preempted Channel Conversion Complete Interrupt Enable
+   *          抢占通道（注入通道）转换完成中断使能位
+   * 
+   * pcceint: Preempted Channel Conversion Complete Interrupt
+   *          抢占通道（注入通道）转换完成中断
+   * 
+   * pcceflag: Preempted Channel Conversion Complete Flag
+   *           抢占通道（注入通道）转换完成标志
+   * 
+   * pcceflag: Preempted Channel Conversion Complete Flag
+   */
+  *saved_state = ADC2->ctrl1_bit.pcceien;
+  adc_interrupt_enable(ADC2, ADC_PCCE_INT, FALSE);
+  adc_flag_clear(ADC2, ADC_PCCE_FLAG);
+  return ERR_NONE;
+}
+
+error_t current_hw_calibration_read(motor_handle_t *m)
+{
+  uint16_t started;
+  uint32_t spins = 0U;
+  uint32_t irq_state;
+  if (m == NULL) { return ERR_NULL; }
+  /* TMR6 is a free-running 16-bit 1 MHz timer. Modular subtraction handles
+   * its 65.536 ms wrap; each wait is bounded to 1 ms. The spin bound also
+   * prevents an infinite wait if this timebase was accidentally stopped. */
+  adc_flag_clear(ADC2, ADC_PCCE_FLAG);
+  started = (uint16_t)board_time_us();
+  while (adc_flag_get(ADC2, ADC_PCCE_FLAG) == RESET) // 轮询直到新的 PCCE 置位
+  {
+    if ((uint16_t)((uint16_t)board_time_us() - started) >= 1000U ||
+        ++spins >= 1000000U)
+    {
+      return ERR_TIMEOUT;
+    }
+  }
+  irq_state = __get_PRIMASK();
+  /* 关中断，读三相 ADC，再清标志、开中断 */
+  __disable_irq();
+  board_get_phase_current(m);
+  adc_flag_clear(ADC2, ADC_PCCE_FLAG);
+  if (irq_state == 0U) { __enable_irq(); }
+  return ERR_NONE;
+}
+
+void current_hw_calibration_end(uint32_t saved_state)
+{
+  adc_flag_clear(ADC2, ADC_PCCE_FLAG);
+  adc_interrupt_enable(ADC2, ADC_PCCE_INT, saved_state ? TRUE : FALSE);
+}
+
 error_t current_hw_init(void)
 {
   adc_interrupt_enable(ADC2, ADC_PCCE_INT, TRUE);

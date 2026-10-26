@@ -88,6 +88,11 @@ error_t mc_init(void)
 
   m = motor_get_handler();
   foc_init(m, &cfg);
+  if (!m->current_offset_cal_done)
+  {
+    motor_disarm(m);
+    return ERR_OFFSET_CAL;
+  }
 
   ret = mc_runtime_start();
   if (ret != ERR_NONE)

@@ -84,6 +84,21 @@ int board_get_gate_hw(gate_hw_binding_t *hw)
   return 0;
 }
 
+
+/* This port has no qualified fresh-sequence polling implementation yet.
+ * Fail explicitly rather than reporting calibration of repeated registers. */
+error_t current_hw_calibration_begin(uint32_t *saved_state)
+{
+  (void)saved_state;
+  return ERR_NOT_IMPL;
+}
+error_t current_hw_calibration_read(motor_handle_t *m)
+{
+  (void)m;
+  return ERR_NOT_IMPL;
+}
+void current_hw_calibration_end(uint32_t saved_state) { (void)saved_state; }
+
 error_t current_hw_init(void)
 {
   if (HAL_ADCEx_Calibration_Start(HADC_PHASE_CURRENT, ADC_SINGLE_ENDED) != HAL_OK)

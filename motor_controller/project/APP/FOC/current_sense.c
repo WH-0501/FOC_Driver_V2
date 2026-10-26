@@ -1,6 +1,7 @@
 #include "current_sense.h"
 #include "board.h"
 #include "motor.h"
+#include "foc_fault.h"
 
 static void current_sense_offset_cal_step(motor_handle_t *m)
 {
@@ -108,24 +109,62 @@ static void current_sense_apply_raw_to_physical(motor_handle_t *m)
 
 static void current_sense_run_offset_cal_blocking(motor_handle_t *m)
 {
-  if (m == NULL)
+  motor_runtime_t *rt;
+  uint32_t saved_state = 0U;
+  uint32_t discard;
+  error_t ret;
+  if (m == NULL) { return; }
+  rt = motor_runtime(m);
+  if (rt == NULL) { return; }
+
+  /* Take ownership before changing the bridge. Never run the control callback
+   * concurrently with blocking calibration, and never stop ADC triggering. 
+   * AT32 上 begin 会:
+   *   - 禁止从 ISR 调用 (ERR_STATE)
+   *   - 保存并关闭 ADC2 PCCE 完成中断（避免 ISR 抢清标志）
+   *   - 除陈旧完成标志
+   *   - 不停止 ADC 转换 / PWM 触发链
+   */
+  ret = current_hw_calibration_begin(&saved_state);
+  if (ret != ERR_NONE)
   {
+    /* 如果当前ADC正在使用,则直接返回 */
+    m->current_offset_cal_pending = false;
+    m->current_offset_calibrating = false;
+    rt->offset_active = 0U;
+    motor_disarm(m);
+    motor_fault_raise(m, (fault_t)(FAULT_CURRENT_SENSOR | FAULT_CALIBRATION));
     return;
   }
-
+  rt->offset_active = 0U;
+  rt->offset_cnt = 0U;
   motor_enter_dc_cal_hw(m);
-
-  m->current_offset_cal_pending = true;
-  m->current_offset_calibrating = false;
-  m->current_offset_cal_done = false;
-
-  while (!m->current_offset_cal_done)
+  /* Discard fresh conversions after wake/bridge preparation. At 20 kHz,
+   * 128 events provide at least about 6.4 ms before accumulation starts. 
+   * 稳定期: 丢弃 128 次新转换，唤醒、桥臂切换后的过渡样本不进均值计算
+   */
+  for (discard = 0U; discard < CURRENT_OFFSET_SETTLING_SAMPLES; ++discard)
   {
-    board_get_phase_current(m);
-    current_sense_process_sample(m);
+    ret = current_hw_calibration_read(m);
+    if (ret != ERR_NONE) { break; }
+  }
+  while ((ret == ERR_NONE) && !m->current_offset_cal_done)
+  {
+    ret = current_hw_calibration_read(m);
+    if (ret == ERR_NONE) { current_sense_offset_cal_step(m); }
   }
 
+  /* Disable the bridge BEFORE restoring the normal ADC interrupt owner. */
   motor_disarm(m);
+  rt->offset_active = 0U;
+  m->current_offset_cal_pending = false;
+  m->current_offset_calibrating = false;
+  if (ret != ERR_NONE)
+  {
+    m->current_offset_cal_done = false;
+    motor_fault_raise(m, (fault_t)(FAULT_CURRENT_SENSOR | FAULT_CALIBRATION));
+  }
+  current_hw_calibration_end(saved_state);
 }
 
 /**
@@ -157,5 +196,5 @@ void current_sense_init(motor_handle_t *m)
 void current_sense_process_sample(motor_handle_t *m)
 {
   current_sense_apply_raw_to_physical(m);
-  current_sense_offset_cal_step(m);
+  /* Offset accumulation is owned exclusively by the fresh-event startup path. */
 }

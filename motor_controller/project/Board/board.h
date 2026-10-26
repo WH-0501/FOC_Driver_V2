@@ -53,6 +53,14 @@ uint32_t board_time_us(void);
 error_t current_hw_init(void);
 error_t current_hw_deinit(void);
 
+/* Startup-only exclusive ownership of fresh conversion completion events.
+ * begin saves/restores only the sample IRQ enable; conversions keep running.
+ * read discards a stale event, waits for a new complete sequence and snapshots
+ * all phases. end restores the saved IRQ state. Not callable from an ISR. */
+error_t current_hw_calibration_begin(uint32_t *saved_state);
+error_t current_hw_calibration_read(motor_handle_t *m);
+void current_hw_calibration_end(uint32_t saved_state);
+
 /** Maximum high-side duty that preserves this board's ADC sampling window. */
 float pwm_hw_max_duty(void);
 
