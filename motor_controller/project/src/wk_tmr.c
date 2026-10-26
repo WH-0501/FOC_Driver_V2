@@ -95,6 +95,9 @@ void wk_tmr1_init(void)
   tmr_primary_mode_select(TMR1, TMR_PRIMARY_SEL_RESET);
   tmr_primary_mode2_select(TMR1, TMR_PRIMARY_SEL_RESET);
 
+  /* S02: CH1-3 preload transfers on natural overflow/underflow events.
+   * RPR=0 deliberately retains both boundaries; normal post-ADC writes latch
+   * at the next valley. Do not force software update during normal control. */
   /* configure channel 1 output settings */
   tmr_output_struct.oc_mode = TMR_OUTPUT_CONTROL_PWM_MODE_A;
   tmr_output_struct.oc_output_state = TRUE;
@@ -105,7 +108,7 @@ void wk_tmr1_init(void)
   tmr_output_struct.occ_idle_state = FALSE;
   tmr_output_channel_config(TMR1, TMR_SELECT_CHANNEL_1, &tmr_output_struct);
   tmr_channel_value_set(TMR1, TMR_SELECT_CHANNEL_1, 0);
-  tmr_output_channel_buffer_enable(TMR1, TMR_SELECT_CHANNEL_1, FALSE);
+  tmr_output_channel_buffer_enable(TMR1, TMR_SELECT_CHANNEL_1, TRUE);
 
   tmr_output_channel_immediately_set(TMR1, TMR_SELECT_CHANNEL_1, FALSE);
 
@@ -119,7 +122,7 @@ void wk_tmr1_init(void)
   tmr_output_struct.occ_idle_state = FALSE;
   tmr_output_channel_config(TMR1, TMR_SELECT_CHANNEL_2, &tmr_output_struct);
   tmr_channel_value_set(TMR1, TMR_SELECT_CHANNEL_2, 0);
-  tmr_output_channel_buffer_enable(TMR1, TMR_SELECT_CHANNEL_2, FALSE);
+  tmr_output_channel_buffer_enable(TMR1, TMR_SELECT_CHANNEL_2, TRUE);
 
   tmr_output_channel_immediately_set(TMR1, TMR_SELECT_CHANNEL_2, FALSE);
 
@@ -133,7 +136,7 @@ void wk_tmr1_init(void)
   tmr_output_struct.occ_idle_state = FALSE;
   tmr_output_channel_config(TMR1, TMR_SELECT_CHANNEL_3, &tmr_output_struct);
   tmr_channel_value_set(TMR1, TMR_SELECT_CHANNEL_3, 0);
-  tmr_output_channel_buffer_enable(TMR1, TMR_SELECT_CHANNEL_3, FALSE);
+  tmr_output_channel_buffer_enable(TMR1, TMR_SELECT_CHANNEL_3, TRUE);
 
   tmr_output_channel_immediately_set(TMR1, TMR_SELECT_CHANNEL_3, FALSE);
 

@@ -177,28 +177,51 @@ float pwm_hw_max_duty(void)
   return (float)AT32_FOC_CURRENT_MAX_CCR / (float)pwm_compare_top;
 }
 
+/* Stage a complete voltage vector without a hardware transfer between writes.
+ * IRQ masking alone cannot stop a timer update. OVFEN gates the transfer,
+ * while the counter and fixed CH4 ADC trigger continue running. */
+static void pwm_stage_compare(uint32_t u, uint32_t v, uint32_t w)
+{
+  uint32_t irq_state = __get_PRIMASK();
+  uint32_t previous_ovfen;
+  __disable_irq();
+  previous_ovfen = PWM_TIM_HANDLE->ctrl1_bit.ovfen;
+  PWM_TIM_HANDLE->ctrl1_bit.ovfen = TRUE;
+  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, u);
+  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, v);
+  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, w);
+  PWM_TIM_HANDLE->ctrl1_bit.ovfen = previous_ovfen;
+  if (irq_state == 0U) { __enable_irq(); }
+}
+
+/* All phase channels must be disabled here. Clear active AND pending values
+ * before re-enabling outputs, so a restart cannot expose the old vector. */
+static void pwm_clear_disabled_compare(void)
+{
+  uint32_t irq_state = __get_PRIMASK();
+  __disable_irq();
+  tmr_output_channel_buffer_enable(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, FALSE);
+  tmr_output_channel_buffer_enable(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, FALSE);
+  tmr_output_channel_buffer_enable(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, FALSE);
+  pwm_stage_compare(0U, 0U, 0U);
+  tmr_output_channel_buffer_enable(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, TRUE);
+  tmr_output_channel_buffer_enable(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, TRUE);
+  tmr_output_channel_buffer_enable(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, TRUE);
+  if (irq_state == 0U) { __enable_irq(); }
+}
+
 error_t pwm_hw_init(void)
 {
-  motor_actuation_t actuation = {
-    .duty_a = 0.0f,
-    .duty_b = 0.0f,
-    .duty_c = 0.0f,
-  };
-
-  if (pwm_compare_top == 0U)
-  {
-    pwm_compare_top = pwm_get_compare_top();
-  }
-
-  set_pwm(&actuation);
-  tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, FALSE);
-  tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, FALSE);
-  tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, FALSE);
+  if (pwm_compare_top == 0U) { pwm_compare_top = pwm_get_compare_top(); }
+  (void)pwm_hw_stop();
+  pwm_clear_disabled_compare();
   return ERR_NONE;
 }
 
 error_t pwm_hw_start(void)
 {
+  (void)pwm_hw_stop();
+  pwm_clear_disabled_compare();
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, TRUE);
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, TRUE);
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, TRUE);
@@ -207,18 +230,16 @@ error_t pwm_hw_start(void)
 
 error_t pwm_hw_lowside_brake_off(void)
 {
-  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, 0U);
-  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, 0U);
-  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, 0U);
+  pwm_stage_compare(0U, 0U, 0U);
   return ERR_NONE;
 }
 
 error_t pwm_hw_stop(void)
 {
-  (void)pwm_hw_lowside_brake_off();
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, FALSE);
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, FALSE);
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, FALSE);
+  pwm_stage_compare(0U, 0U, 0U);
   return ERR_NONE;
 }
 
@@ -226,9 +247,7 @@ error_t pwm_hw_lowside_brake_on(void)
 {
   /* MP6540: EN=1, PWM=0 selects the low-side FET. With active-high
    * PWM A, CCR=0 keeps PWM low, including the current-offset calibration. */
-  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, 0U);
-  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, 0U);
-  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, 0U);
+  pwm_stage_compare(0U, 0U, 0U);
   return ERR_NONE;
 }
 
@@ -247,12 +266,10 @@ error_t set_pwm(motor_actuation_t *actuation)
     return ERR_PARAM;
   }
 
-  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL,
-                        (uint32_t)(actuation->duty_a * (float)pwm_compare_top));
-  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL,
-                        (uint32_t)(actuation->duty_b * (float)pwm_compare_top));
-  tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL,
-                        (uint32_t)(actuation->duty_c * (float)pwm_compare_top));
+  pwm_stage_compare(
+      (uint32_t)(actuation->duty_a * (float)pwm_compare_top),
+      (uint32_t)(actuation->duty_b * (float)pwm_compare_top),
+      (uint32_t)(actuation->duty_c * (float)pwm_compare_top));
   return ERR_NONE;
 }
 
