@@ -80,9 +80,13 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
   }
   
   // 5. 计算积分项
+  float ki_eff = param->ki;
+  if (pid->mode == 2u) {
+    ki_eff *= FOC_PID_CUR_KI_SCALE;
+  }
   float I = pid->last_integral;
-  if (param->ki != 0.0f && param->i_limit > 0.0f && pid->dt > 0.0f) {
-    pid->last_integral += error * param->ki * pid->dt;
+  if (ki_eff != 0.0f && param->i_limit > 0.0f && pid->dt > 0.0f) {
+    pid->last_integral += error * ki_eff * pid->dt;
     /* Enforce the integral contribution budget before using it in output. */
     pid->last_integral = CLAMP(pid->last_integral, -param->i_limit, param->i_limit);
     I = pid->last_integral;

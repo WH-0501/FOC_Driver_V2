@@ -40,6 +40,7 @@ from protocol import (
     parse_iap_status_payload,
     parse_node_id_response,
     parse_period_report,
+    parse_cur_pid_response,
     parse_pid_response,
     parse_protect_response,
     parse_stiff_damp_response,
@@ -447,7 +448,7 @@ class MainWindow(QMainWindow):
         panel = self.motor_panel if arb_id == self._motor_id else None
 
         if cmd in (CMD.GET_POS_PID, CMD.SET_POS_PID):
-            pid = parse_pid_response(payload)
+            pid = parse_pid_response(payload, self.client.protocol_version)
             if panel:
                 panel.apply_pid("pos", pid)
             self.log(f"电机 {arb_id} 位置PID: P={pid.get('P', 0):.4f} I={pid.get('I', 0):.4f} D={pid.get('D', 0):.4f}")
@@ -455,12 +456,12 @@ class MainWindow(QMainWindow):
                 self._set_scan_motor_id(arb_id)
                 self._ensure_motor_panel(arb_id)
         elif cmd in (CMD.GET_VEL_PID, CMD.SET_VEL_PID):
-            pid = parse_pid_response(payload)
+            pid = parse_pid_response(payload, self.client.protocol_version)
             if panel:
                 panel.apply_pid("vel", pid)
             self.log(f"电机 {arb_id} 速度PID: P={pid.get('P', 0):.4f} I={pid.get('I', 0):.4f} D={pid.get('D', 0):.4f}")
         elif cmd in (CMD.GET_CUR_PID, CMD.SET_CUR_PID):
-            pid = parse_pid_response(payload)
+            pid = parse_cur_pid_response(payload, self.client.protocol_version)
             if panel:
                 panel.apply_pid("cur", pid)
             self.log(f"电机 {arb_id} 电流PID: P={pid.get('P', 0):.4f} I={pid.get('I', 0):.4f} D={pid.get('D', 0):.4f}")

@@ -10,8 +10,6 @@
 #define POLE_PAIRS      (5) ///< 极对数
 #define GEAR_RATIO      (50) ///< 电机到关节减速比（直驱填 1.0）
 
-#define PID_PARAM_FACTOR (10000.0f)
-
 #define DEFAULT_TEMP    (25.0f) ///< 默认温度 [℃]
 #define DEFAULT_TEMP_ADC (1588) ///< 默认温度 ADC 值
 
@@ -181,13 +179,13 @@
 // #define DEF_CUR_LIMIT (0.0f)
 // #define DEF_CUR_D_FILTER (0.0f)
 #define DEF_Q_KP (1.0f)
-#define DEF_Q_KI (0.2f)
+#define DEF_Q_KI (1507.96f)
 #define DEF_Q_KD (0.0f)
 #define DEF_Q_RAMP (0.0f)
 #define DEF_Q_LIMIT (0.0f)
 #define DEF_Q_D_FILTER (0.0f)
 #define DEF_D_KP (1.0f)
-#define DEF_D_KI (0.2f)
+#define DEF_D_KI (1507.96f)
 #define DEF_D_KD (0.0f)
 #define DEF_D_RAMP (0.0f)
 #define DEF_D_LIMIT (0.0f)

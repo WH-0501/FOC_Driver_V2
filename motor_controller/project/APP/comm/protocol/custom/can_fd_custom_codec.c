@@ -98,26 +98,31 @@ int16_t can_fd_codec_rad_s_to_vel_q7_rpm(float rad_s)
   return (int16_t)(rpm /* * CAN_FD_POS_SCALE */);
 }
 
+/*
+ * V2.0.0 PID 线值（Q12）：wire = round(K * 4096)，K = wire / 4096。
+ * 最小非零 K 步进 = 1/4096；与 MIT 刚度/阻尼同一 Q12 语义。
+ * 电流环（0x44/0x49）：Kp/Kd 为物理值；Ki 为 config 缩放值（Ki_phys / FOC_PID_CUR_KI_SCALE）。
+ */
 void can_fd_codec_pack_pid(float kp, float ki, float kd, uint8_t out[6])
 {
-  can_fd_codec_write_u16_be(&out[0], can_fd_codec_float_to_q12(kp / PID_PARAM_FACTOR));
-  can_fd_codec_write_u16_be(&out[2], can_fd_codec_float_to_q12(ki / PID_PARAM_FACTOR));
-  can_fd_codec_write_u16_be(&out[4], can_fd_codec_float_to_q12(kd / PID_PARAM_FACTOR));
+  can_fd_codec_write_u16_be(&out[0], can_fd_codec_float_to_q12(kp));
+  can_fd_codec_write_u16_be(&out[2], can_fd_codec_float_to_q12(ki));
+  can_fd_codec_write_u16_be(&out[4], can_fd_codec_float_to_q12(kd));
 }
 
 void can_fd_codec_unpack_pid(const uint8_t in[6], float *kp, float *ki, float *kd)
 {
   if (kp != NULL)
   {
-    *kp = can_fd_codec_q12_to_float(can_fd_codec_read_u16_be(&in[0])) * PID_PARAM_FACTOR;
+    *kp = can_fd_codec_q12_to_float(can_fd_codec_read_u16_be(&in[0]));
   }
   if (ki != NULL)
   {
-    *ki = can_fd_codec_q12_to_float(can_fd_codec_read_u16_be(&in[2])) * PID_PARAM_FACTOR;
+    *ki = can_fd_codec_q12_to_float(can_fd_codec_read_u16_be(&in[2]));
   }
   if (kd != NULL)
   {
-    *kd = can_fd_codec_q12_to_float(can_fd_codec_read_u16_be(&in[4])) * PID_PARAM_FACTOR;
+    *kd = can_fd_codec_q12_to_float(can_fd_codec_read_u16_be(&in[4]));
   }
 }
 

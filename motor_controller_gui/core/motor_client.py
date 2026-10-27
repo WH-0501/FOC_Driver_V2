@@ -18,6 +18,7 @@ from protocol import (
     format_bytes_hex,
     pack_frame,
     pack_multi_targets,
+    pack_cur_pid_params,
     pack_pid_params,
     pack_protect,
     pack_stiff_damp,
@@ -278,13 +279,19 @@ class MotorClient:
         return self._send(motor_id, CMD.KTH71_CAL_STATUS)
 
     def broadcast_set_pos_pid(self, p: float, i: float, d: float) -> bool:
-        return self._send(CAN_BROADCAST_ID, CMD.SET_POS_PID, pack_pid_params(p, i, d))
+        return self._send(
+            CAN_BROADCAST_ID, CMD.SET_POS_PID, pack_pid_params(p, i, d, self.protocol_version)
+        )
 
     def broadcast_set_vel_pid(self, p: float, i: float, d: float) -> bool:
-        return self._send(CAN_BROADCAST_ID, CMD.SET_VEL_PID, pack_pid_params(p, i, d))
+        return self._send(
+            CAN_BROADCAST_ID, CMD.SET_VEL_PID, pack_pid_params(p, i, d, self.protocol_version)
+        )
 
     def broadcast_set_cur_pid(self, p: float, i: float, d: float) -> bool:
-        return self._send(CAN_BROADCAST_ID, CMD.SET_CUR_PID, pack_pid_params(p, i, d))
+        return self._send(
+            CAN_BROADCAST_ID, CMD.SET_CUR_PID, pack_cur_pid_params(p, i, d, self.protocol_version)
+        )
 
     def broadcast_set_stiff_damp(self, stiff: float, damp: float) -> bool:
         return self._send(CAN_BROADCAST_ID, CMD.SET_STIFF_DAMP, pack_stiff_damp(stiff, damp))
@@ -427,14 +434,20 @@ class MotorClient:
         self.get_protect(motor_id)
 
     def set_pos_pid(self, motor_id: int, p: float, i: float, d: float) -> bool:
-        return self._send(motor_id, CMD.SET_POS_PID, pack_pid_params(p, i, d))
+        return self._send(
+            motor_id, CMD.SET_POS_PID, pack_pid_params(p, i, d, self.protocol_version)
+        )
 
     def set_vel_pid(self, motor_id: int, p: float, i: float, d: float) -> bool:
-        return self._send(motor_id, CMD.SET_VEL_PID, pack_pid_params(p, i, d))
+        return self._send(
+            motor_id, CMD.SET_VEL_PID, pack_pid_params(p, i, d, self.protocol_version)
+        )
 
     def set_cur_pid(self, motor_id: int, p: float, i: float, d: float) -> bool:
         print(f"set_cur_pid: p={p}, i={i}, d={d}")
-        return self._send(motor_id, CMD.SET_CUR_PID, pack_pid_params(p, i, d))
+        return self._send(
+            motor_id, CMD.SET_CUR_PID, pack_cur_pid_params(p, i, d, self.protocol_version)
+        )
 
     def set_stiff_damp(self, motor_id: int, stiff: float, damp: float) -> bool:
         return self._send(motor_id, CMD.SET_STIFF_DAMP, pack_stiff_damp(stiff, damp))

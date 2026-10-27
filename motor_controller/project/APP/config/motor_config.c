@@ -1,10 +1,12 @@
 #include "motor_config.h"
 #include "common.h"
+#include "foc_pid.h"
 #include <stddef.h>
 #include <string.h>
 
 #define MOTOR_CONFIG_BLOB_MAGIC   (0x4D434647u) /* 'MCFG' */
-#define MOTOR_CONFIG_BLOB_VERSION (2u)
+#define MOTOR_CONFIG_BLOB_VERSION (3u)
+#define MOTOR_CONFIG_BLOB_VERSION_V2 (2u)
 #define MOTOR_CONFIG_BLOB_VERSION_V1 (1u)
 #define MOTOR_CONFIG_V1_PAYLOAD_LEN ((uint16_t)offsetof(motor_config_t, mit))
 
@@ -86,6 +88,15 @@ static bool motor_config_blob_parse(const motor_config_blob_t *blob, motor_confi
       return true;
     }
 
+    if ((blob->header.version == MOTOR_CONFIG_BLOB_VERSION_V2) &&
+        (blob->header.payload_len == (uint16_t)sizeof(motor_config_t)))
+    {
+      memcpy(config, blob->payload, sizeof(motor_config_t));
+      config->pid.id.ki /= FOC_PID_CUR_KI_SCALE;
+      config->pid.iq.ki /= FOC_PID_CUR_KI_SCALE;
+      return true;
+    }
+
     return false;
   }
   if (blob->header.payload_len != (uint16_t)sizeof(motor_config_t))
@@ -156,7 +167,7 @@ void motor_config_set_defaults(motor_config_t *config)
   config->motion.max_jerk_rad_s3 = MAX_JERK_RAD_S3;
 
   config->pid.id.kp = DEF_D_KP;
-  config->pid.id.ki = DEF_D_KI;
+  config->pid.id.ki = DEF_D_KI / FOC_PID_CUR_KI_SCALE;
   config->pid.id.kd = DEF_D_KD;
   config->pid.id.ramp = DEF_D_RAMP;
   config->pid.id.limit = config->limits.vd_limit;
@@ -165,7 +176,7 @@ void motor_config_set_defaults(motor_config_t *config)
   config->pid.id.anti_windup_gain = DEF_D_ANTI_WINDUP_GAIN;
 
   config->pid.iq.kp = DEF_Q_KP;
-  config->pid.iq.ki = DEF_Q_KI;
+  config->pid.iq.ki = DEF_Q_KI / FOC_PID_CUR_KI_SCALE;
   config->pid.iq.kd = DEF_Q_KD;
   config->pid.iq.ramp = DEF_Q_RAMP;
   config->pid.iq.limit = config->limits.vq_limit;

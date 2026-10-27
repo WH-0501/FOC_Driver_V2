@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core.motor_client import MotorClient
-from protocol import PID_VALUE_MAX, pid_params_in_range
+from protocol import PID_VALUE_MAX, cur_pid_params_in_range, pid_params_in_range
 
 
 class MotorParamWidget(QGroupBox):
@@ -197,7 +197,7 @@ class MotorParamWidget(QGroupBox):
         self.client.reset_factory(self.motor_id)
 
     def _validate_pid(self, p: float, i: float, d: float) -> bool:
-        err = pid_params_in_range(p, i, d)
+        err = pid_params_in_range(p, i, d, self.client.protocol_version)
         if err is None:
             return True
         QMessageBox.warning(self, "PID 参数无效", err)
@@ -223,7 +223,9 @@ class MotorParamWidget(QGroupBox):
         if not self._require_disabled():
             return
         p, i, d = self.cur_p.value(), self.cur_i.value(), self.cur_d.value()
-        if not self._validate_pid(p, i, d):
+        err = cur_pid_params_in_range(p, i, d, self.client.protocol_version)
+        if err is not None:
+            QMessageBox.warning(self, "PID 参数无效", err)
             return
         self.client.set_cur_pid(self.motor_id, p, i, d)
 

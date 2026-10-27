@@ -18,6 +18,8 @@ from .constants import (
     IAP_V5_MIN_START_PAYLOAD,
     ErrorCode,
     MotorError,
+    CUR_PID_KI_PHYS_MAX,
+    CUR_PID_KI_SCALE,
     PID_FORMAT,
     PID_RAW_MAX,
     PID_VALUE_MAX,
@@ -356,7 +358,7 @@ def format_bytes_binary(data: bytes) -> str:
 # ---------- 参数打包（大端，与固件一致） ----------
 
 def float_to_q12(value: float) -> int:
-    """float -> Q12 uint16，与固件 can_fd_codec_float_to_q12 一致。"""
+    """float -> Q12 uint16（MIT 刚度/阻尼等 raw=K），与固件 can_fd_codec_float_to_q12 一致。"""
     scaled = value * PID_FORMAT
     if scaled < 0.0:
         scaled = 0.0
@@ -365,8 +367,29 @@ def float_to_q12(value: float) -> int:
     return int(round(scaled))
 
 
-def pid_params_in_range(p: float, i: float, d: float) -> Optional[str]:
+def pid_wire_from_float(
+    value: float, protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION
+) -> int:
+    """V1/V2：wire = round(K * 4096)。"""
+    del protocol_version
+    return float_to_q12(value)
+
+
+def pid_float_from_wire(
+    raw: int, protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION
+) -> float:
+    del protocol_version
+    return float(raw) / PID_FORMAT
+
+
+def pid_params_in_range(
+    p: float,
+    i: float,
+    d: float,
+    protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION,
+) -> Optional[str]:
     """超出 Q12 可编码范围时返回错误说明，否则返回 None。"""
+    del protocol_version
     for name, val in (("P", p), ("I", i), ("D", d)):
         if val < 0.0:
             return f"{name}={val} 不能为负数"
@@ -375,8 +398,50 @@ def pid_params_in_range(p: float, i: float, d: float) -> Optional[str]:
     return None
 
 
-def pack_pid_params(p: float, i: float, d: float) -> bytes:
-    return struct.pack(">HHH", float_to_q12(p), float_to_q12(i), float_to_q12(d))
+def pack_pid_params(
+    p: float,
+    i: float,
+    d: float,
+    protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION,
+) -> bytes:
+    return struct.pack(
+        ">HHH",
+        pid_wire_from_float(p, protocol_version),
+        pid_wire_from_float(i, protocol_version),
+        pid_wire_from_float(d, protocol_version),
+    )
+
+
+def cur_pid_params_in_range(
+    p: float,
+    i_phys: float,
+    d: float,
+    protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION,
+) -> Optional[str]:
+    """电流环：P/D 为物理值；I 为物理 Ki，线值为 I / CUR_PID_KI_SCALE。"""
+    err = pid_params_in_range(p, i_phys / CUR_PID_KI_SCALE, d, protocol_version)
+    if err is not None:
+        return err
+    if i_phys > CUR_PID_KI_PHYS_MAX:
+        return f"I={i_phys} 超出电流环物理 Ki 上限 {CUR_PID_KI_PHYS_MAX:.4f}"
+    return None
+
+
+def pack_cur_pid_params(
+    p: float,
+    i_phys: float,
+    d: float,
+    protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION,
+) -> bytes:
+    return pack_pid_params(p, i_phys / CUR_PID_KI_SCALE, d, protocol_version)
+
+
+def parse_cur_pid_response(
+    payload: bytes, protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION
+) -> dict[str, float]:
+    pid = parse_pid_response(payload, protocol_version)
+    pid["I"] = pid["I"] * CUR_PID_KI_SCALE
+    return pid
 
 
 def pack_stiff_damp(stiff: float, damp: float) -> bytes:
@@ -559,14 +624,17 @@ def parse_period_report(
     }
 
 
-def parse_pid_response(payload: bytes) -> Dict[str, float]:
+def parse_pid_response(
+    payload: bytes,
+    protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION,
+) -> Dict[str, float]:
     if len(payload) < 6:
         return {}
     p_raw, i_raw, d_raw = struct.unpack(">HHH", payload[0:6])
     return {
-        "P": p_raw / PID_FORMAT,
-        "I": i_raw / PID_FORMAT,
-        "D": d_raw / PID_FORMAT,
+        "P": pid_float_from_wire(p_raw, protocol_version),
+        "I": pid_float_from_wire(i_raw, protocol_version),
+        "D": pid_float_from_wire(d_raw, protocol_version),
     }
 
 

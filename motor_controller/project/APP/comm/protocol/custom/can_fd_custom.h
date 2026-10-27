@@ -11,7 +11,7 @@
 #define CAN_FD_BROADCAST_ID     0x00u
 #define CAN_FD_IAP_ID           0x7FFu
 
-#define CAN_FD_PID_FORMAT       4096.0f
+#define CAN_FD_PID_FORMAT       4096.0f  ///< V2 PID / MIT 刚度阻尼：运行值 = raw / CAN_FD_PID_FORMAT
 #define CAN_FD_POS_SCALE        128.0f  ///< 位置 Q7：1 LSB = 1/128 rad
 
 #define CAN_FD_REPORT_HZ_DEFAULT  1000u ///< 默认上报频率 1000Hz

@@ -15,10 +15,13 @@
 #include <stdint.h>
 #include "error_types.h"
 
+/** 电流环 config/CAN 中 Ki 为 Ki_phys / FOC_PID_CUR_KI_SCALE；环内积分还原为物理 Ki。 */
+#define FOC_PID_CUR_KI_SCALE (10000.0f)
+
 typedef struct
 {
   float kp;             ///< 比例系数
-  float ki;             ///< 积分系数
+  float ki;             ///< 积分系数（电流环 Id/Iq 为缩放值，见 FOC_PID_CUR_KI_SCALE）
   float kd;             ///< 微分系数
   float ramp;           ///< 设定值斜坡或输出斜坡系数（依实现而定）
   float limit;          ///< 输出或积分限幅
