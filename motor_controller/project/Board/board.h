@@ -32,6 +32,9 @@ typedef void (*board_current_loop_cb_t)(void);
 void board_init(void);
 void board_deinit(void);
 
+/** Cortex-M fault/NMI 等异常路径：关电流环回调、停 PWM、拉低相位 EN。可重入，勿依赖 motor 运行时状态。 */
+void board_fault_emergency_stop(void);
+
 void board_current_loop_start(void);
 void board_current_loop_stop(void);
 

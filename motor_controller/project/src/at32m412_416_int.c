@@ -55,12 +55,20 @@
 
 /* private function prototypes --------------------------------------------*/
 /* add user code begin function prototypes */
-
+static void cortex_fault_shutdown(void);
 /* add user code end function prototypes */
 
 /* private user code ---------------------------------------------------------*/
 /* add user code begin 0 */
-
+static void cortex_fault_shutdown(void)
+{
+  __disable_irq();
+  board_fault_emergency_stop();
+  for (;;)
+  {
+    __NOP();
+  }
+}
 /* add user code end 0 */
 
 /* external variables ---------------------------------------------------------*/
@@ -92,7 +100,7 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* add user code begin HardFault_IRQ 0 */
-
+  cortex_fault_shutdown();
   /* add user code end HardFault_IRQ 0 */
   /* go to infinite loop when hard fault exception occurs */
   while (1)
@@ -112,7 +120,7 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* add user code begin MemoryManagement_IRQ 0 */
-
+  cortex_fault_shutdown();
   /* add user code end MemoryManagement_IRQ 0 */
   /* go to infinite loop when memory manage exception occurs */
   while (1)
@@ -131,7 +139,7 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* add user code begin BusFault_IRQ 0 */
-
+  cortex_fault_shutdown();
   /* add user code end BusFault_IRQ 0 */
   /* go to infinite loop when bus fault exception occurs */
   while (1)
@@ -150,7 +158,7 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* add user code begin UsageFault_IRQ 0 */
-
+  cortex_fault_shutdown();
   /* add user code end UsageFault_IRQ 0 */
   /* go to infinite loop when usage fault exception occurs */
   while (1)

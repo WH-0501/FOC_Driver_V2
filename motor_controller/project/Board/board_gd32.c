@@ -5,6 +5,7 @@
  * 预驱引脚通过 BOARD_GATE_* 宏配置（默认同 STM32 模板引脚）。
  */
 #include "board.h"
+#include "gd32f4xx_gpio.h"
 
 #ifndef BOARD_GATE_NSLEEP_PORT
 #define BOARD_GATE_NSLEEP_PORT GPIOA
@@ -122,6 +123,14 @@ error_t pwm_hw_stop(void)
 {
   (void)pwm_hw_lowside_brake_off();
   return ERR_NONE;
+}
+
+void board_fault_emergency_stop_hw(void)
+{
+  (void)pwm_hw_stop();
+  gpio_bit_reset(BOARD_GATE_ENA_PORT, BOARD_GATE_ENA_PIN);
+  gpio_bit_reset(BOARD_GATE_ENB_PORT, BOARD_GATE_ENB_PIN);
+  gpio_bit_reset(BOARD_GATE_ENC_PORT, BOARD_GATE_ENC_PIN);
 }
 
 error_t pwm_hw_lowside_brake_on(void)

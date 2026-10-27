@@ -185,6 +185,14 @@ error_t pwm_hw_stop(void)
   return ERR_NONE;
 }
 
+void board_fault_emergency_stop_hw(void)
+{
+  (void)pwm_hw_stop();
+  HAL_GPIO_WritePin(BOARD_GATE_ENA_PORT, BOARD_GATE_ENA_PIN, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BOARD_GATE_ENB_PORT, BOARD_GATE_ENB_PIN, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(BOARD_GATE_ENC_PORT, BOARD_GATE_ENC_PIN, GPIO_PIN_RESET);
+}
+
 error_t pwm_hw_lowside_brake_on(void)
 {
   if (pwm_compare_top == 0U)

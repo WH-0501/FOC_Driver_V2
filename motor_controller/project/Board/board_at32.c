@@ -8,6 +8,7 @@
 #include "at32_foc_timing.h"
 #include "at32m412_416_wk_config.h"
 #include "at32m412_416_adc.h"
+#include "at32m412_416_gpio.h"
 #include "at32m412_416_tmr.h"
 #include "wk_dma.h"
 #include "wk_usart.h"
@@ -298,6 +299,14 @@ error_t pwm_hw_stop(void)
   tmr_channel_enable(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, FALSE);
   pwm_stage_compare(0U, 0U, 0U);
   return ERR_NONE;
+}
+
+void board_fault_emergency_stop_hw(void)
+{
+  (void)pwm_hw_stop();
+  gpio_bits_reset(ENA_GPIO_PORT, ENA_PIN);
+  gpio_bits_reset(ENB_GPIO_PORT, ENB_PIN);
+  gpio_bits_reset(ENC_GPIO_PORT, ENC_PIN);
 }
 
 error_t pwm_hw_lowside_brake_on(void)
