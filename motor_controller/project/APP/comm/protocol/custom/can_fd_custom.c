@@ -95,10 +95,7 @@ static bool can_fd_custom_motor_id_match(uint8_t motor_id)
 
 static control_mode_t can_fd_custom_wire_mode_to_ctrl(uint8_t wire_mode)
 {
-  if (wire_mode >= (uint8_t)CTRL_MODE_RESERVED)
-  {
-    return CTRL_MODE_IDLE;
-  }
+  /* Preserve invalid values so the common API rejects them explicitly. */
   return (control_mode_t)wire_mode;
 }
 
@@ -333,10 +330,10 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       break;
 
     case CAN_FD_CMD_CONTROL_MODE:
-      if ((payload_len >= 1u) && !mc_is_enabled())
-      {
-        mc_set_ctrl_mode(can_fd_custom_wire_mode_to_ctrl(payload[0]));
-      }
+      result = (payload_len >= 1u)
+          ? mc_set_ctrl_mode(can_fd_custom_wire_mode_to_ctrl(payload[0])) : ERR_PARAM;
+      reply_payload[0] = (uint8_t)result;
+      can_fd_custom_reply(CAN_FD_CMD_CONTROL_MODE, reply_payload, 1u);
       break;
 
     case CAN_FD_CMD_SET_POS_PID:

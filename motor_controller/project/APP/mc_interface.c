@@ -117,23 +117,28 @@ void mc_current_loop_isr(void)
   foc_control_loop(motor_get_handler());
 }
 
-void mc_set_ctrl_mode(control_mode_t mode)
+error_t mc_set_ctrl_mode(control_mode_t mode)
 {
   motor_handle_t *m = motor_get_handler();
-
-  m->ctrl_mode = mode;
-
-  if ((mode == CTRL_MODE_TORQUE) || (mode == CTRL_MODE_SPEED) ||
-      (mode == CTRL_MODE_CST) || (mode == CTRL_MODE_CSV))
-  {
-    (void)foc_pid_clear(&m->id_pid);
-    (void)foc_pid_clear(&m->iq_pid);
-  }
-
+  error_t ret;
+  if (!control_mode_is_supported(mode)) { return ERR_CTRL_MODE; }
   if (mode == CTRL_MODE_IDLE)
   {
-    mc_disable();
+    ret = mc_disable();
+    if (ret == ERR_NONE) { m->ctrl_mode = CTRL_MODE_IDLE; }
+    return ret;
   }
+  if (motor_fault_is_latched(m) || m->fsm == STATE_FAULT) { return ERR_FAULT_LATCHED; }
+  if (foc_fsm_is_calibrating(m->fsm)) { return ERR_CALIBRATING; }
+  /* STATE_RUNNING also covers the interval before hardware arm on the ISR. */
+  if (m->fsm != STATE_IDLE || motor_is_armed(m)) { return ERR_STATE; }
+
+  (void)foc_pid_clear(&m->id_pid);
+  (void)foc_pid_clear(&m->iq_pid);
+  (void)foc_pid_clear(&m->velocity_pid);
+  (void)foc_pid_clear(&m->position_pid);
+  m->ctrl_mode = mode;
+  return ERR_NONE;
 }
 
 error_t mc_enable(void)

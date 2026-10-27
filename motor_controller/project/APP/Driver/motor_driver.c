@@ -82,7 +82,7 @@ void motor_driver_arm(motor_driver_t *drv)
  * @brief 关闭电机驱动器 （停机）
  * 
  * 1. 停止 PWM 输出
- * 2. 退出睡眠模式
+ * 2. 保持当前休眠状态，不执行唤醒等待
  * 3. 设置所有相位使能为 false
  * 4. 设置电机驱动器状态为未使能
  * 
@@ -96,7 +96,7 @@ void motor_driver_disarm(motor_driver_t *drv)
   }
 
   (void)pwm_hw_stop();
-  gate_driver_exit_sleep(drv->gate);
+  /* Disable must not wake a sleeping driver or wait inside the control ISR. */
   gate_driver_set_all_phase_en(drv->gate, false);
   drv->armed = false;
 }

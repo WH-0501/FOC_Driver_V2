@@ -80,11 +80,18 @@ static void foc_fsm_on_run(motor_handle_t *m, fsm_state_t state)
       {
         break;
       }
-      motor_sync_arm_with_mode(m);
-      if (m->ctrl_mode == CTRL_MODE_IDLE)
+      if (!control_mode_needs_pwm(m->ctrl_mode))
       {
-        foc_fsm_next_state(m, STATE_IDLE);
+        motor_disarm(m);
+        if (m->ctrl_mode == CTRL_MODE_IDLE) { foc_fsm_next_state(m, STATE_IDLE); }
+        else
+        {
+          motor_fault_raise(m, FAULT_PARAM);
+          foc_fsm_next_state(m, STATE_FAULT);
+        }
+        break;
       }
+      motor_sync_arm_with_mode(m);
       break;
     case STATE_FAULT:
       break;

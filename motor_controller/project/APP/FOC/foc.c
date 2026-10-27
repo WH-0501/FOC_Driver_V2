@@ -11,6 +11,7 @@
 #include "../config/motor_config.h"
 #include "dwt_profile_delay.h"
 #include "common.h"
+#include "control_mode.h"
 #include "math_compat.h"
 #include <string.h>
 
@@ -232,6 +233,20 @@ static void foc_position_closed_control(motor_handle_t *m, float target_pos)
   foc_speed_closed_control(m, speed_cmd);
 }
 
+static void foc_reject_control_mode(motor_handle_t *m)
+{
+  motor_disarm(m);
+  if (m->ctrl_mode == CTRL_MODE_IDLE)
+  {
+    foc_fsm_next_state(m, STATE_IDLE);
+  }
+  else
+  {
+    motor_fault_raise(m, FAULT_PARAM);
+    foc_fsm_next_state(m, STATE_FAULT);
+  }
+}
+
 static void foc_control_run(motor_handle_t *m)
 {
   motor_runtime_t *rt = motor_runtime(m);
@@ -274,6 +289,7 @@ static void foc_control_run(motor_handle_t *m)
       foc_speed_open_control(m, m->ref.speed_rad_s);
       break;
     default:
+      foc_reject_control_mode(m);
       break;
   }
 
@@ -351,6 +367,13 @@ void foc_control_loop(motor_handle_t *m)
 {
   if (m == NULL)
   {
+    return;
+  }
+
+  /* Reject before sensor I/O/FSM can arm hardware or retain an old vector. */
+  if (m->fsm == STATE_RUNNING && !control_mode_needs_pwm(m->ctrl_mode))
+  {
+    foc_reject_control_mode(m);
     return;
   }
 

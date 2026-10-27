@@ -10,7 +10,10 @@ error_t mc_init(void);
 void mc_poll(void);
 void mc_current_loop_isr(void);
 
-void mc_set_ctrl_mode(control_mode_t mode);
+/** Only implemented modes are accepted. Non-idle changes require STATE_IDLE
+ * and disarmed hardware; IDLE requests stop. Returns ERR_CTRL_MODE for an
+ * unsupported mode. Call from the foreground, not from a control ISR. */
+error_t mc_set_ctrl_mode(control_mode_t mode);
 control_mode_t mc_get_ctrl_mode(void);
 fsm_state_t mc_get_fsm_state(void);
 
