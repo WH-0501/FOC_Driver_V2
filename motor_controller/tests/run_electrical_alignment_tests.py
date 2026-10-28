@@ -26,24 +26,30 @@ stub=r'''
 #define DIR_CCW -1
 #define FAULT_ALIGN_FAILED 1
 typedef int error_t;
-enum {ERR_NONE,ERR_NULL,ERR_PARAM,ERR_ALIGIN_FAILED,ERR_ALIGIN_SPREAD_OUT};
+enum {ERR_NONE,ERR_NULL,ERR_PARAM,ERR_STATE,ERR_TIMEOUT,ERR_COMM,ERR_SENSOR,ERR_OFFSET_CAL,ERR_FAULT_LATCHED,ERR_ALIGIN_FAILED,ERR_ALIGIN_SPREAD_OUT};
+#define STATE_IDLE 0
 typedef struct {
  struct {struct {float theta_elec_offset_rad;int direction;unsigned pole_pairs;} param;} config;
  struct {struct {float angle_rad;} shaft;float theta_elec_rad,i_d,i_q;} state;
- struct {unsigned pwm_enable;} out;int id_pid,iq_pid;
+ struct {unsigned pwm_enable;} out;int id_pid,iq_pid;int fsm;bool current_offset_cal_done;
 } motor_handle_t;
 typedef struct {bool align_direction_flipped,align_ok,align_engaged,electrical_align_done;
  float align_raw_elec_rad,align_raw_engage_rad,align_polarity_test_iq,
  align_theta_before_rad,align_theta_after_rad,open_loop_elec_angle_rad;} motor_runtime_t;
 static motor_runtime_t runtime;
 static float physical,field,zero;static int sensor_sign=1,physical_pp=5,stuck,armed,fault;
-static int jitter,reads;
+static int jitter,reads;static uint32_t test_clock;static int inject_fault;static int broken_delay;
 static float angle_normalize(float a){a=fmodf(a,_2PI);return a<0?a+_2PI:a;}
 static motor_runtime_t *motor_runtime(motor_handle_t *m){(void)m;return &runtime;}
 static void motor_arm(motor_handle_t *m){(void)m;armed=1;}
 static void motor_disarm(motor_handle_t *m){(void)m;armed=0;}
 static void motor_fault_raise(motor_handle_t *m,int f){(void)m;fault|=f;}
-static void delay_ms(uint32_t ms){(void)ms;}
+static void delay_ms(uint32_t ms){test_clock+=ms*(broken_delay?1u:1000u);}
+static uint32_t board_time_us(void){return test_clock & 65535u;}
+static bool motor_is_armed(motor_handle_t *m){(void)m;return armed!=0;}
+static bool motor_fault_is_latched(motor_handle_t *m){(void)m;return fault!=0;}
+static void motor_fault_protect(motor_handle_t *m){(void)m;if(inject_fault && test_clock>20000u)fault=1;}
+static void foc_sense_poll_vbus(motor_handle_t *m){(void)m;}
 static int foc_pid_clear(int *p){*p=0;return 0;}
 static void foc_voltage(motor_handle_t *m,float uq,float ud,float theta){
  (void)m;
@@ -62,8 +68,13 @@ static void foc_sense_update(motor_handle_t *m){
 '''
 tests=r'''
 #define CHECK(x) do{if(!(x)){printf("FAIL line %d: %s\n",__LINE__,#x);exit(1);}}while(0)
-static void reset(motor_handle_t *m){memset(m,0,sizeof(*m));memset(&runtime,0,sizeof(runtime));m->config.param.direction=1;m->config.param.pole_pairs=5;m->config.param.theta_elec_offset_rad=1.23f;physical=field=0;zero=0.7f;sensor_sign=1;physical_pp=5;stuck=fault=armed=jitter=reads=0;}
-int main(void){motor_handle_t m;cal_elec_align_cfg_t cfg;cal_ctx_t ctx;float spread;
+static void reset(motor_handle_t *m){memset(m,0,sizeof(*m));memset(&runtime,0,sizeof(runtime));m->config.param.direction=1;m->config.param.pole_pairs=5;m->config.param.theta_elec_offset_rad=1.23f;physical=field=0;zero=0.7f;sensor_sign=1;physical_pp=5;stuck=fault=armed=jitter=reads=inject_fault=0;test_clock=0;broken_delay=0;m->current_offset_cal_done=true;}
+static unsigned verify_count, settled_count;static int refuse_report;
+static bool collect(const cal_verify_sample_t *s,void *user){
+ (void)user;if(refuse_report)return false;
+ CHECK(s->sequence==verify_count++);if(s->settled)settled_count++;
+ CHECK(s->elapsed_ms<15000u);CHECK(s->error_rad>=-_PI&&s->error_rad<=_PI);return true;}
+int main(void){uint16_t n;float maxerr,offset;motor_handle_t m;cal_elec_align_cfg_t cfg;cal_ctx_t ctx;float spread;
  for(int sign=-1;sign<=1;sign+=2)for(int initial=-1;initial<=1;initial+=2)for(int pp=1;pp<=7;pp+=2){
  reset(&m);sensor_sign=sign;m.config.param.direction=initial;physical_pp=pp;m.config.param.pole_pairs=pp;
  CHECK(cal_elec_align(&m)==ERR_NONE);CHECK(m.config.param.direction==sign);CHECK(runtime.align_ok&&runtime.electrical_align_done&&!armed&&!fault);
@@ -77,6 +88,24 @@ int main(void){motor_handle_t m;cal_elec_align_cfg_t cfg;cal_ctx_t ctx;float spr
  CHECK(fabsf(angle_normalize(cal_sample_raw_at_lock(&ctx,0,0,0,&spread)+_PI)-_PI)<0.001f);CHECK(spread>=0&&spread<0.002f);
  CHECK(fabsf(angle_normalize(cal_offset_friction_avg(0.01f,_2PI-0.01f)+_PI)-_PI)<0.001f);
  reset(&m);ctx.m=&m;ctx.align_angle=0;ctx.method=CAL_ELEC_ALIGN_UD;zero=0;m.config.param.theta_elec_offset_rad=0.01f;CHECK(cal_theta_matches_expected(&ctx,0.02f));
+
+ reset(&m);CHECK(cal_elec_align(&m)==ERR_NONE);offset=m.config.param.theta_elec_offset_rad;
+ verify_count=settled_count=0;CHECK(cal_verify_electrical(&m,collect,NULL,&n,&maxerr)==ERR_NONE);
+ CHECK(n==verify_count&&n>100&&settled_count==9&&!armed&&maxerr<.001f);
+ CHECK(m.config.param.theta_elec_offset_rad==offset&&m.config.param.direction==1);
+ m.config.param.theta_elec_offset_rad=angle_normalize(offset+0.7f);verify_count=settled_count=0;
+ CHECK(cal_verify_electrical(&m,collect,NULL,&n,&maxerr)==ERR_ALIGIN_FAILED);CHECK(!armed&&maxerr>.69f);
+ CHECK(m.config.param.theta_elec_offset_rad==angle_normalize(offset+0.7f));
+ m.config.param.theta_elec_offset_rad=offset;m.config.param.direction=-1;verify_count=settled_count=0;
+ CHECK(cal_verify_electrical(&m,collect,NULL,&n,&maxerr)==ERR_ALIGIN_FAILED);CHECK(m.config.param.direction==-1&&!armed);
+ m.config.param.direction=1;physical_pp=7;verify_count=settled_count=0;
+ CHECK(cal_verify_electrical(&m,collect,NULL,&n,&maxerr)==ERR_ALIGIN_FAILED);CHECK(!armed);
+ reset(&m);refuse_report=1;CHECK(cal_verify_electrical(&m,collect,NULL,&n,&maxerr)==ERR_COMM);CHECK(!armed);refuse_report=0;
+ reset(&m);inject_fault=1;CHECK(cal_verify_electrical(&m,collect,NULL,&n,&maxerr)==ERR_FAULT_LATCHED);CHECK(!armed);
+ reset(&m);armed=1;CHECK(cal_verify_electrical(&m,collect,NULL,&n,&maxerr)==ERR_STATE);CHECK(armed);armed=0;
+ reset(&m);m.current_offset_cal_done=false;CHECK(cal_verify_electrical(&m,collect,NULL,&n,&maxerr)==ERR_OFFSET_CAL);CHECK(!armed);
+ reset(&m);broken_delay=1;CHECK(cal_verify_electrical(&m,collect,NULL,&n,&maxerr)==ERR_TIMEOUT);CHECK(!armed&&n==0);
+ puts("PASS verification: 9 lock points, offset/direction/pole faults, timer wrap, unchanged parameters, transport abort, hardware fault and state guards");
  puts("PASS: 16 direction/pole combinations, stalled rotor, wrong pole count, invalid period, wrap averaging, signed angle tolerance and rollback");return 0;}
 '''
 vcvars=Path(r'C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Auxiliary/Build/vcvars64.bat')

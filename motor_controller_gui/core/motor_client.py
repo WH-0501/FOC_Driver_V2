@@ -270,6 +270,16 @@ class MotorClient:
         """单播电角度对齐；method 见 ElecAlignMethod。"""
         return self._send(motor_id, CMD.ALIGN_ELECTRIC_ANGLE, bytes([method & 0xFF]))
 
+    def verify_electrical(self, motor_id: int, session: int) -> bool:
+        if motor_id == CAN_BROADCAST_ID:
+            return False
+        profile = self.can.manager.profile
+        if profile is not None and not profile.fd:
+            self._log_fn and self._log_fn("电角验证曲线需要 CAN-FD")
+            return False
+        return self._send(motor_id, CMD.VERIFY_ELECTRICAL,
+                          bytes([1]) + int(session).to_bytes(2, "big"))
+
     def kth71_cal_start(self, motor_id: int) -> bool:
         return self._send(motor_id, CMD.KTH71_CAL_START)
 

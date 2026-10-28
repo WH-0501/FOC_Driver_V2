@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
 from typing import Any, Callable, Dict, Optional
 
 from core.motor_client import MotorClient
+from ui.alignment_verify_dialog import AlignmentVerifyDialog
 from protocol import (
     ELEC_ALIGN_METHOD_HINTS,
     ELEC_ALIGN_METHOD_NAMES,
@@ -44,6 +45,7 @@ class MotorCalWidget(QWidget):
         self.motor_id = motor_id
         self.client = client
         self._is_enabled_fn = is_enabled_fn or (lambda: False)
+        self.verify_dialog = None
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -65,7 +67,7 @@ class MotorCalWidget(QWidget):
                 ELEC_ALIGN_METHOD_NAMES.get(method, str(method)),
                 int(method),
             )
-        default_idx = self.align_method_combo.findData(int(ElecAlignMethod.UQ))
+        default_idx = self.align_method_combo.findData(int(ElecAlignMethod.UD))
         if default_idx >= 0:
             self.align_method_combo.setCurrentIndex(default_idx)
 
@@ -88,6 +90,9 @@ class MotorCalWidget(QWidget):
         elec_layout.addLayout(align_btn_row)
         elec_layout.addWidget(self.align_method_hint)
         elec_layout.addWidget(self.align_result_label)
+        self.verify_btn = QPushButton("验证当前对齐 · 实时曲线")
+        self.verify_btn.clicked.connect(self._open_verify)
+        elec_layout.addWidget(self.verify_btn)
         elec_group.setLayout(elec_layout)
         root.addWidget(elec_group)
 
@@ -184,7 +189,7 @@ class MotorCalWidget(QWidget):
     def _current_align_method(self) -> int:
         method = self.align_method_combo.currentData()
         if method is None:
-            return int(ElecAlignMethod.UQ)
+            return int(ElecAlignMethod.UD)
         return int(method)
 
     def _on_align_method_changed(self) -> None:
@@ -197,6 +202,10 @@ class MotorCalWidget(QWidget):
         self.align_method_hint.setText(ELEC_ALIGN_METHOD_HINTS.get(method, ""))
 
     def set_motor_id(self, motor_id: int) -> None:
+        if self.verify_dialog is not None and self.motor_id != motor_id:
+            self.verify_dialog.close()
+            self.verify_dialog.deleteLater()
+            self.verify_dialog = None
         self.motor_id = motor_id
 
     def show_align_result(self, result: Dict[str, Any]) -> None:
@@ -233,3 +242,20 @@ class MotorCalWidget(QWidget):
         else:
             self.save_flash_status.setText("Flash：保存失败（见日志）")
             self.save_flash_status.setStyleSheet("color: #b71c1c;")
+
+    def _open_verify(self):
+        if self._is_enabled_fn():
+            QMessageBox.warning(self, "无法验证", "请先失能电机。")
+            return
+        if self.verify_dialog is None:
+            self.verify_dialog = AlignmentVerifyDialog(self.motor_id, self.client, self)
+        self.verify_dialog.show()
+        self.verify_dialog.raise_()
+
+    def show_verify_sample(self, payload):
+        if self.verify_dialog is not None:
+            self.verify_dialog.receive_sample(payload)
+
+    def show_verify_result(self, payload):
+        if self.verify_dialog is not None:
+            self.verify_dialog.receive_result(payload)

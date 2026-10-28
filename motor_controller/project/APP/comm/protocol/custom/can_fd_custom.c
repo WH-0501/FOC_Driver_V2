@@ -2,6 +2,7 @@
 #include "comm.h"
 #include "can_fd_custom_codec.h"
 #include "can_fd_custom_iap.h"
+#include "foc_calibration.h"
 #include "mc_interface.h"
 #include "motor.h"
 #include "motor_config.h"
@@ -334,6 +335,34 @@ static void can_fd_write_i32_be(uint8_t *p, int32_t v)
  * [8..11] 电角零偏 int32 BE，同单位
  * [12..13] 极性探针 Iq int16 BE，单位 mA
  */
+/* Verification v1: explicit big-endian fields, no native struct on wire. */
+/* PTB may still be transmitting the previous frame. Retry only locally and
+ * with a bounded delay; sustained send failure still aborts verification. */
+static bool can_fd_verify_send(uint8_t cmd, const uint8_t *p, uint8_t len)
+{
+  uint8_t attempt;
+  for (attempt = 0u; attempt < 5u; ++attempt) {
+    if (can_fd_custom_send_frame(s_node_id, cmd, p, len)) return true;
+    if (attempt < 4u) delay_ms(2u);
+  }
+  return false;
+}
+
+static bool can_fd_verify_sample(const cal_verify_sample_t *sample, void *user)
+{
+  uint8_t p[32] = {0};
+  p[0] = 1u; p[1] = sample->phase; p[2] = sample->settled ? 1u : 0u;
+  can_fd_codec_write_u16_be(&p[4], *(const uint16_t *)user);
+  can_fd_codec_write_u16_be(&p[6], sample->sequence);
+  can_fd_write_i32_be(&p[8], (int32_t)sample->elapsed_ms);
+  can_fd_write_i32_be(&p[12], can_fd_rad_to_urad(sample->target_rad));
+  can_fd_write_i32_be(&p[16], can_fd_rad_to_urad(sample->measured_rad));
+  can_fd_write_i32_be(&p[20], can_fd_rad_to_urad(sample->error_rad));
+  can_fd_write_i32_be(&p[24], can_fd_rad_to_urad(sample->mechanical_rad));
+  can_fd_write_i32_be(&p[28], can_fd_rad_to_urad(sample->expected_mechanical_rad));
+  return can_fd_verify_send(CAN_FD_CMD_VERIFY_SAMPLE, p, sizeof(p));
+}
+
 static void can_fd_custom_reply_align(error_t result, uint8_t method)
 {
   motor_handle_t *m = s_motor;
@@ -650,6 +679,26 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       }
       break;
 
+    case CAN_FD_CMD_VERIFY_ELECTRICAL:
+      {
+        uint8_t p[12] = {1u, 0u};
+        uint16_t session = (payload_len >= 3u) ? can_fd_codec_read_u16_be(&payload[1]) : 0u;
+        uint16_t samples = 0u;
+        float max_error = 0.0f;
+        /* Never perform a multi-motor verification from a broadcast command. */
+        result = ERR_PARAM;
+        if (payload_len >= 3u && payload[0] == 1u)
+          result = cal_verify_electrical(m, can_fd_verify_sample, &session, &samples, &max_error);
+        p[1] = (uint8_t)result;
+        can_fd_codec_write_u16_be(&p[2], session);
+        can_fd_codec_write_u16_be(&p[4], samples);
+        can_fd_write_i32_be(&p[8], can_fd_rad_to_urad(max_error));
+        /* The last sample can still occupy a TX slot. Do not silently lose
+         * the terminal response after the motor has already been disarmed. */
+        (void)can_fd_verify_send(CAN_FD_CMD_VERIFY_ELECTRICAL, p, sizeof(p));
+      }
+      break;
+
     case CAN_FD_CMD_ALIGN_ELECTRIC_ANGLE:
       if (can_fd_custom_require_disabled())
       {
@@ -843,6 +892,7 @@ static void can_fd_custom_on_rx(const comm_frame_t *frame)
     return;
   }
 
+  if (cmd == CAN_FD_CMD_VERIFY_ELECTRICAL && frame->id != s_node_id) return;
   can_fd_custom_handle_command(cmd, payload, payload_len);
 }
 
@@ -883,3 +933,4 @@ const comm_protocol_ops_t *can_fd_custom_protocol_ops(void)
 {
   return &s_can_fd_custom_ops;
 }
+

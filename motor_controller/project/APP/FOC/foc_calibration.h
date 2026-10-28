@@ -83,4 +83,19 @@ error_t cal_elec_align_ex(motor_handle_t *m,
                           cal_elec_align_method_t method,
                           const cal_elec_align_cfg_t *cfg);
 
+
+typedef struct {
+  uint16_t sequence;
+  uint32_t elapsed_ms;
+  uint8_t phase; /* 0 initial lock, 1 forward, 2 reverse */
+  bool settled;
+  float target_rad, measured_rad, error_rad;
+  float mechanical_rad, expected_mechanical_rad;
+} cal_verify_sample_t;
+typedef bool (*cal_verify_report_fn)(const cal_verify_sample_t *sample, void *user);
+/** Bounded (~7.1 s + I/O) pure Ud sweep. Does NOT change or save calibration.
+ * Only call from foreground while IDLE and disarmed. Callback false aborts. */
+error_t cal_verify_electrical(motor_handle_t *m, cal_verify_report_fn report,
+                             void *user, uint16_t *samples, float *max_error);
+
 #endif /* __FOC_CALIBRATION_H__ */

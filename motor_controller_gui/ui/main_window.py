@@ -461,7 +461,8 @@ class MainWindow(QMainWindow):
         #     print(f"timestamp: {timestamp}")
         #     print(f"parsed: {parsed}")
 
-        self._log_rx(arb_id, cnt, cmd, data)
+        if cmd != CMD.VERIFY_SAMPLE:
+            self._log_rx(arb_id, cnt, cmd, data)
 
         if cmd == CMD.IAP_STATUS:
             self.client.deliver_iap_response(arb_id, cmd, payload)
@@ -488,6 +489,15 @@ class MainWindow(QMainWindow):
             return
 
         panel = self.motor_panel if arb_id == self._motor_id else None
+
+        if cmd == CMD.VERIFY_SAMPLE:
+            if panel:
+                panel.cal_widget.show_verify_sample(payload)
+            return
+        if cmd == CMD.VERIFY_ELECTRICAL:
+            if panel:
+                panel.cal_widget.show_verify_result(payload)
+            return
 
         if cmd in (CMD.GET_POS_PID, CMD.SET_POS_PID):
             pid = parse_pid_response(payload, self.client.protocol_version)

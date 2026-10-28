@@ -1,5 +1,6 @@
 #include "foc_calibration.h"
 #include "foc.h"
+#include "board.h"
 #include "foc_sense.h"
 #include "current_sense.h"
 #include "foc_fault.h"
@@ -960,4 +961,125 @@ error_t cal_elec_align_ex(motor_handle_t *m,
 error_t cal_elec_align(motor_handle_t *m)
 {
   return cal_elec_align_ex(m, CAL_ELEC_ALIGN_METHOD_DEFAULT, NULL);
+}
+
+/* Read-only verification of the existing calibration, not another alignment.
+ * Bounded foreground operation; callback failure and hardware faults stop PWM.
+ * All angles sent to the observer use the existing direction/offset unchanged. */
+typedef struct {
+  motor_handle_t *m;
+  cal_verify_report_fn report;
+  void *user;
+  cal_verify_sample_t sample;
+  float prev_mech;
+  float max_error;
+  uint16_t clock_us;
+  uint32_t elapsed_us;
+  uint32_t last_report_ms;
+  bool baseline_set;
+  bool failed;
+} cal_verify_ctx_t;
+
+static error_t cal_verify_tick(cal_verify_ctx_t *v, float target,
+                               uint8_t phase, bool settled)
+{
+  float measured, mech;
+  uint16_t now, wait_start;
+  if (motor_fault_is_latched(v->m)) return ERR_FAULT_LATCHED;
+  foc_voltage(v->m, 0.0f, ALIGN_ELECTRICAL_VOLTAGE_D_V, angle_normalize(target));
+  wait_start = (uint16_t)board_time_us();
+  delay_ms(5u);
+  /* Independent timer detects a broken DWT delay before the field can sweep. */
+  if ((uint16_t)((uint16_t)board_time_us() - wait_start) < 4000u)
+    return ERR_TIMEOUT;
+  foc_sense_poll_vbus(v->m);
+  foc_sense_update(v->m);
+  motor_fault_protect(v->m);
+  if (motor_fault_is_latched(v->m) || !motor_is_armed(v->m)) return ERR_FAULT_LATCHED;
+  now = (uint16_t)board_time_us();
+  v->elapsed_us += (uint16_t)(now - v->clock_us);
+  v->clock_us = now;
+  mech = v->m->state.shaft.angle_rad;
+  measured = v->m->state.theta_elec_rad;
+  if (!(mech >= 0.0f && mech < _2PI) ||
+      !(measured >= 0.0f && measured < _2PI)) return ERR_SENSOR;
+  if (v->baseline_set)
+    v->sample.mechanical_rad += angle_normalize(mech - v->prev_mech + _PI) - _PI;
+  v->prev_mech = mech;
+  if (phase == 0u && settled) {
+    v->baseline_set = true;
+    v->sample.mechanical_rad = 0.0f;
+  }
+  v->sample.elapsed_ms = v->elapsed_us / 1000u;
+  v->sample.phase = phase;
+  v->sample.settled = settled;
+  v->sample.target_rad = angle_normalize(target);
+  v->sample.measured_rad = measured;
+  v->sample.error_rad = angle_normalize(measured - target + _PI) - _PI;
+  v->sample.expected_mechanical_rad = (target - ALIGN_ELECTRICAL_ANGLE_RAD) /
+                                      (float)v->m->config.param.pole_pairs;
+  if (settled) {
+    float error = fabsf(v->sample.error_rad);
+    if (error > v->max_error) v->max_error = error;
+    if (error > ALIGN_ROTOR_ENGAGE_TOL_RAD) v->failed = true;
+    /* Independently check accumulated mechanical motion; catches wrong pole
+     * count even when wrapped electrical angles happen to agree at endpoints. */
+    if (fabsf(v->sample.mechanical_rad - v->sample.expected_mechanical_rad) >
+        0.15f * _2PI / (float)v->m->config.param.pole_pairs) v->failed = true;
+  }
+  if (settled || v->sample.elapsed_ms - v->last_report_ms >= 50u) {
+    if (!v->report(&v->sample, v->user)) return ERR_COMM;
+    v->last_report_ms = v->sample.elapsed_ms;
+    v->sample.sequence++;
+  }
+  return ERR_NONE;
+}
+
+error_t cal_verify_electrical(motor_handle_t *m, cal_verify_report_fn report,
+                             void *user, uint16_t *samples, float *max_error)
+{
+  cal_verify_ctx_t v;
+  error_t ret = ERR_NONE;
+  unsigned i, leg, hold;
+  float from, target;
+  if (samples != NULL) *samples = 0u;
+  if (max_error != NULL) *max_error = 0.0f;
+  if (m == NULL || report == NULL) return ERR_NULL;
+  if (motor_fault_is_latched(m)) return ERR_FAULT_LATCHED;
+  if (motor_is_armed(m) || m->fsm != STATE_IDLE) return ERR_STATE;
+  if (!m->current_offset_cal_done) return ERR_OFFSET_CAL;
+  if (m->config.param.pole_pairs == 0u ||
+      (m->config.param.direction != DIR_CW && m->config.param.direction != DIR_CCW)) return ERR_PARAM;
+  memset(&v, 0, sizeof(v));
+  v.m = m; v.report = report; v.user = user;
+  v.clock_us = (uint16_t)board_time_us();
+  motor_arm(m);
+  if (!motor_is_armed(m)) {ret = ERR_STATE; goto cleanup;}
+  for (hold = 0u; hold < 140u; ++hold) {
+    ret = cal_verify_tick(&v, ALIGN_ELECTRICAL_ANGLE_RAD, 0u, hold == 139u);
+    if (ret != ERR_NONE) goto cleanup;
+  }
+  from = ALIGN_ELECTRICAL_ANGLE_RAD;
+  for (leg = 0u; leg < 8u; ++leg) {
+    uint8_t phase = (leg < 4u) ? 1u : 2u;
+    target = from + ((leg < 4u) ? 0.5f * _PI : -0.5f * _PI);
+    for (i = 1u; i <= 90u; ++i) {
+      ret = cal_verify_tick(&v, from + (target - from) * (float)i / 90.0f, phase, false);
+      if (ret != ERR_NONE) goto cleanup;
+    }
+    for (hold = 0u; hold < 70u; ++hold) {
+      ret = cal_verify_tick(&v, target, phase, hold == 69u);
+      if (ret != ERR_NONE) goto cleanup;
+    }
+    from = target;
+  }
+  if (v.failed) ret = ERR_ALIGIN_FAILED;
+cleanup:
+  /* Disarm before emitting the final protocol reply. Parameters are untouched. */
+  motor_disarm(m);
+  (void)foc_pid_clear(&m->id_pid);
+  (void)foc_pid_clear(&m->iq_pid);
+  if (samples != NULL) *samples = v.sample.sequence;
+  if (max_error != NULL) *max_error = v.max_error;
+  return ret;
 }
