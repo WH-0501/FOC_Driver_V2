@@ -1,300 +1,380 @@
-"""实时波形显示。"""
-
-from typing import Dict, List, Optional, Sequence, Tuple
-
+"""Motor oscilloscope: bounded history, independent display freeze and raw analysis."""
+import csv
+import time
+import threading
+from collections import OrderedDict
 import numpy as np
 import pyqtgraph as pg
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QWheelEvent
-from PyQt5.QtWidgets import (
-    QCheckBox,
-    QFrame,
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QSizePolicy,
-    QVBoxLayout,
-)
-
-from core.waveform_buffer import NOMINAL_REPORT_PERIOD, WAVEFORM_WINDOW_SECONDS, WaveformBuffer
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
+    QGroupBox, QHBoxLayout, QLabel, QMessageBox, QPushButton, QSplitter,
+    QVBoxLayout, QWidget)
+from core.waveform_buffer import WaveformBuffer, WAVEFORM_WINDOW_SECONDS
+from core.waveform_analysis import peak_envelope, spectrum
 from core.waveform_curves import WAVEFORM_CURVES, waveform_curves_for
 from protocol import ProtocolVersion
 from ui.curve_selector_widget import CurveSelectorWidget
 
-DEFAULT_X_WINDOW = WAVEFORM_WINDOW_SECONDS
-MIN_X_WINDOW = 0.001
-MAX_X_WINDOW = 120.0
-ZOOM_FACTOR = 1.15
-ABS_MAX_PLOT_POINTS = 1500
-PLOT_REFRESH_MS = 50
-ZOOM_DEBOUNCE_MS = 40
-
-DISPLAY_STYLE = """
-QFrame#waveformDisplay {
-    border: 1px solid #3a3a55;
-    border-radius: 4px;
-    background-color: #1a1a2e;
-}
-"""
+PLOT_REFRESH_MS = 33
+MAX_MOTOR_BUFFERS = 32
+MAX_RING_BYTES = 384 * 1024 * 1024
 
 
-class WheelZoomPlotWidget(pg.PlotWidget):
-    def __init__(self, on_zoom=None, parent=None):
-        super().__init__(parent=parent)
-        self._on_zoom = on_zoom
+class WaveformViewBox(pg.ViewBox):
+    """Only a pan gesture requests history; wheel zoom keeps live acquisition visible."""
+    history_requested = pyqtSignal()
 
-    def wheelEvent(self, event: QWheelEvent) -> None:
-        if self._on_zoom is not None:
-            delta = event.angleDelta().y()
-            if delta == 0:
-                return
-            vertical = bool(event.modifiers() & Qt.ControlModifier)
-            self._on_zoom(delta > 0, vertical)
-            event.accept()
-            return
-        super().wheelEvent(event)
+    def mouseDragEvent(self, event, axis=None):
+        if event.isStart() and event.button() in (Qt.LeftButton, Qt.MiddleButton):
+            self.history_requested.emit()
+        super().mouseDragEvent(event, axis=axis)
 
 
 class WaveformWidget(QGroupBox):
+    _export_finished = pyqtSignal(str, bool)
+
     def __init__(self, parent=None):
-        super().__init__("波形展示", parent)
-        self._buffers: Dict[int, WaveformBuffer] = {}
-        self._motor_id: Optional[int] = None
+        super().__init__("电机示波器", parent)
+        self._buffers = OrderedDict()
+        self._motor_id = None
         self._paused = False
-        self._x_window = DEFAULT_X_WINDOW
-        self._v_zoom = 1.0
+        self._frozen = None
+        self._dirty = True
+        self._last_render = None
         self._protocol_version = ProtocolVersion.V2_0_0
         self._build_ui()
+        self._export_finished.connect(self._on_export_finished)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._refresh_plot)
         self._timer.start(PLOT_REFRESH_MS)
-        self._zoom_timer = QTimer(self)
-        self._zoom_timer.setSingleShot(True)
-        self._zoom_timer.timeout.connect(self._refresh_plot)
 
-    def _build_ui(self) -> None:
-        layout = QVBoxLayout()
-
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
         self._title = QLabel("未选择电机")
-        self._title.setStyleSheet("font-weight: bold;")
         layout.addWidget(self._title)
-
-        display = QFrame()
-        display.setObjectName("waveformDisplay")
-        display.setStyleSheet(DISPLAY_STYLE)
-        display_layout = QHBoxLayout(display)
-        display_layout.setContentsMargins(0, 0, 0, 0)
-        display_layout.setSpacing(0)
-
+        row = QHBoxLayout()
+        self.pause_btn = QPushButton("冻结显示")
+        self.resume_btn = QPushButton("实时跟随")
+        self.clear_btn = QPushButton("清空")
+        self.reset_zoom_btn = QPushButton("重置视图")
+        self.export_btn = QPushButton("导出 CSV")
+        for button in (self.pause_btn, self.resume_btn, self.clear_btn, self.reset_zoom_btn, self.export_btn):
+            row.addWidget(button)
+        self.capacity = QComboBox()
+        for label, points in (('缓存 1万点', 10000), ('缓存 12万点', 120000), ('缓存 100万点', 1000000)):
+            self.capacity.addItem(label, points)
+        self.capacity.setCurrentIndex(1)
+        row.addWidget(self.capacity)
+        row.addStretch()
+        layout.addLayout(row)
+        row = QHBoxLayout()
+        self.mode = QComboBox()
+        self.mode.addItems(["时域", "FFT", "XY", "直方图", "条形图"])
+        self.channel = QComboBox()
+        self.x_channel = QComboBox()
+        for key, name, *_ in WAVEFORM_CURVES:
+            self.channel.addItem(name, key)
+            self.x_channel.addItem(name, key)
+        self.channel.setCurrentIndex(5)
+        self.x_channel.setCurrentIndex(6)
+        self.fft_size = QComboBox()
+        self.fft_size.addItems(["256", "1024", "4096", "16384"])
+        self.fft_size.setCurrentText("4096")
+        self.sample_dt = QDoubleSpinBox()
+        self.sample_dt.setRange(0.001, 1000)
+        self.sample_dt.setDecimals(3)
+        self.sample_dt.setValue(1)
+        self.sample_dt.setSuffix(" ms")
+        for label, control in (("分析", self.mode), ("Y / 测量", self.channel), ("XY-X", self.x_channel)):
+            row.addWidget(QLabel(label))
+            row.addWidget(control)
+        layout.addLayout(row)
+        row = QHBoxLayout()
+        self.window = QDoubleSpinBox()
+        self.window.setRange(0.001, 3600)
+        self.window.setDecimals(3)
+        self.window.setValue(WAVEFORM_WINDOW_SECONDS)
+        self.window.setSuffix(" s")
+        self.collect_cb = QCheckBox("采集")
+        self.collect_cb.setChecked(True)
+        self.auto_y = QCheckBox("Y 自动")
+        self.auto_y.setChecked(True)
+        self.cursor_cb = QCheckBox("双游标")
+        for label, control in (("窗口", self.window), ("FFT点数", self.fft_size), ("采样间隔", self.sample_dt)):
+            row.addWidget(QLabel(label))
+            row.addWidget(control)
+        row.addWidget(self.collect_cb)
+        row.addWidget(self.auto_y)
+        row.addWidget(self.cursor_cb)
+        layout.addLayout(row)
         pg.setConfigOptions(antialias=False)
-        self._plot = WheelZoomPlotWidget(on_zoom=self._on_wheel_zoom)
-        self._plot.setBackground("#1a1a2e")
-        self._plot.showGrid(x=True, y=True, alpha=0.25)
-        self._plot.setLabel("bottom", "时间", units="s")
-        self._plot.setLabel("left", "数值")
-        self._plot.setMouseEnabled(x=False, y=False)
+        self._view_box = WaveformViewBox()
+        self._view_box.history_requested.connect(self._on_pause)
+        self._plot = pg.PlotWidget(background="#101923", viewBox=self._view_box)
+        self._plot.showGrid(x=True, y=True, alpha=0.18)
+        self._plot.setLabel('bottom', '时间', units='s')
+        self._plot.setMouseEnabled(x=True, y=True)
         self._plot.enableAutoRange(enable=False)
-        self._plot.getViewBox().setAutoVisible(x=False, y=False)
-        self._plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
         self._curves = {}
-        for key, name, color, line_style, _default, _group in WAVEFORM_CURVES:
-            # 笔宽=1 避免 pyqtgraph 0.13.x 在分段 drawLines + 点数<2 时崩溃
-            pen = pg.mkPen(color=color, width=1, style=line_style)
-            curve = self._plot.plot([], [], pen=pen, name=name, clipToView=True)
-            self._curves[key] = curve
-
+        for key, name, color, style, *_ in WAVEFORM_CURVES:
+            self._curves[key] = self._plot.plot(pen=pg.mkPen(color, width=1, style=style),
+                                               connect='finite', name=name)
+        self._analysis_curve = self._plot.plot(pen=pg.mkPen('#50dbbd', width=1), connect='finite')
+        self._bars = pg.BarGraphItem(x=[], height=[], width=0.8, brush='#50dbbd')
+        self._plot.addItem(self._bars)
+        self._cursors = [pg.InfiniteLine(pos=v, angle=90, movable=True,
+                         pen=pg.mkPen(c, style=Qt.DashLine)) for v, c in ((2, '#f5c76b'), (4, '#66caff'))]
+        for cursor in self._cursors:
+            self._plot.addItem(cursor)
+            cursor.hide()
+            cursor.sigPositionChanged.connect(self._schedule_refresh)
         self._curve_selector = CurveSelectorWidget()
         self._curve_selector.selection_changed.connect(self._schedule_refresh)
-
-        display_layout.addWidget(self._plot, 1)
-        display_layout.addWidget(self._curve_selector)
-        layout.addWidget(display, 1)
-
-        ctrl = QHBoxLayout()
-        self.pause_btn = QPushButton("暂停")
-        self.resume_btn = QPushButton("恢复")
-        self.clear_btn = QPushButton("清空")
-        self.reset_zoom_btn = QPushButton("重置缩放")
-        self.collect_cb = QCheckBox("数据采集")
-        self.collect_cb.setChecked(True)
-        ctrl.addWidget(self.pause_btn)
-        ctrl.addWidget(self.resume_btn)
-        ctrl.addWidget(self.clear_btn)
-        ctrl.addWidget(self.reset_zoom_btn)
-        ctrl.addWidget(self.collect_cb)
-        ctrl.addStretch()
-        layout.addLayout(ctrl)
-
-        hint = QLabel("滚轮：水平缩放  |  Ctrl+滚轮：垂直缩放")
-        hint.setStyleSheet("color: #666;")
-        layout.addWidget(hint)
-
-        self.setLayout(layout)
-
+        split = QSplitter()
+        split.addWidget(self._plot)
+        split.addWidget(self._curve_selector)
+        split.setStretchFactor(0, 1)
+        layout.addWidget(split, 1)
+        self.measurement = QLabel("双游标可测量 Δt、Δy、1/Δt；FFT 使用原始缓存与设置的采样间隔")
+        self.measurement.setWordWrap(True)
+        layout.addWidget(self.measurement)
+        self.metrics = QLabel()
+        layout.addWidget(self.metrics)
+        for combo in (self.mode, self.channel, self.x_channel, self.fft_size):
+            combo.currentIndexChanged.connect(self._schedule_refresh)
+        self.mode.currentIndexChanged.connect(self._mode_changed)
+        for spin in (self.window, self.sample_dt):
+            spin.valueChanged.connect(self._schedule_refresh)
+        self.auto_y.toggled.connect(self._schedule_refresh)
+        self.cursor_cb.toggled.connect(self._schedule_refresh)
+        self._plot.getViewBox().sigRangeChangedManually.connect(self._manual_range)
         self.pause_btn.clicked.connect(self._on_pause)
         self.resume_btn.clicked.connect(self._on_resume)
         self.clear_btn.clicked.connect(self.clear_current)
         self.reset_zoom_btn.clicked.connect(self._reset_zoom)
+        self.export_btn.clicked.connect(self._export_csv)
+        self.capacity.currentIndexChanged.connect(self._resize_buffer)
 
-    def _schedule_refresh(self) -> None:
-        self._zoom_timer.start(ZOOM_DEBOUNCE_MS)
+    def _evict_for(self, extra_bytes, protect):
+        while (sum(b._data.nbytes for b in self._buffers.values()) + extra_bytes > MAX_RING_BYTES
+               or len(self._buffers) >= MAX_MOTOR_BUFFERS):
+            victims = [k for k in self._buffers if k != protect and k != self._motor_id]
+            if not victims:
+                break
+            del self._buffers[victims[0]]
 
-    def _reset_zoom(self) -> None:
-        self._x_window = DEFAULT_X_WINDOW
-        self._v_zoom = 1.0
-        self._refresh_plot()
+    def _resize_buffer(self, *_):
+        buf = self._buffers.get(self._motor_id)
+        if buf is not None:
+            size = int(self.capacity.currentData())
+            self._evict_for(max(0, size * 88 - buf._data.nbytes), self._motor_id)
+            buf.resize(size)
+        self._dirty = True
 
-    def _on_wheel_zoom(self, zoom_in: bool, vertical: bool) -> None:
-        factor = 1.0 / ZOOM_FACTOR if zoom_in else ZOOM_FACTOR
-        if vertical:
-            self._v_zoom = max(0.1, min(20.0, self._v_zoom * factor))
-        else:
-            self._x_window = max(MIN_X_WINDOW, min(MAX_X_WINDOW, self._x_window * factor))
-        self._update_x_range_only()
-        self._zoom_timer.start(ZOOM_DEBOUNCE_MS)
+    def _schedule_refresh(self, *_):
+        self._dirty = True
 
-    def _update_x_range_only(self) -> None:
-        """滚轮缩放时先更新视窗，完整重绘由防抖定时器触发。"""
-        if self._motor_id is None or self._motor_id not in self._buffers:
-            return
-        times = self._buffers[self._motor_id].times
-        if not times:
-            return
-        x_min, x_max = self._x_limits(times[-1])
-        self._plot.setXRange(x_min, x_max, padding=0)
+    def _mode_changed(self, *_):
+        self._last_render = None
+        self._plot.enableAutoRange(x=True, y=True)
+        if self.mode.currentText() == '时域' and self._paused and self._frozen is not None:
+            times = self._frozen['times']
+            if len(times):
+                self._plot.setXRange(max(0, times[-1]-self.window.value()),
+                                     max(self.window.value(), times[-1]), padding=0)
+        self._dirty = True
 
-    def _x_limits(self, t_max: float) -> Tuple[float, float]:
-        if t_max <= self._x_window:
-            return 0.0, self._x_window
-        return t_max - self._x_window, t_max
+    def _manual_range(self, axes):
+        # ViewBox emits this for wheel zoom as well as pan/scale gestures.
+        # While live, retain the new time span and continue following latest data.
+        if axes[0] and not self._paused and self.mode.currentText() == '时域':
+            left, right = self._view_box.viewRange()[0]
+            self.window.setValue(right - left)
+        if axes[1]:
+            self.auto_y.setChecked(False)
+        self._dirty = True
 
-    def _max_plot_points(self) -> int:
-        pixel_w = max(320, self._plot.width())
-        by_pixel = int(pixel_w * 1.2)
-        by_window = int(self._x_window / NOMINAL_REPORT_PERIOD) + 10
-        return min(ABS_MAX_PLOT_POINTS, max(80, min(by_pixel, by_window)))
+    def _reset_zoom(self):
+        self.window.setValue(WAVEFORM_WINDOW_SECONDS)
+        self.auto_y.setChecked(True)
+        self._on_resume()
 
-    @staticmethod
-    def _downsample_peak(xs: Sequence[float], ys: Sequence[float], max_points: int) -> Tuple[List[float], List[float]]:
-        n = len(xs)
-        if n <= max_points:
-            return list(xs), list(ys)
-
-        bucket = max(1, n // max_points)
-        out_x: List[float] = []
-        out_y: List[float] = []
-        for i in range(0, n, bucket):
-            bx = xs[i : i + bucket]
-            by = ys[i : i + bucket]
-            if not by:
-                continue
-            lo = min(range(len(by)), key=by.__getitem__)
-            hi = max(range(len(by)), key=by.__getitem__)
-            if lo == hi:
-                out_x.append(bx[lo])
-                out_y.append(by[lo])
-            elif lo < hi:
-                out_x.extend([bx[lo], bx[hi]])
-                out_y.extend([by[lo], by[hi]])
-            else:
-                out_x.extend([bx[hi], bx[lo]])
-                out_y.extend([by[hi], by[lo]])
-        return out_x, out_y
-
-    def apply_protocol_version(self, version: ProtocolVersion) -> None:
+    def apply_protocol_version(self, version):
         if version == self._protocol_version:
             return
         self._protocol_version = version
         curves = waveform_curves_for(version)
-        name_by_key = {key: name for key, name, color, line_style, *_rest in curves}
-        for key, curve in self._curves.items():
-            if key in name_by_key:
-                curve.opts["name"] = name_by_key[key]
         self._curve_selector.apply_curves(curves)
+        for index, (key, name, *_) in enumerate(curves):
+            self.channel.setItemText(index, name)
+            self.x_channel.setItemText(index, name)
         self._buffers.clear()
-        self._reset_zoom()
+        self._on_resume()
 
-    def set_motor(self, motor_id: Optional[int]) -> None:
+    def set_motor(self, motor_id):
         self._motor_id = motor_id
-        if motor_id is None:
-            self._title.setText("未选择电机")
-        else:
-            self._title.setText(f"电机 ID: {motor_id}")
-        self._reset_zoom()
+        self._title.setText(f"电机 Node-ID {motor_id}" if motor_id is not None else "未选择电机")
+        buf = self._buffers.get(motor_id)
+        if buf is not None:
+            self.capacity.blockSignals(True)
+            self.capacity.setCurrentIndex(self.capacity.findData(buf.max_points))
+            self.capacity.blockSignals(False)
+        self._on_resume()
 
-    def _get_buffer(self, motor_id: int) -> WaveformBuffer:
+    def _get_buffer(self, motor_id):
         if motor_id not in self._buffers:
-            self._buffers[motor_id] = WaveformBuffer()
+            points = int(self.capacity.currentData())
+            self._evict_for(points * 88, motor_id)
+            self._buffers[motor_id] = WaveformBuffer(points)
+        self._buffers.move_to_end(motor_id)
         return self._buffers[motor_id]
 
-    def set_target(self, motor_id: int, pos=None, vel=None, curr=None, iq=None) -> None:
-        iq_val = iq if iq is not None else curr
-        self._get_buffer(motor_id).set_target(pos=pos, vel=vel, iq=iq_val)
+    def set_target(self, motor_id, pos=None, vel=None, curr=None, iq=None):
+        self._get_buffer(motor_id).set_target(pos, vel, iq if iq is not None else curr)
 
-    def append_sample(self, motor_id: int, sample: Dict, timestamp: Optional[float] = None) -> None:
-        if not self.collect_cb.isChecked() or self._paused:
-            return
-        self._get_buffer(motor_id).append_sample(sample, timestamp=timestamp)
+    def append_sample(self, motor_id, sample, timestamp=None):
+        if self.collect_cb.isChecked():
+            self._get_buffer(motor_id).append_sample(sample, timestamp)
 
-    def clear_current(self) -> None:
-        if self._motor_id is not None and self._motor_id in self._buffers:
+    def clear_current(self):
+        if self._motor_id in self._buffers:
             self._buffers[self._motor_id].clear()
-        self._reset_zoom()
+        self._on_resume()
 
-    def _on_pause(self) -> None:
+    def _on_pause(self):
+        if not self._paused:
+            buf = self._buffers.get(self._motor_id)
+            self._frozen = buf.snapshot() if buf is not None else None
         self._paused = True
+        self._dirty = True
+        self.pause_btn.setEnabled(False)
 
-    def _on_resume(self) -> None:
+    def _on_resume(self):
         self._paused = False
+        self._frozen = None
+        self._last_render = None
+        self._dirty = True
+        self.pause_btn.setEnabled(True)
 
-    def _refresh_plot(self) -> None:
+    def _source(self):
+        if self._paused:
+            if self._frozen is None:
+                return None
+            if self.mode.currentText() == '时域':
+                lo, hi = self._plot.getViewBox().viewRange()[0]
+                times = self._frozen['times']
+                left = max(0, int(np.searchsorted(times, lo)) - 1)
+                right = min(len(times), int(np.searchsorted(times, hi, side='right')) + 1)
+                return {key: values[left:right] for key, values in self._frozen.items()}
+            return self._frozen
+        buf = self._buffers.get(self._motor_id)
+        if buf is None or not len(buf):
+            return None
+        latest = buf.latest_time
+        return buf.snapshot_window(max(0, latest - self.window.value()), latest)
+
+    def _export_csv(self):
+        buf = self._buffers.get(self._motor_id)
+        data = self._frozen if self._paused else (buf.snapshot() if buf is not None else None)
+        if data is None or not len(data['times']):
+            QMessageBox.information(self, '导出', '当前电机没有缓存数据')
+            return
+        path, _ = QFileDialog.getSaveFileName(self, '导出原始缓存', f'motor_{self._motor_id}.csv', 'CSV (*.csv)')
+        if not path:
+            return
+        headers = ['time_s'] + [self.channel.itemText(i) for i in range(self.channel.count())]
+        self.export_btn.setEnabled(False)
+        self.export_btn.setText('正在导出…')
+        def write():
+            try:
+                with open(path, 'w', newline='', encoding='utf-8-sig') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(headers)
+                    writer.writerows(zip(*(data[k] for k in data)))
+                self._export_finished.emit(path, True)
+            except OSError as exc:
+                self._export_finished.emit(str(exc), False)
+        threading.Thread(target=write, daemon=False).start()
+
+    def _on_export_finished(self, detail, success):
+        self.export_btn.setEnabled(True)
+        self.export_btn.setText('导出 CSV')
+        if success:
+            QMessageBox.information(self, '导出完成', detail)
+        else:
+            QMessageBox.warning(self, '导出失败', detail)
+
+    def _refresh_plot(self):
+        buf = self._buffers.get(self._motor_id)
+        token = (self._motor_id, buf.generation if buf is not None else -1, self._paused)
+        if not self._dirty and (self._paused or token == self._last_render):
+            return
+        start = time.perf_counter()
+        self._dirty = False
+        self._last_render = token
+        mode = self.mode.currentText()
         visible = self._curve_selector.visible_keys()
-        if self._motor_id is None or self._motor_id not in self._buffers:
-            for key, curve in self._curves.items():
-                curve.setData([], [])
-                curve.setVisible(key in visible)
-            return
-
-        buf = self._buffers[self._motor_id]
-        if not buf.times:
-            for key, curve in self._curves.items():
-                curve.setData([], [])
-                curve.setVisible(key in visible)
-            return
-
-        t_max = buf.times[-1]
-        x_min, x_max = self._x_limits(t_max)
-        window = buf.snapshot_window(x_min, x_max)
-        times = window["times"]
-        if not times:
-            return
-
-        max_pts = self._max_plot_points()
-        visible_vals: List[float] = []
-
         for key, curve in self._curves.items():
-            show = key in visible
-            curve.setVisible(show)
-            if show and key in window:
-                xs, ys = self._downsample_peak(times, window[key], max_pts)
-                if len(xs) >= 2:
-                    curve.setData(np.asarray(xs, dtype=np.float64), np.asarray(ys, dtype=np.float64))
-                    visible_vals.extend(ys)
-                else:
-                    curve.setData([], [])
-            else:
+            curve.setVisible(mode == '时域' and key in visible)
+        self._analysis_curve.setVisible(mode in ('FFT', 'XY', '直方图'))
+        self._bars.setVisible(mode == '条形图')
+        for cursor in self._cursors:
+            cursor.setVisible(self.cursor_cb.isChecked() and mode == '时域')
+        data = self._source()
+        if data is None or not len(data['times']):
+            for curve in list(self._curves.values()) + [self._analysis_curve]:
                 curve.setData([], [])
-
-        self._plot.setXRange(x_min, x_max, padding=0)
-
-        if visible_vals:
-            v_min, v_max = min(visible_vals), max(visible_vals)
-            if v_min == v_max:
-                v_min -= 1.0
-                v_max += 1.0
-            margin = max(1.0, (v_max - v_min) * 0.08) / self._v_zoom
-            mid = (v_max + v_min) / 2
-            half = (v_max - v_min) / 2 / self._v_zoom + margin
-            self._plot.setYRange(mid - half, mid + half, padding=0)
+            self._bars.setOpts(x=[], height=[])
+            self.metrics.setText('等待采样数据')
+            return
+        t = data['times']
+        budget = max(100, min(4000, self._plot.width() * 2))
+        y = data[self.channel.currentData()]
+        info = ''
+        if mode == '时域':
+            self._plot.setLabel('bottom', '时间', units='s')
+            self._plot.setLabel('left', '原始数值（各通道单位见选择器）')
+            self._plot.enableAutoRange(x=False, y=self.auto_y.isChecked())
+            for key in visible:
+                xplot, yplot = peak_envelope(t, data[key], budget)
+                self._curves[key].setData(xplot, yplot)
+            if not self._paused:
+                self._plot.setXRange(max(0, t[-1] - self.window.value()), max(self.window.value(), t[-1]), padding=0)
+            finite = y[np.isfinite(y)]
+            if finite.size:
+                info = f"{self.channel.currentText()}  min {finite.min():.5g}  max {finite.max():.5g}  mean {finite.mean():.5g}  RMS {np.sqrt(np.mean(finite**2)):.5g}"
+            if self.cursor_cb.isChecked():
+                a, b = [c.value() for c in self._cursors]
+                dt = b - a
+                ia, ib = np.searchsorted(t, [a, b])
+                dy_text = '--'
+                if t[0] <= a <= t[-1] and t[0] <= b <= t[-1]:
+                    dy_text = f'{y[min(ib, len(t)-1)] - y[min(ia, len(t)-1)]:.5g}'
+                freq = f'{1/abs(dt):.5g}' if abs(dt) > 1e-12 else '--'
+                info += f"  |  Δt {dt:.6g} s  1/|Δt| {freq} Hz  Δy {dy_text}"
+        elif mode == 'FFT':
+            n = int(self.fft_size.currentText())
+            x, amplitude = spectrum(y, n, self.sample_dt.value()/1000)
+            self._analysis_curve.setData(x, amplitude)
+            self._plot.setLabel('bottom', '频率', units='Hz')
+            self._plot.setLabel('left', '单边幅值 / Hann / 去直流')
+            info = f'需要 {n} 个连续有效样本，当前 {np.isfinite(y).sum()}；频率按设置的设备采样间隔计算'
+        elif mode == 'XY':
+            # Uniform index limit preserves time ordering; no min/max on nonmonotonic X.
+            step = max(1, int(np.ceil(len(t)/budget)))
+            self._analysis_curve.setData(data[self.x_channel.currentData()][::step], y[::step])
+            self._plot.setLabel('bottom', self.x_channel.currentText())
+            self._plot.setLabel('left', self.channel.currentText())
+        elif mode == '直方图':
+            finite = y[np.isfinite(y)]
+            counts, edges = np.histogram(finite, bins=64)
+            self._analysis_curve.setData((edges[:-1]+edges[1:])/2, counts)
+            self._plot.setLabel('bottom', self.channel.currentText())
+            self._plot.setLabel('left', '样本数 / 64 bins')
+        else:
+            keys = [key for key, *_ in WAVEFORM_CURVES if key in visible]
+            self._bars.setOpts(x=np.arange(len(keys)), height=[data[k][-1] for k in keys])
+            self._plot.setLabel('bottom', ' / '.join(keys))
+            self._plot.setLabel('left', '最新值（混合单位）')
+        self.measurement.setText(info or self.channel.currentText())
+        self.metrics.setText(f"{'冻结' if self._paused else '实时'} | 可视 {len(t):,} 点 | 缓存 {len(buf) if buf is not None else 0:,}/{buf.max_points if buf is not None else 0:,} | 更新 {(time.perf_counter()-start)*1000:.1f} ms（不含绘制）")

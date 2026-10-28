@@ -1,6 +1,8 @@
 """CAN/CANFD 通信线程。"""
 
 import threading
+from collections import deque
+from protocol import CMD
 
 from PyQt5.QtCore import QThread, pyqtSignal
 
@@ -22,6 +24,22 @@ class CanThread(QThread):
         self._send_lock = threading.Lock()
         self._recv_lock = threading.Lock()
         self._lifecycle_lock = threading.Lock()
+        self._telemetry_lock = threading.Lock()
+        self._telemetry = deque(maxlen=32768)
+        self.telemetry_dropped = 0
+
+    def clear_telemetry(self):
+        with self._telemetry_lock:
+            self._telemetry.clear()
+
+    def take_telemetry(self, limit=1024):
+        with self._telemetry_lock:
+            return [self._telemetry.popleft() for _ in range(min(limit, len(self._telemetry)))]
+
+    @property
+    def telemetry_pending(self):
+        with self._telemetry_lock:
+            return len(self._telemetry)
 
     @property
     def bus(self):
@@ -33,6 +51,7 @@ class CanThread(QThread):
     def open_device(self, profile_name: str, device_index: int = 0, serial_port: str = "") -> None:
         def action() -> None:
             with self._lifecycle_lock:
+                self.clear_telemetry()
                 self.manager.open_device(profile_name, device_index, serial_port)
             self.connection_status.emit(True, f"设备已打开: {self.manager.device_label()}")
 
@@ -105,7 +124,14 @@ class CanThread(QThread):
                     if not batch:
                         break
                     for msg in batch:
-                        self.msg_received.emit(msg.arbitration_id, bytes(msg.data), msg.timestamp)
+                        data = bytes(msg.data)
+                        if len(data) >= 2 and data[1] == CMD.PERIOD_REPORT:
+                            with self._telemetry_lock:
+                                if len(self._telemetry) == self._telemetry.maxlen:
+                                    self.telemetry_dropped += 1
+                                self._telemetry.append((msg.arbitration_id, data, msg.timestamp))
+                        else:
+                            self.msg_received.emit(msg.arbitration_id, data, msg.timestamp)
                     drained += len(batch)
                 if drained == 0:
                     self.msleep(5)

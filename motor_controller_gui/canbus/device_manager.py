@@ -77,6 +77,9 @@ class CanDeviceManager:
         self.last_open_warning = ""
 
         if self.profile.backend == "zlgcan":
+            import sys
+            if sys.platform != 'win32':
+                raise RuntimeError("厂商 DLL 仅支持 Windows，请选择 SocketCAN / PCAN / SLCAN")
             dll_path, err, _backend = find_can_driver_dll(self.profile.driver_dll)
             if dll_path is None:
                 raise RuntimeError(err)
@@ -111,6 +114,10 @@ class CanDeviceManager:
                 fd=self.profile.fd,
                 data_bitrate=self.profile.data_bitrate,
             )
+        elif self.profile.backend in ('socketcan', 'virtual'):
+            self.bus = can.Bus(interface=self.profile.backend,
+                               channel=serial_port or self.profile.default_channel,
+                               fd=self.profile.fd)
         else:
             raise ValueError(f"不支持的后端: {self.profile.backend}")
 
@@ -208,6 +215,9 @@ class CanDeviceManager:
     def send(self, arbitration_id: int, data: bytes, is_fd: bool = True) -> bool:
         if not self.is_running:
             return False
+        if (self.profile and not self.profile.fd and is_fd) or len(data) > (64 if is_fd else 8):
+            self.last_error = "当前通道不支持该帧：经典 CAN 最大 8 字节，FD 最大 64 字节"
+            return False
         try:
             if self._zlg is not None:
                 return self._zlg.send(arbitration_id, data, is_fd)
@@ -230,6 +240,11 @@ class CanDeviceManager:
         if not frames:
             return True
         if not self.is_running:
+            return False
+        if (self.profile and not self.profile.fd and is_fd) or any(
+            len(data) > (64 if is_fd else 8) for _, data in frames
+        ):
+            self.last_error = "批量发送包含当前通道不支持的帧（经典 CAN 最大 8B）"
             return False
         try:
             if self._zlg is not None:

@@ -32,7 +32,7 @@ class ConnectionPanel(QGroupBox):
     protocol_version_changed = pyqtSignal(str)
 
     def __init__(self, device_info_fn=None, parent=None):
-        super().__init__("CANFD 连接管理", parent)
+        super().__init__("CAN / CAN-FD 连接管理", parent)
         self._device_info_fn = device_info_fn
         self._state = DeviceState.CLOSED
         self._running_channel: Optional[int] = None
@@ -73,7 +73,7 @@ class ConnectionPanel(QGroupBox):
         row_proto.addWidget(QLabel("固件协议:"))
         row_proto.addWidget(self.protocol_combo)
         row_proto.addStretch()
-        root.addLayout(row_proto)
+        row1.addLayout(row_proto)
 
         # SLCAN 串口选择（仅 SLCAN 型号显示）
         self.serial_row = QWidget()
@@ -83,7 +83,8 @@ class ConnectionPanel(QGroupBox):
         self.serial_combo.setMinimumWidth(220)
         self.serial_combo.setEditable(True)
         self.refresh_serial_btn = QPushButton("刷新串口")
-        serial_layout.addWidget(QLabel("串口:"))
+        self.transport_label = QLabel("串口:")
+        serial_layout.addWidget(self.transport_label)
         serial_layout.addWidget(self.serial_combo, 1)
         serial_layout.addWidget(self.refresh_serial_btn)
         self.serial_row.setLayout(serial_layout)
@@ -93,7 +94,6 @@ class ConnectionPanel(QGroupBox):
         row2 = QHBoxLayout()
         self.device_label = QLabel("未连接")
         row2.addWidget(self.device_label, 1)
-        root.addLayout(row2)
 
         # 第三行：通道 + 控制（创芯双通道需选通道；ZQWL 单通道无此概念）
         self.channel_row = QWidget()
@@ -113,6 +113,7 @@ class ConnectionPanel(QGroupBox):
         root.addWidget(self.channel_row)
 
         row4 = QHBoxLayout()
+        row4.addWidget(self.device_label)
         self.close_btn = QPushButton("关闭设备")
         self.info_btn = QPushButton("设备信息")
         row4.addStretch()
@@ -122,7 +123,7 @@ class ConnectionPanel(QGroupBox):
 
         self.status_label = QLabel("状态: 未连接")
         self.status_label.setStyleSheet("color: #0066cc;")
-        root.addWidget(self.status_label)
+        row4.insertWidget(1, self.status_label)
 
         self.setLayout(root)
 
@@ -148,10 +149,16 @@ class ConnectionPanel(QGroupBox):
 
     def _on_model_changed(self, model_name: str) -> None:
         is_slcan = "SLCAN" in model_name
-        self.serial_row.setVisible(is_slcan)
+        is_named_channel = 'SocketCAN' in model_name or 'Virtual' in model_name
+        self.serial_row.setVisible(is_slcan or is_named_channel)
+        self.refresh_serial_btn.setVisible(is_slcan)
+        self.transport_label.setText('通道名:' if is_named_channel else '串口:')
         if is_slcan:
             self._refresh_serial_ports()
         profile = next((p for p in DEVICE_PROFILES if p.name == model_name), None)
+        if is_named_channel and profile:
+            self.serial_combo.clear()
+            self.serial_combo.addItem(profile.default_channel)
         show_channel = True if profile is None else profile.show_channel_selector
         self.channel_row.setVisible(show_channel)
         self._refresh_channel_options(model_name)

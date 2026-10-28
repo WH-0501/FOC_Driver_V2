@@ -1,135 +1,103 @@
-"""波形数据环形缓冲。"""
-
-import bisect
-import time
-from collections import deque
-from typing import Deque, Dict, Optional, Tuple
-
+"""Bounded NumPy ring. GUI consumer owns writes; snapshots are independent arrays."""
+import numpy as np
 from core.waveform_curves import CURVE_KEYS
 
-# 1 kHz 采样下保留 6 s 历史
 WAVEFORM_WINDOW_SECONDS = 6.0
-WAVEFORM_MAX_POINTS = 6000
-# 与固件 PERIOD_REPORT 1 ms 周期对齐
+WAVEFORM_MAX_POINTS = 120_000
 NOMINAL_REPORT_PERIOD = 0.001
 
-
 class WaveformBuffer:
-    """保存单个电机的时间序列数据。"""
+    def __init__(self, max_points=WAVEFORM_MAX_POINTS, window_seconds=120.0):
+        if max_points < 2 or window_seconds <= 0:
+            raise ValueError("Invalid buffer capacity")
+        self.max_points = int(max_points)
+        self.window_seconds = float(window_seconds)
+        self._data = np.empty((len(CURVE_KEYS) + 1, self.max_points), dtype=np.float64)
+        self._head = self._size = 0
+        self._last_raw_ts = None
+        self._time = 0.0
+        self._last_target = dict(pos=0.0, vel=0.0, iq=0.0)
+        self.generation = self.total_samples = 0
 
-    def __init__(
-        self,
-        max_points: int = WAVEFORM_MAX_POINTS,
-        window_seconds: float = WAVEFORM_WINDOW_SECONDS,
-    ):
-        self.max_points = max_points
-        self.window_seconds = window_seconds
-        self._last_raw_ts: Optional[float] = None
-        self.times: Deque[float] = deque(maxlen=max_points)
-        self.channels: Dict[str, Deque[float]] = {key: deque(maxlen=max_points) for key in CURVE_KEYS}
-        self._last_target = {"pos": 0.0, "vel": 0.0, "iq": 0.0}
-        self.generation = 0
+    def __len__(self):
+        return self._size
 
-    def set_target(self, pos: Optional[float] = None, vel: Optional[float] = None, iq: Optional[float] = None) -> None:
-        if pos is not None:
-            self._last_target["pos"] = pos
-        if vel is not None:
-            self._last_target["vel"] = vel
-        if iq is not None:
-            self._last_target["iq"] = iq
+    @property
+    def latest_time(self):
+        return self._time if self._size else None
 
-    def _next_time(self, timestamp: Optional[float]) -> float:
-        """生成单调递增的显示时间轴。
+    @property
+    def times(self):
+        return self.snapshot(keys=())["times"]
 
-        CAN 硬件时间戳在批读时可能重复或精度过低（甚至单位有误），
-        此时回退到 1 ms 名义周期，保证 1 kHz 波形连续可辨。
-        """
-        if not self.times:
+    def set_target(self, pos=None, vel=None, iq=None):
+        for key, value in (("pos", pos), ("vel", vel), ("iq", iq)):
+            if value is not None:
+                self._last_target[key] = float(value)
+
+    def append_sample(self, sample, timestamp=None):
+        if self._size:
+            dt = NOMINAL_REPORT_PERIOD
+            if timestamp is not None and self._last_raw_ts is not None:
+                delta = timestamp - self._last_raw_ts
+                if np.isfinite(delta) and delta > 0:
+                    dt = delta
+            self._time += dt
+        if timestamp is not None and np.isfinite(timestamp):
             self._last_raw_ts = timestamp
-            return 0.0
-
-        last_t = self.times[-1]
-        if timestamp is None:
-            return last_t + NOMINAL_REPORT_PERIOD
-
-        if self._last_raw_ts is None:
-            self._last_raw_ts = timestamp
-            return last_t + NOMINAL_REPORT_PERIOD
-
-        delta = timestamp - self._last_raw_ts
-        if delta <= 0:
-            return last_t + NOMINAL_REPORT_PERIOD
-
-        # delta 过小：时间戳单位/精度异常，按 1 kHz 展开
-        if delta < 0.0005:
-            return last_t + NOMINAL_REPORT_PERIOD
-
-        # 单次跳变过大（积压批次），避免横轴瞬间拉伸
-        if delta > 0.05:
-            self._last_raw_ts = timestamp
-            return last_t + NOMINAL_REPORT_PERIOD
-
-        self._last_raw_ts = timestamp
-        return last_t + delta
-
-    def append_sample(self, sample: Dict[str, float], timestamp: Optional[float] = None) -> None:
-        ts = timestamp if timestamp is not None else time.perf_counter()
-        t = self._next_time(ts)
-
-        self.times.append(t)
-        self.channels["target_pos"].append(self._last_target["pos"])
-        self.channels["actual_pos"].append(sample.get("position_plot", sample.get("position_rad", 0.0)))
-        self.channels["target_vel"].append(self._last_target["vel"])
-        self.channels["actual_vel"].append(sample.get("velocity", 0.0))
-        self.channels["target_iq"].append(self._last_target["iq"])
-        self.channels["iq"].append(sample.get("iq_ma", sample.get("current_ma", 0.0)))
-        self.channels["id"].append(sample.get("id_ma", 0.0))
-        self.channels["ia"].append(sample.get("ia_ma", 0.0))
-        self.channels["ib"].append(sample.get("ib_ma", 0.0))
-        self.channels["ic"].append(sample.get("ic_ma", 0.0))
-
-        self._trim_window()
+        target = self._last_target
+        self._data[:, self._head] = (
+            self._time, target['pos'], sample.get('position_plot', sample.get('position_rad', np.nan)),
+            target['vel'], sample.get('velocity', np.nan), target['iq'],
+            sample.get('iq_ma', sample.get('current_ma', np.nan)),
+            *(sample.get(k + '_ma', np.nan) if sample.get('has_phase_current', True) else np.nan
+              for k in ('id', 'ia', 'ib', 'ic')),
+        )
+        self._head = (self._head + 1) % self.max_points
+        self._size = min(self._size + 1, self.max_points)
+        self.total_samples += 1
         self.generation += 1
 
-    def _trim_window(self) -> None:
-        if not self.times:
-            return
-        latest = self.times[-1]
-        cutoff = latest - self.window_seconds
-        while self.times and self.times[0] < cutoff:
-            self.times.popleft()
-            for ch in self.channels.values():
-                ch.popleft()
-
-    def clear(self) -> None:
+    def clear(self):
+        self._head = self._size = self.total_samples = 0
         self._last_raw_ts = None
-        self.times.clear()
-        for ch in self.channels.values():
-            ch.clear()
-        self.generation = 0
+        self._time = 0.0
+        self.generation += 1
 
-    def snapshot(self) -> Dict[str, Tuple]:
-        result = {"times": tuple(self.times)}
-        for key, ch in self.channels.items():
-            result[key] = tuple(ch)
-        return result
+    def resize(self, max_points):
+        if max_points < 2:
+            raise ValueError('Invalid buffer capacity')
+        snapshot = self.snapshot()
+        keep = min(self._size, int(max_points))
+        self.max_points = int(max_points)
+        self._data = np.empty((len(CURVE_KEYS)+1, self.max_points), dtype=np.float64)
+        if keep:
+            for row, key in enumerate(['times'] + CURVE_KEYS):
+                self._data[row, :keep] = snapshot[key][-keep:]
+        self._size = keep
+        self._head = keep % self.max_points
+        self.generation += 1
 
-    def snapshot_window(self, x_min: float, x_max: float) -> Dict[str, Tuple]:
-        """按时间窗口截取数据，避免绘图时全量扫描缓冲。"""
-        n = len(self.times)
-        if n == 0:
-            empty = {"times": ()}
-            empty.update({key: () for key in CURVE_KEYS})
-            return empty
+    def _segments(self):
+        start = (self._head - self._size) % self.max_points
+        if not self._size:
+            return []
+        if start < self._head:
+            return [(start, self._head)]
+        return [(start, self.max_points), (0, self._head)]
 
-        times = self.times
-        i0 = bisect.bisect_left(times, x_min)
-        i1 = bisect.bisect_right(times, x_max)
-        if i1 <= i0:
-            i0 = max(0, i1 - 1)
-        i1 = min(i1, n)
+    def snapshot(self, keys=None):
+        return self.snapshot_window(-np.inf, np.inf, keys)
 
-        result: Dict[str, Tuple] = {"times": tuple(times[i] for i in range(i0, i1))}
-        for key, ch in self.channels.items():
-            result[key] = tuple(ch[i] for i in range(i0, i1))
+    def snapshot_window(self, x_min, x_max, keys=None):
+        keys = CURVE_KEYS if keys is None else list(keys)
+        result, slices = {}, []
+        for start, end in self._segments():
+            times = self._data[0, start:end]
+            lo = int(np.searchsorted(times, x_min, side='left'))
+            hi = int(np.searchsorted(times, x_max, side='right'))
+            slices.append(slice(start + lo, start + hi))
+        for name, row in [('times', 0)] + [(k, CURVE_KEYS.index(k) + 1) for k in keys]:
+            result[name] = (np.concatenate([self._data[row, s] for s in slices])
+                            if slices else np.empty(0, dtype=np.float64))
         return result

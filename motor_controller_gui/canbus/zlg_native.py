@@ -21,10 +21,14 @@ from ctypes import (
     c_ulonglong,
     c_ushort,
     c_void_p,
-    windll,
 )
 from pathlib import Path
 from typing import List, Optional, Tuple
+
+try:
+    from ctypes import windll
+except ImportError:
+    windll = None  # Other platforms can still use python-can backends.
 
 ZCAN_USBCANFD_200U = 41
 ZCAN_USBCANFD_100U = 42

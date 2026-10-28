@@ -1,12 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
+import sys
+from pathlib import Path
+
+can_backends = ['can.interfaces.virtual', 'can.interfaces.pcan', 'can.interfaces.slcan']
+if sys.platform.startswith('linux'):
+    can_backends.append('can.interfaces.socketcan')
 
 
 a = Analysis(
     ['motor_gui.py'],
     pathex=[],
     binaries=[],
-    datas=[('library', 'library')],
-    hiddenimports=[],
+    datas=[('library', 'library')] if Path('library').is_dir() else [],
+    hiddenimports=can_backends,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -61,6 +61,30 @@ DEVICE_PROFILES: List[DeviceProfile] = [
     DeviceProfile(
         name="SLCAN 适配器 (CANable 等)",
         backend="slcan",
+        fd=False,
+    ),
+    DeviceProfile(
+        name="PCAN-USB (经典 CAN)",
+        backend="pcan",
+        default_channel="PCAN_USBBUS1",
+        fd=False,
+    ),
+    DeviceProfile(
+        name="SocketCAN (Linux CAN)",
+        backend="socketcan",
+        default_channel="can0",
+        fd=False,
+    ),
+    DeviceProfile(
+        name="SocketCAN (Linux CAN-FD)",
+        backend="socketcan",
+        default_channel="can0",
+        fd=True,
+    ),
+    DeviceProfile(
+        name="Virtual CAN-FD (软件测试)",
+        backend="virtual",
+        default_channel="motor-test",
         fd=True,
     ),
     DeviceProfile(

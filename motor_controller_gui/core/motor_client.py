@@ -178,14 +178,22 @@ class MotorClient:
 
     def _send(self, arb_id: int, cmd: CMD, payload: bytes = b"", *, exact_dlc: bool = False) -> bool:
         frame = pack_frame(cmd, payload, self.counter.next())
-        if exact_dlc:
+        profile = self.can.manager.profile
+        is_fd = profile.fd if profile else True
+        if not is_fd:
+            if len(frame) > 8:
+                if self._log_fn:
+                    self._log_fn(f"经典 CAN 无法发送 {cmd.name}: {len(frame)}B 超过 8B；请切换 CAN-FD")
+                return False
+            data = frame
+        elif exact_dlc:
             if len(frame) not in CANFD_DLC_LENGTHS:
                 return False
             data = frame
         else:
             data = pad_canfd_payload(frame)
         self._log_tx(arb_id, cmd, frame, data)
-        return self.can.send_message(arb_id, data, is_fd=True)
+        return self.can.send_message(arb_id, data, is_fd=is_fd)
 
     def clear_iap_wait(self) -> None:
         with self._iap_lock:

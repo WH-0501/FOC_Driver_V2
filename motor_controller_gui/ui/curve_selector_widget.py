@@ -42,7 +42,7 @@ def _checkbox_style(rgb: tuple, checked: bool) -> str:
     if checked:
         color = _rgb_css(rgb)
     else:
-        color = _rgb_css(tuple(int(c * 0.45) for c in rgb))
+        color = _rgb_css(tuple(int(c * 0.75) for c in rgb))
     return f"color: {color}; font-size: 13px; spacing: 6px;"
 
 

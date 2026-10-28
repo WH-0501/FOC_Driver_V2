@@ -5,11 +5,13 @@ import threading
 import time
 from typing import Dict, Optional
 
-from PyQt5.QtCore import QTime, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QTime, QTimer, pyqtSignal
 
 from PyQt5.QtWidgets import (
     QApplication,
     QGroupBox,
+    QDockWidget,
+    QScrollArea,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -72,10 +74,13 @@ class MainWindow(QMainWindow):
         self._status_pending: Dict[int, bool] = {}
         self._init_ui()
         self._init_connections()
+        self._ensure_motor_panel(self._motor_id)
+        self._on_motor_id_changed(self._motor_id)
 
     def _init_ui(self) -> None:
         self.setWindowTitle(self._window_title())
-        self.setMinimumSize(1000, 720)
+        self.setMinimumSize(1100, 700)
+        self.resize(1500, 900)
 
         central = QWidget()
         root = QVBoxLayout()
@@ -83,7 +88,12 @@ class MainWindow(QMainWindow):
         self.connection_panel = ConnectionPanel(
             device_info_fn=lambda: self.can_thread.manager.device_info_text()
         )
-        root.addWidget(self.connection_panel)
+        connection_dock = QDockWidget("连接与设备", self)
+        connection_dock.setObjectName("connectionDock")
+        connection_dock.setWidget(self.connection_panel)
+        self.addDockWidget(Qt.TopDockWidgetArea, connection_dock)
+        self._view_menu = self.menuBar().addMenu("视图")
+        self._view_menu.addAction(connection_dock.toggleViewAction())
 
         mgr = QGroupBox("电机")
         mgr_layout = QHBoxLayout()
@@ -107,7 +117,7 @@ class MainWindow(QMainWindow):
         body_splitter.addWidget(self.waveform_widget)
 
         right_panel = QWidget()
-        right_panel.setMaximumWidth(340)
+        right_panel.setMinimumWidth(320)
         right_layout = QVBoxLayout()
         right_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -117,7 +127,10 @@ class MainWindow(QMainWindow):
         self.motor_panel_host.setLayout(self.motor_panel_layout)
         right_layout.addWidget(self.motor_panel_host)
         right_panel.setLayout(right_layout)
-        body_splitter.addWidget(right_panel)
+        control_scroll = QScrollArea()
+        control_scroll.setWidgetResizable(True)
+        control_scroll.setWidget(right_panel)
+        body_splitter.addWidget(control_scroll)
 
         body_splitter.setStretchFactor(0, 7)
         body_splitter.setStretchFactor(1, 3)
@@ -128,10 +141,14 @@ class MainWindow(QMainWindow):
         log_layout = QVBoxLayout()
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setMaximumHeight(120)
+        self.log_text.document().setMaximumBlockCount(2000)
         log_layout.addWidget(self.log_text)
         log_group.setLayout(log_layout)
-        root.addWidget(log_group)
+        log_dock = QDockWidget("通信日志", self)
+        log_dock.setObjectName("logDock")
+        log_dock.setWidget(log_group)
+        self.addDockWidget(Qt.BottomDockWidgetArea, log_dock)
+        self._view_menu.addAction(log_dock.toggleViewAction())
 
         central.setLayout(root)
         self.setCentralWidget(central)
@@ -149,11 +166,30 @@ class MainWindow(QMainWindow):
         self.can_thread.scan_finished.connect(self._on_scan_finished)
         self.can_thread.scan_failed.connect(self._on_scan_failed)
         self.can_thread.msg_received.connect(self._handle_can_message)
+        self._receive_timer = QTimer(self)
+        self._receive_timer.timeout.connect(self._drain_telemetry)
+        self._receive_timer.start(16)
 
         self._status_flush_timer = QTimer(self)
         self._status_flush_timer.setInterval(int(STATUS_UI_INTERVAL * 1000))
         self._status_flush_timer.timeout.connect(self._flush_pending_status)
         self._status_flush_timer.start()
+
+    def _drain_telemetry(self):
+        for arb_id, data, timestamp in self.can_thread.take_telemetry():
+            self._handle_can_message(arb_id, data, timestamp)
+        self.statusBar().showMessage(
+            f"接收队列 {self.can_thread.telemetry_pending}/32768 | "
+            f"过载丢弃 {self.can_thread.telemetry_dropped} 帧")
+
+    def closeEvent(self, event):
+        self.can_thread.running = False
+        if not self.can_thread.wait(2000):
+            event.ignore()
+            self.log("接收线程尚未退出，请稍后关闭")
+            return
+        self.can_thread.manager.close_device()
+        event.accept()
 
     def _status_force_update(self, motor_id: int, report: dict) -> bool:
         """错误码、使能、模式变化时立即刷新 UI。"""
@@ -187,12 +223,12 @@ class MainWindow(QMainWindow):
 
     def _make_target_callback(self, motor_id: int):
         def _cb(pos=None, vel=None, curr=None):
-            self.waveform_widget.set_target(motor_id, pos=pos, vel=vel, iq=curr)
+            self.waveform_widget.set_target(self._motor_id, pos=pos, vel=vel, iq=curr)
         return _cb
 
     def _window_title(self) -> str:
         ver = self.client.protocol_version.value
-        return f"电机调试上位机 (CANFD) — 协议 V{ver}"
+        return f"电机调试工作台 · CAN / CAN-FD — 协议 V{ver}"
 
     def log(self, msg: str) -> None:
         """线程安全：任意线程可调用，实际写入在主线程执行。"""
@@ -226,6 +262,7 @@ class MainWindow(QMainWindow):
         except ValueError as exc:
             self.log(str(exc))
             return
+        self.can_thread.clear_telemetry()
         self.client.set_protocol_version(version)
         if self.motor_panel:
             self.motor_panel.apply_protocol_version(version)
@@ -369,6 +406,7 @@ class MainWindow(QMainWindow):
         self.log(f"已加载电机面板 (Node-ID={motor_id})")
 
     def _set_scan_motor_id(self, motor_id: int) -> None:
+        self._scan_pending = False
         self.motor_id_spin.blockSignals(True)
         self.motor_id_spin.setValue(motor_id)
         self.motor_id_spin.blockSignals(False)
