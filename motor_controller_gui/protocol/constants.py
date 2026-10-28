@@ -80,6 +80,14 @@ ELEC_ALIGN_METHOD_HINTS = {
     ElecAlignMethod.HFI: "HFI 扫角后按 Ud 公式写 offset。",
 }
 
+# 0xAB 应答：14 B，电角 int32 大端，1 LSB = 1e-6 rad（与固件 CAN_FD_ALIGN_* 一致）
+ALIGN_REPLY_LEN = 14
+ALIGN_ANGLE_SCALE = 1_000_000.0
+ALIGN_FLAG_OK = 1 << 0
+ALIGN_FLAG_FLIPPED = 1 << 1
+ALIGN_FLAG_ENGAGED = 1 << 2
+ALIGN_FLAG_DONE = 1 << 3
+
 
 class ControlMode(IntEnum):
     """与固件 datatypes.h control_mode_t 一致。"""

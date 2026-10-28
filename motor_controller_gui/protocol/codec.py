@@ -16,7 +16,15 @@ from .constants import (
     IAP_V5_FRAME_SIZE,
     IAP_V5_PAD_BYTE,
     IAP_V5_MIN_START_PAYLOAD,
+    ALIGN_ANGLE_SCALE,
+    ALIGN_FLAG_DONE,
+    ALIGN_FLAG_ENGAGED,
+    ALIGN_FLAG_FLIPPED,
+    ALIGN_REPLY_LEN,
+    ELEC_ALIGN_METHOD_NAMES,
+    ElecAlignMethod,
     ErrorCode,
+    format_api_error_detail,
     MotorError,
     CUR_PID_KI_PHYS_MAX,
     CUR_PID_KI_SCALE,
@@ -671,6 +679,86 @@ def parse_api_result(payload: bytes) -> tuple[bool, int]:
         return False, int(ErrorCode.ERR_FAIL)
     code = int(payload[0])
     return code == int(ErrorCode.ERR_NONE), code
+
+
+def _i8(raw: int) -> int:
+    return raw - 256 if raw >= 128 else raw
+
+
+def parse_align_result(payload: bytes) -> Dict[str, Any]:
+    """解析 0xAB 应答。短包（旧固件 1 B）只有 error_t，detail 为 False。"""
+    if not payload:
+        return {
+            "ok": False,
+            "error": int(ErrorCode.ERR_FAIL),
+            "detail": False,
+        }
+    code = int(payload[0])
+    result: Dict[str, Any] = {
+        "ok": code == int(ErrorCode.ERR_NONE),
+        "error": code,
+        "detail": len(payload) >= ALIGN_REPLY_LEN,
+    }
+    if not result["detail"]:
+        return result
+
+    method = int(payload[1])
+    flags = int(payload[3])
+    theta_after_urad, offset_urad = struct.unpack(">ii", payload[4:12])
+    iq_ma = struct.unpack(">h", payload[12:14])[0]
+    result.update(
+        {
+            "method": method,
+            "direction": _i8(int(payload[2])),
+            "flags": flags,
+            "flipped": bool(flags & ALIGN_FLAG_FLIPPED),
+            "engaged": bool(flags & ALIGN_FLAG_ENGAGED),
+            "done": bool(flags & ALIGN_FLAG_DONE),
+            "theta_elec_rad": theta_after_urad / ALIGN_ANGLE_SCALE,
+            "theta_offset_rad": offset_urad / ALIGN_ANGLE_SCALE,
+            "polarity_iq_a": iq_ma / 1000.0,
+        }
+    )
+    return result
+
+
+def _fmt_rad(rad: float) -> str:
+    deg = rad * 180.0 / math.pi
+    return f"{rad:.4f} rad（{deg:.2f}°）"
+
+
+def format_align_result_lines(result: Dict[str, Any]) -> List[str]:
+    """对齐结果的界面/日志行。首行是成败，有明细时附电角与方向。"""
+    if result.get("ok"):
+        lines = ["结果: 成功"]
+    else:
+        lines = [f"结果: {format_api_error_detail(int(result.get('error', ErrorCode.ERR_FAIL)))}"]
+    if not result.get("detail"):
+        lines.append("明细: 固件应答无电角/方向（仅 error_t）")
+        return lines
+
+    method = result.get("method")
+    try:
+        method_name = ELEC_ALIGN_METHOD_NAMES.get(ElecAlignMethod(method), str(method))
+    except ValueError:
+        method_name = f"未知方案 {method}"
+    direction = int(result.get("direction", 0))
+    if direction == 1:
+        direction_name = "CW"
+    elif direction == -1:
+        direction_name = "CCW"
+    else:
+        direction_name = "未知"
+    if result.get("flipped"):
+        direction_name += "（本次已翻转）"
+
+    lines.append(f"方案: {method_name}")
+    lines.append(f"方向: {direction_name}")
+    lines.append(f"对齐后电角: {_fmt_rad(float(result.get('theta_elec_rad', 0.0)))}")
+    lines.append(f"电角零偏: {_fmt_rad(float(result.get('theta_offset_rad', 0.0)))}")
+    lines.append(f"极性探针 Iq: {float(result.get('polarity_iq_a', 0.0)):.3f} A")
+    lines.append(f"转子吸合: {'是' if result.get('engaged') else '否'}")
+    return lines
 
 
 def parse_kth71_anlc_status(payload: bytes) -> Optional[int]:

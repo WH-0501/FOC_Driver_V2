@@ -11,11 +11,14 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from typing import Any, Dict
+
 from core.motor_client import MotorClient
 from protocol import (
     ELEC_ALIGN_METHOD_HINTS,
     ELEC_ALIGN_METHOD_NAMES,
     ElecAlignMethod,
+    format_align_result_lines,
 )
 
 
@@ -63,17 +66,20 @@ class MotorCalWidget(QWidget):
         self.align_method_hint.setStyleSheet("color: #666;")
 
         self.align_local_btn = QPushButton("本机对齐")
-        self.align_broadcast_btn = QPushButton("广播对齐")
 
         align_btn_row = QGridLayout()
         align_btn_row.setHorizontalSpacing(6)
         align_btn_row.addWidget(QLabel("对齐方案:"), 0, 0)
-        align_btn_row.addWidget(self.align_method_combo, 0, 1, 1, 2)
-        align_btn_row.addWidget(self.align_local_btn, 1, 0)
-        align_btn_row.addWidget(self.align_broadcast_btn, 1, 1, 1, 2)
+        align_btn_row.addWidget(self.align_method_combo, 0, 1)
+        align_btn_row.addWidget(self.align_local_btn, 1, 0, 1, 2)
+
+        self.align_result_label = QLabel("对齐结果：尚未执行")
+        self.align_result_label.setWordWrap(True)
+        self.align_result_label.setStyleSheet("color: #666;")
 
         elec_layout.addLayout(align_btn_row)
         elec_layout.addWidget(self.align_method_hint)
+        elec_layout.addWidget(self.align_result_label)
         elec_group.setLayout(elec_layout)
         root.addWidget(elec_group)
 
@@ -126,7 +132,6 @@ class MotorCalWidget(QWidget):
 
         self.align_method_combo.currentIndexChanged.connect(self._on_align_method_changed)
         self.align_local_btn.clicked.connect(self._align_local)
-        self.align_broadcast_btn.clicked.connect(self._align_broadcast)
         self.origin_btn.clicked.connect(self.client.broadcast_set_origin)
         self.kth71_cal_start_btn.clicked.connect(
             lambda: self.client.kth71_cal_start(self.motor_id)
@@ -158,8 +163,15 @@ class MotorCalWidget(QWidget):
             return
         self.align_method_hint.setText(ELEC_ALIGN_METHOD_HINTS.get(method, ""))
 
-    def _align_local(self) -> None:
-        self.client.align_electric_angle(self.motor_id, self._current_align_method())
+    def set_motor_id(self, motor_id: int) -> None:
+        self.motor_id = motor_id
 
-    def _align_broadcast(self) -> None:
-        self.client.broadcast_align_angle(self._current_align_method())
+    def show_align_result(self, result: Dict[str, Any]) -> None:
+        self.align_result_label.setText("\n".join(format_align_result_lines(result)))
+        color = "#1b5e20" if result.get("ok") else "#b71c1c"
+        self.align_result_label.setStyleSheet(f"color: {color};")
+
+    def _align_local(self) -> None:
+        self.align_result_label.setText("对齐结果：已发送，等待应答…")
+        self.align_result_label.setStyleSheet("color: #666;")
+        self.client.align_electric_angle(self.motor_id, self._current_align_method())

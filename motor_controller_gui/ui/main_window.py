@@ -29,9 +29,11 @@ from protocol import (
     CMD,
     ErrorCode,
     KTH71_ANLC_STATUS_NAMES,
+    format_align_result_lines,
     format_api_error_detail,
     format_bytes_binary,
     format_bytes_hex,
+    parse_align_result,
     parse_api_result,
     parse_bool_result,
     parse_kth71_anlc_status,
@@ -342,6 +344,7 @@ class MainWindow(QMainWindow):
             self.motor_panel.param_widget.motor_id = motor_id
             self.motor_panel.iap_widget.set_motor_id(motor_id)
             self.motor_panel.status_widget.set_motor_id(motor_id)
+            self.motor_panel.cal_widget.set_motor_id(motor_id)
         self.waveform_widget.set_motor(motor_id)
         self.log(f"当前电机 Node-ID: {motor_id}")
 
@@ -506,7 +509,10 @@ class MainWindow(QMainWindow):
         elif cmd == CMD.FAULT_RESET:
             self._log_api_result(arb_id, "异常复位", payload)
         elif cmd == CMD.ALIGN_ELECTRIC_ANGLE:
-            self._log_api_result(arb_id, "电角度对齐", payload)
+            align = parse_align_result(payload)
+            if panel:
+                panel.apply_align_result(align)
+            self.log(f"电机 {arb_id} 电角度对齐: " + "；".join(format_align_result_lines(align)))
         elif cmd == CMD.KTH71_CAL_START:
             self._log_api_result(arb_id, "KTH71 开始校准", payload)
         elif cmd == CMD.KTH71_CAL_TRIGGER:

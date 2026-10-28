@@ -1,6 +1,6 @@
 """单电机综合面板（状态 + 控制 + 参数）。"""
 
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
@@ -64,6 +64,9 @@ class MotorPanel(QWidget):
 
     def apply_protect(self, values: Dict) -> None:
         self.param_widget.apply_protect(values)
+
+    def apply_align_result(self, result: Dict[str, Any]) -> None:
+        self.cal_widget.show_align_result(result)
 
     def apply_protocol_version(self, version: ProtocolVersion) -> None:
         self.control_widget.apply_protocol_version(version)

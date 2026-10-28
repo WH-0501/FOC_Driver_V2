@@ -262,10 +262,6 @@ class MotorClient:
         """单播电角度对齐；method 见 ElecAlignMethod。"""
         return self._send(motor_id, CMD.ALIGN_ELECTRIC_ANGLE, bytes([method & 0xFF]))
 
-    def broadcast_align_angle(self, method: int = 0) -> bool:
-        """广播电角度对齐；method 见 ElecAlignMethod。"""
-        return self._send(CAN_BROADCAST_ID, CMD.ALIGN_ELECTRIC_ANGLE, bytes([method & 0xFF]))
-
     def kth71_cal_start(self, motor_id: int) -> bool:
         return self._send(motor_id, CMD.KTH71_CAL_START)
 
