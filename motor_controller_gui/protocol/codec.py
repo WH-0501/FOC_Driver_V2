@@ -21,6 +21,8 @@ from .constants import (
     ALIGN_FLAG_ENGAGED,
     ALIGN_FLAG_FLIPPED,
     ALIGN_REPLY_LEN,
+    MOTOR_PARAM_FLAG_ALIGN_DONE,
+    MOTOR_PARAM_REPLY_LEN,
     ELEC_ALIGN_METHOD_NAMES,
     ElecAlignMethod,
     ErrorCode,
@@ -685,6 +687,26 @@ def _i8(raw: int) -> int:
     return raw - 256 if raw >= 128 else raw
 
 
+def parse_motor_param_response(payload: bytes) -> Optional[Dict[str, Any]]:
+    """解析 0x53 应答：电机本体只读参数。"""
+    if len(payload) < MOTOR_PARAM_REPLY_LEN:
+        return None
+    gear_x1000 = struct.unpack(">H", payload[2:4])[0]
+    theta_elec_urad, theta_mech_urad = struct.unpack(">ii", payload[4:12])
+    cpr = struct.unpack(">H", payload[12:14])[0]
+    flags = int(payload[14])
+    direction = _i8(int(payload[1]))
+    return {
+        "pole_pairs": int(payload[0]),
+        "direction": direction,
+        "gear_ratio": gear_x1000 / 1000.0,
+        "theta_elec_offset_rad": theta_elec_urad / ALIGN_ANGLE_SCALE,
+        "theta_offset_rad": theta_mech_urad / ALIGN_ANGLE_SCALE,
+        "encoder_counts_per_rev": cpr,
+        "electrical_align_done": bool(flags & MOTOR_PARAM_FLAG_ALIGN_DONE),
+    }
+
+
 def parse_align_result(payload: bytes) -> Dict[str, Any]:
     """解析 0xAB 应答。短包（旧固件 1 B）只有 error_t，detail 为 False。"""
     if not payload:
@@ -759,7 +781,10 @@ def format_align_result_lines(result: Dict[str, Any]) -> List[str]:
     lines.append(f"极性探针 Iq: {float(result.get('polarity_iq_a', 0.0)):.3f} A")
     lines.append(f"转子吸合: {'是' if result.get('engaged') else '否'}")
     if result.get("ok"):
-        lines.append("提示: 请在参数页保存；转矩模式请同时观察 Id（Id 过大通常表示电角仍偏 90°）。")
+        lines.append(
+            "提示: 请在本页「保存驱动器参数到 Flash」（与参数页保存相同，0x4D）；"
+            "转矩模式请同时观察 Id（Id 过大通常表示电角仍偏 90°）。"
+        )
     return lines
 
 

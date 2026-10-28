@@ -6,12 +6,13 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QLabel,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
-from typing import Any, Dict
+from typing import Any, Callable, Dict, Optional
 
 from core.motor_client import MotorClient
 from protocol import (
@@ -32,10 +33,17 @@ def _hline() -> QFrame:
 class MotorCalWidget(QWidget):
     """校准相关操作集中于此页。"""
 
-    def __init__(self, motor_id: int, client: MotorClient, parent=None):
+    def __init__(
+        self,
+        motor_id: int,
+        client: MotorClient,
+        is_enabled_fn: Optional[Callable[[], bool]] = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.motor_id = motor_id
         self.client = client
+        self._is_enabled_fn = is_enabled_fn or (lambda: False)
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -127,6 +135,30 @@ class MotorCalWidget(QWidget):
         enc_group.setLayout(enc_layout)
         root.addWidget(enc_group)
 
+        root.addWidget(_hline())
+
+        # --- 驱动器 Flash（电角对齐 / 机械零点 / 参数页改动等）---
+        flash_group = QGroupBox("驱动器参数持久化")
+        flash_layout = QVBoxLayout()
+        self.save_flash_btn = QPushButton("保存驱动器参数到 Flash")
+        flash_hint = QLabel(
+            "发送 0x4D，将当前 RAM 中的整份 motor_config 写入 MCU Flash，"
+            "包括：电角零偏与 direction（电角度对齐）、机械零点（设原点）、"
+            "以及 PID / 保护等参数页已下发项。须失能后操作。\n"
+            "KTH71 编码器 ANLC 校准结果保存在编码器芯片内，完成 ANLC 后由芯片自行持久化，"
+            "无需也无法通过本按钮保存。"
+        )
+        flash_hint.setWordWrap(True)
+        flash_hint.setStyleSheet("color: #666;")
+        self.save_flash_status = QLabel("Flash：尚未保存")
+        self.save_flash_status.setWordWrap(True)
+        self.save_flash_status.setStyleSheet("color: #666;")
+        flash_layout.addWidget(self.save_flash_btn)
+        flash_layout.addWidget(flash_hint)
+        flash_layout.addWidget(self.save_flash_status)
+        flash_group.setLayout(flash_layout)
+        root.addWidget(flash_group)
+
         root.addStretch(1)
         self.setLayout(root)
 
@@ -145,6 +177,7 @@ class MotorCalWidget(QWidget):
         self.kth71_cal_status_btn.clicked.connect(
             lambda: self.client.kth71_cal_status(self.motor_id)
         )
+        self.save_flash_btn.clicked.connect(self._save_params_to_flash)
 
         self._on_align_method_changed()
 
@@ -175,3 +208,28 @@ class MotorCalWidget(QWidget):
         self.align_result_label.setText("对齐结果：已发送，等待应答…")
         self.align_result_label.setStyleSheet("color: #666;")
         self.client.align_electric_angle(self.motor_id, self._current_align_method())
+
+    def _require_disabled(self) -> bool:
+        if self._is_enabled_fn():
+            QMessageBox.warning(
+                self,
+                "无法保存",
+                f"电机 {self.motor_id} 当前为使能状态，请先禁使能后再保存到 Flash。",
+            )
+            return False
+        return True
+
+    def _save_params_to_flash(self) -> None:
+        if not self._require_disabled():
+            return
+        self.save_flash_status.setText("Flash：已发送 0x4D，等待应答…")
+        self.save_flash_status.setStyleSheet("color: #666;")
+        self.client.save_params(self.motor_id)
+
+    def show_save_params_result(self, ok: bool) -> None:
+        if ok:
+            self.save_flash_status.setText("Flash：保存成功（掉电后仍有效）")
+            self.save_flash_status.setStyleSheet("color: #1b5e20;")
+        else:
+            self.save_flash_status.setText("Flash：保存失败（见日志）")
+            self.save_flash_status.setStyleSheet("color: #b71c1c;")

@@ -596,6 +596,45 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       can_fd_custom_reply(CAN_FD_CMD_GET_MOTOR_TYPE, reply_payload, 1u);
       break;
 
+    case CAN_FD_CMD_GET_MOTOR_PARAM:
+    {
+      motor_runtime_t *rt = motor_runtime(m);
+      uint8_t mp_reply[CAN_FD_MOTOR_PARAM_REPLY_LEN];
+      float gear_ratio;
+      uint16_t gear_x1000;
+      uint16_t cpr_u16;
+
+      memset(mp_reply, 0, sizeof(mp_reply));
+      mp_reply[0] = m->config.param.pole_pairs;
+      mp_reply[1] = (uint8_t)m->config.param.direction;
+      gear_ratio = m->config.param.gear_ratio;
+      if (gear_ratio < 0.0f)
+      {
+        gear_ratio = 0.0f;
+      }
+      if (gear_ratio > 65.535f)
+      {
+        gear_ratio = 65.535f;
+      }
+      gear_x1000 = (uint16_t)(gear_ratio * 1000.0f + 0.5f);
+      can_fd_codec_write_u16_be(&mp_reply[2], gear_x1000);
+      can_fd_write_i32_be(&mp_reply[4],
+                            can_fd_rad_to_urad(m->config.param.theta_elec_offset_rad));
+      can_fd_write_i32_be(&mp_reply[8], can_fd_rad_to_urad(m->config.param.theta_offset_rad));
+      cpr_u16 = (uint16_t)m->config.param.encoder_counts_per_rev;
+      if (m->config.param.encoder_counts_per_rev > 65535u)
+      {
+        cpr_u16 = 65535u;
+      }
+      can_fd_codec_write_u16_be(&mp_reply[12], cpr_u16);
+      if ((rt != NULL) && (rt->electrical_align_done != 0))
+      {
+        mp_reply[14] |= CAN_FD_MOTOR_PARAM_FLAG_ALIGN_DONE;
+      }
+      can_fd_custom_reply(CAN_FD_CMD_GET_MOTOR_PARAM, mp_reply, CAN_FD_MOTOR_PARAM_REPLY_LEN);
+      break;
+    }
+
     case CAN_FD_CMD_SET_REPORT_RATE:
       if (payload_len >= 2u)
       {

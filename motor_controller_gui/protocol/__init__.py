@@ -94,6 +94,7 @@ from .codec import (
     parse_api_result,
     parse_bool_result,
     parse_kth71_anlc_status,
+    parse_motor_param_response,
     parse_frame,
     parse_node_id_response,
     parse_period_report,
@@ -198,6 +199,7 @@ __all__ = [
     "parse_cur_pid_response",
     "parse_pid_response",
     "parse_protect_response",
+    "parse_motor_param_response",
     "parse_stiff_damp_response",
     "pos_raw_to_angle",
 ]

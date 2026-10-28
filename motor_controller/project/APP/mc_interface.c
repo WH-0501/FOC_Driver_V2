@@ -71,8 +71,8 @@ error_t mc_init(void)
    * 不可 motor_config_init(&m->config) 后调 foc_init(m,&m->config)：
    * foc_init 开头 memset(m,0) 会清零刚载入的 config，且 *config 读到的也是全 0。
    */
-  // (void)motor_config_init(&cfg);
-  motor_config_reset(&cfg);
+  (void)motor_config_init(&cfg);
+  // motor_config_reset(&cfg); // for test
 
   ret = mc_platform_init();
   if (ret != ERR_NONE)

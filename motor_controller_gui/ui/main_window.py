@@ -39,6 +39,7 @@ from protocol import (
     parse_api_result,
     parse_bool_result,
     parse_kth71_anlc_status,
+    parse_motor_param_response,
     parse_frame,
     parse_fw_version_payload,
     parse_iap_status_payload,
@@ -522,8 +523,20 @@ class MainWindow(QMainWindow):
                 f"OCP={prot.get('over_current_ma')}mA UVLO={prot.get('under_voltage_V')}V "
                 f"OVP={prot.get('over_voltage_V')}V"
             )
+        elif cmd == CMD.GET_MOTOR_PARAM:
+            mp = parse_motor_param_response(payload)
+            if mp is not None and panel:
+                panel.apply_motor_param(mp)
+                self.log(
+                    f"电机 {arb_id} 本体参数: pp={mp.get('pole_pairs')} "
+                    f"dir={mp.get('direction')} gear={mp.get('gear_ratio'):.3f}"
+                )
+            elif mp is None:
+                self.log(f"电机 {arb_id} 本体参数: 应答无效 (len={len(payload)})")
         elif cmd == CMD.SAVE_PARAMS:
             ok = parse_bool_result(payload)
+            if panel:
+                panel.apply_save_params_result(ok)
             if ok:
                 self.log(f"电机 {arb_id} 保存参数: 成功")
             else:
@@ -551,6 +564,8 @@ class MainWindow(QMainWindow):
             if panel:
                 panel.apply_align_result(align)
             self.log(f"电机 {arb_id} 电角度对齐: " + "；".join(format_align_result_lines(align)))
+            if align.get("ok"):
+                self.client.get_motor_param(arb_id)
         elif cmd == CMD.KTH71_CAL_START:
             self._log_api_result(arb_id, "KTH71 开始校准", payload)
         elif cmd == CMD.KTH71_CAL_TRIGGER:

@@ -1,5 +1,6 @@
 """电机参数配置面板。"""
 
+import math
 from typing import Callable, Dict, Optional
 
 from PyQt5.QtWidgets import (
@@ -7,6 +8,7 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QLineEdit,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -16,6 +18,8 @@ from PyQt5.QtWidgets import (
 
 from core.motor_client import MotorClient
 from protocol import PID_VALUE_MAX, cur_pid_params_in_range, pid_params_in_range
+
+_READONLY_FIELD_STYLE = "background-color: #f5f5f5; color: #333;"
 
 
 class MotorParamWidget(QGroupBox):
@@ -58,8 +62,46 @@ class MotorParamWidget(QGroupBox):
         layout.addWidget(d, row, 3)
         return p, i, d
 
+    @staticmethod
+    def _fmt_rad_field(rad: float) -> str:
+        deg = rad * 180.0 / math.pi
+        return f"{rad:.4f} rad（{deg:.2f}°）"
+
+    def _add_readonly_row(self, grid: QGridLayout, row: int, label: str) -> QLineEdit:
+        field = QLineEdit("—")
+        field.setReadOnly(True)
+        field.setStyleSheet(_READONLY_FIELD_STYLE)
+        grid.addWidget(QLabel(label), row, 0)
+        grid.addWidget(field, row, 1, 1, 4)
+        return field
+
     def _build_ui(self) -> None:
         layout = QVBoxLayout()
+
+        body_group = QGroupBox("电机本体（只读，不可在本页修改）")
+        body_grid = QGridLayout()
+        self.ro_pole_pairs = self._add_readonly_row(body_grid, 0, "极对数:")
+        self.ro_direction = self._add_readonly_row(body_grid, 1, "旋转方向:")
+        self.ro_gear_ratio = self._add_readonly_row(body_grid, 2, "减速比:")
+        self.ro_theta_elec_offset = self._add_readonly_row(body_grid, 3, "电角零偏:")
+        self.ro_theta_offset = self._add_readonly_row(body_grid, 4, "机械零偏:")
+        self.ro_encoder_cpr = self._add_readonly_row(body_grid, 5, "编码器 CPR:")
+        self.ro_align_done = self._add_readonly_row(body_grid, 6, "电角对齐:")
+        body_hint = QLabel(
+            "由固件编译默认值、电角度对齐、设原点等流程写入；"
+            "持久化请保存 Flash。需固件支持 0x53 读取，否则显示「—」。"
+        )
+        body_hint.setWordWrap(True)
+        body_hint.setStyleSheet("color: #666;")
+        self.get_motor_param_btn = QPushButton("读取")
+        body_btn = QHBoxLayout()
+        body_btn.addWidget(self.get_motor_param_btn)
+        body_btn.addStretch()
+        body_grid.addLayout(body_btn, 7, 0, 1, 5)
+        body_grid.addWidget(body_hint, 8, 0, 1, 5)
+        body_group.setLayout(body_grid)
+        layout.addWidget(body_group)
+
         grid = QGridLayout()
         grid.addWidget(QLabel("P"), 0, 1)
         grid.addWidget(QLabel("I"), 0, 2)
@@ -160,6 +202,7 @@ class MotorParamWidget(QGroupBox):
         self.set_node_id_btn.clicked.connect(self._set_node_id)
         self.save_btn.clicked.connect(self._save_params)
         self.reset_btn.clicked.connect(self._reset_factory)
+        self.get_motor_param_btn.clicked.connect(self._get_motor_param)
 
     def _require_disabled(self) -> bool:
         if self._is_enabled_fn():
@@ -185,6 +228,9 @@ class MotorParamWidget(QGroupBox):
 
     def _get_protect(self) -> None:
         self.client.get_protect(self.motor_id)
+
+    def _get_motor_param(self) -> None:
+        self.client.get_motor_param(self.motor_id)
 
     def _save_params(self) -> None:
         if not self._require_disabled():
@@ -271,3 +317,26 @@ class MotorParamWidget(QGroupBox):
         self.ocp.setValue(int(values.get("over_current_ma", 0)))
         self.uvlo.setValue(int(values.get("under_voltage_V", 0)))
         self.ovp.setValue(int(values.get("over_voltage_V", 0)))
+
+    def apply_motor_param(self, values: Dict) -> None:
+        if not values:
+            return
+        self.ro_pole_pairs.setText(str(int(values.get("pole_pairs", 0))))
+        direction = int(values.get("direction", 0))
+        if direction == 1:
+            dir_text = "CW（顺时针为正）"
+        elif direction == -1:
+            dir_text = "CCW（逆时针为正）"
+        else:
+            dir_text = f"未知 ({direction})"
+        self.ro_direction.setText(dir_text)
+        self.ro_gear_ratio.setText(f"{float(values.get('gear_ratio', 0.0)):.3f}")
+        self.ro_theta_elec_offset.setText(
+            self._fmt_rad_field(float(values.get("theta_elec_offset_rad", 0.0)))
+        )
+        self.ro_theta_offset.setText(
+            self._fmt_rad_field(float(values.get("theta_offset_rad", 0.0)))
+        )
+        self.ro_encoder_cpr.setText(str(int(values.get("encoder_counts_per_rev", 0))))
+        align_done = values.get("electrical_align_done")
+        self.ro_align_done.setText("已完成" if align_done else "未完成")

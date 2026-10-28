@@ -429,13 +429,17 @@ class MotorClient:
     def get_protect(self, motor_id: int) -> bool:
         return self._send(motor_id, CMD.GET_PROTECT)
 
+    def get_motor_param(self, motor_id: int) -> bool:
+        return self._send(motor_id, CMD.GET_MOTOR_PARAM)
+
     def read_all_params(self, motor_id: int) -> None:
-        """读取单电机全部可配置参数（PID / 刚度阻尼 / 保护）。"""
+        """读取单电机全部可配置参数（PID / 刚度阻尼 / 保护 / 电机本体只读）。"""
         self.get_pos_pid(motor_id)
         self.get_vel_pid(motor_id)
         self.get_cur_pid(motor_id)
         self.get_stiff_damp(motor_id)
         self.get_protect(motor_id)
+        self.get_motor_param(motor_id)
 
     def set_pos_pid(self, motor_id: int, p: float, i: float, d: float) -> bool:
         return self._send(

@@ -36,7 +36,11 @@ class MotorPanel(QWidget):
             log_fn,
             is_enabled_fn=lambda: self.status_widget.is_enabled(),
         )
-        self.cal_widget = MotorCalWidget(motor_id, client)
+        self.cal_widget = MotorCalWidget(
+            motor_id,
+            client,
+            is_enabled_fn=lambda: self.status_widget.is_enabled(),
+        )
         self.iap_widget = IapWidget(motor_id, client, log_fn=log_fn)
 
         layout = QVBoxLayout()
@@ -62,11 +66,17 @@ class MotorPanel(QWidget):
     def apply_stiff_damp(self, values: Dict) -> None:
         self.param_widget.apply_stiff_damp(values)
 
-    def apply_protect(self, values: Dict) -> None:
+    def apply_protect(self, values: Dict[str, float]) -> None:
         self.param_widget.apply_protect(values)
+
+    def apply_motor_param(self, values: Dict) -> None:
+        self.param_widget.apply_motor_param(values)
 
     def apply_align_result(self, result: Dict[str, Any]) -> None:
         self.cal_widget.show_align_result(result)
+
+    def apply_save_params_result(self, ok: bool) -> None:
+        self.cal_widget.show_save_params_result(ok)
 
     def apply_protocol_version(self, version: ProtocolVersion) -> None:
         self.control_widget.apply_protocol_version(version)
