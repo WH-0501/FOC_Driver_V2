@@ -14,6 +14,14 @@
 #define CAN_FD_PID_FORMAT       4096.0f  ///< V2 PID / MIT 刚度阻尼：运行值 = raw / CAN_FD_PID_FORMAT
 #define CAN_FD_POS_SCALE        128.0f  ///< 位置 Q7：1 LSB = 1/128 rad
 
+/** 0xAB 应答电角：int32 大端，1 LSB = 1e-6 rad */
+#define CAN_FD_ALIGN_ANGLE_SCALE  1000000.0f
+#define CAN_FD_ALIGN_REPLY_LEN    14u
+#define CAN_FD_ALIGN_FLAG_OK      (1u << 0)  ///< align_ok
+#define CAN_FD_ALIGN_FLAG_FLIPPED (1u << 1)  ///< 本次翻转了 direction
+#define CAN_FD_ALIGN_FLAG_ENGAGED (1u << 2)  ///< 转子已吸合
+#define CAN_FD_ALIGN_FLAG_DONE    (1u << 3)  ///< electrical_align_done
+
 #define CAN_FD_REPORT_HZ_DEFAULT  1000u ///< 默认上报频率 1000Hz
 #define CAN_FD_REPORT_HZ_MAX      1000u ///< 最大上报频率 1000Hz
 

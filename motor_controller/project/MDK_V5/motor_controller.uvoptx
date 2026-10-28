@@ -152,9 +152,9 @@
         <Bp>
           <Number>0</Number>
           <Type>0</Type>
-          <LineNumber>321</LineNumber>
+          <LineNumber>150</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134239006</Address>
+          <Address>134244790</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
@@ -163,39 +163,23 @@
           <BreakIfRCount>1</BreakIfRCount>
           <Filename>..\APP\FOC\encoder.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\motor_controller\../APP/FOC/encoder.c\321</Expression>
+          <Expression>\\motor_controller\../APP/FOC/encoder.c\150</Expression>
         </Bp>
         <Bp>
           <Number>1</Number>
           <Type>0</Type>
-          <LineNumber>378</LineNumber>
+          <LineNumber>137</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134241008</Address>
+          <Address>134225426</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
           <BreakIfRCount>1</BreakIfRCount>
-          <Filename>..\APP\FOC\foc.c</Filename>
+          <Filename>..\APP\Driver\encoder\kth71xx.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\motor_controller\../APP/FOC/foc.c\378</Expression>
-        </Bp>
-        <Bp>
-          <Number>2</Number>
-          <Type>0</Type>
-          <LineNumber>345</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>134240812</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
-          <Filename>..\APP\FOC\foc.c</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression>\\motor_controller\../APP/FOC/foc.c\345</Expression>
+          <Expression>\\motor_controller\../APP/Driver/encoder/kth71xx.c\137</Expression>
         </Bp>
       </Breakpoint>
       <WatchWindow1>

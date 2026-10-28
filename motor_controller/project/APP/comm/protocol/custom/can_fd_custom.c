@@ -256,6 +256,128 @@ static void can_fd_custom_reply_pid(uint8_t reply_cmd, const pid_param_t *pid)
   can_fd_custom_reply(reply_cmd, payload, 6u);
 }
 
+static int32_t can_fd_rad_to_urad(float rad)
+{
+  float scaled;
+
+  if (rad != rad)
+  {
+    return 0;
+  }
+
+  scaled = rad * CAN_FD_ALIGN_ANGLE_SCALE;
+  if (scaled >= 2147483647.0f)
+  {
+    return 2147483647;
+  }
+  if (scaled <= -2147483648.0f)
+  {
+    return (int32_t)(-2147483647 - 1);
+  }
+  if (scaled >= 0.0f)
+  {
+    scaled += 0.5f;
+  }
+  else
+  {
+    scaled -= 0.5f;
+  }
+  return (int32_t)scaled;
+}
+
+static int16_t can_fd_amp_to_ma(float amp)
+{
+  float ma;
+
+  if (amp != amp)
+  {
+    return 0;
+  }
+
+  ma = amp * 1000.0f;
+  if (ma >= 32767.0f)
+  {
+    return 32767;
+  }
+  if (ma <= -32768.0f)
+  {
+    return (int16_t)(-32767 - 1);
+  }
+  if (ma >= 0.0f)
+  {
+    ma += 0.5f;
+  }
+  else
+  {
+    ma -= 0.5f;
+  }
+  return (int16_t)ma;
+}
+
+static void can_fd_write_i32_be(uint8_t *p, int32_t v)
+{
+  uint32_t u = (uint32_t)v;
+
+  p[0] = (uint8_t)(u >> 24);
+  p[1] = (uint8_t)(u >> 16);
+  p[2] = (uint8_t)(u >> 8);
+  p[3] = (uint8_t)u;
+}
+
+/**
+ * 0xAB 应答 14 B：
+ * [0] error_t
+ * [1] method
+ * [2] direction int8（1=CW，-1=CCW，0=未知）
+ * [3] flags
+ * [4..7] 对齐后电角 int32 BE，1 LSB = 1e-6 rad
+ * [8..11] 电角零偏 int32 BE，同单位
+ * [12..13] 极性探针 Iq int16 BE，单位 mA
+ */
+static void can_fd_custom_reply_align(error_t result, uint8_t method)
+{
+  motor_handle_t *m = s_motor;
+  motor_runtime_t *rt;
+  uint8_t reply[CAN_FD_ALIGN_REPLY_LEN] = {0};
+  uint8_t flags = 0u;
+
+  reply[0] = (uint8_t)result;
+  reply[1] = method;
+
+  if (m == NULL)
+  {
+    can_fd_custom_reply(CAN_FD_CMD_ALIGN_ELECTRIC_ANGLE, reply, CAN_FD_ALIGN_REPLY_LEN);
+    return;
+  }
+
+  reply[2] = (uint8_t)m->config.param.direction;
+  rt = motor_runtime(m);
+  if (rt != NULL)
+  {
+    if (rt->align_ok)
+    {
+      flags |= CAN_FD_ALIGN_FLAG_OK;
+    }
+    if (rt->align_direction_flipped)
+    {
+      flags |= CAN_FD_ALIGN_FLAG_FLIPPED;
+    }
+    if (rt->align_engaged)
+    {
+      flags |= CAN_FD_ALIGN_FLAG_ENGAGED;
+    }
+    if (rt->electrical_align_done)
+    {
+      flags |= CAN_FD_ALIGN_FLAG_DONE;
+    }
+    can_fd_write_i32_be(&reply[4], can_fd_rad_to_urad(rt->align_theta_after_rad));
+    can_fd_codec_write_i16_be(&reply[12], can_fd_amp_to_ma(rt->align_polarity_test_iq));
+  }
+  reply[3] = flags;
+  can_fd_write_i32_be(&reply[8], can_fd_rad_to_urad(m->config.param.theta_elec_offset_rad));
+  can_fd_custom_reply(CAN_FD_CMD_ALIGN_ELECTRIC_ANGLE, reply, CAN_FD_ALIGN_REPLY_LEN);
+}
+
 static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, uint8_t payload_len)
 {
   motor_handle_t *m = s_motor;
@@ -492,9 +614,11 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
     case CAN_FD_CMD_ALIGN_ELECTRIC_ANGLE:
       if (can_fd_custom_require_disabled())
       {
+        uint8_t method = (uint8_t)CAL_ELEC_ALIGN_METHOD_DEFAULT;
+
         if (payload_len >= 1u)
         {
-          uint8_t method = payload[0];
+          method = payload[0];
           if (method <= (uint8_t)CAL_ELEC_ALIGN_HFI)
           {
             result = mc_align_electrical((cal_elec_align_method_t)method);
@@ -508,8 +632,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         {
           result = mc_align_electrical(CAL_ELEC_ALIGN_METHOD_DEFAULT);
         }
-        reply_payload[0] = (uint8_t)result;
-        can_fd_custom_reply(CAN_FD_CMD_ALIGN_ELECTRIC_ANGLE, reply_payload, 1u);
+        can_fd_custom_reply_align(result, method);
       }
       break;
 
