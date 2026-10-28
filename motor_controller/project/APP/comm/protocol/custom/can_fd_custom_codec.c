@@ -83,19 +83,21 @@ int16_t can_fd_codec_rad_s_to_vel_q7_rpm(float rad_s)
 {
   float rpm = RAD_PER_SEC_TO_RPM(rad_s);
 
-  // if (rpm > 32767.0f / CAN_FD_POS_SCALE)
-  // {
-  //   rpm = 32767.0f / CAN_FD_POS_SCALE;
-  // }
-  // if (rpm < -32768.0f / CAN_FD_POS_SCALE)
-  // {
-  //   rpm = -32768.0f / CAN_FD_POS_SCALE;
-  // }
+  if (rpm > 32767.0f)
+  {
+    rpm = 32767.0f;
+  }
+  if (rpm < -32768.0f)
+  {
+    rpm = -32768.0f;
+  }
 
-  // rad/s 已转换为输出轴,因此需要再转换为输入轴.
-  rpm = rpm * GEAR_RATIO;
-
-  return (int16_t)(rpm /* * CAN_FD_POS_SCALE */);
+  /* 与 0x02 目标速度一致：关节端（减速端）RPM，勿乘 gear_ratio */
+  if (rpm >= 0.0f)
+  {
+    return (int16_t)(rpm + 0.5f);
+  }
+  return (int16_t)(rpm - 0.5f);
 }
 
 /*

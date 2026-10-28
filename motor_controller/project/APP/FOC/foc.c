@@ -163,15 +163,23 @@ static void foc_speed_open_control(motor_handle_t *m, float target_speed)
   }
   else
   {
-    rt->open_loop_uq = OPEN_LOOP_UQ_MAX;
-    // rt->open_loop_iq = OPEN_LOOP_IQ_MAX;
-    /* ref.speed / open_loop_omega 为关节端 [rad/s]；电角速率 = pp × ω_shaft = pp × ω_joint × gear_ratio */
+    float spin_sign = rt->open_loop_omega;
+    float gear_ratio = (m->config.param.gear_ratio > 0.0f) ? m->config.param.gear_ratio : 1.0f;
+    float uq_mag = OPEN_LOOP_UQ_MAX;
+
+    if (fabsf(spin_sign) < OPEN_LOOP_OMEGA_EPS_RAD_S)
     {
-      float gear_ratio = (m->config.param.gear_ratio > 0.0f) ? m->config.param.gear_ratio : 1.0f;
-      rt->open_loop_elec_angle_rad = angle_normalize(
-          rt->open_loop_elec_angle_rad
-          + (float)m->config.param.pole_pairs * rt->open_loop_omega * gear_ratio * dt);
+      spin_sign = target_speed;
     }
+    if (spin_sign < 0.0f)
+    {
+      uq_mag = -uq_mag;
+    }
+    rt->open_loop_uq = uq_mag;
+    /* ref.speed / open_loop_omega 为关节端 [rad/s]；电角速率 = pp × ω_shaft = pp × ω_joint × gear_ratio */
+    rt->open_loop_elec_angle_rad = angle_normalize(
+        rt->open_loop_elec_angle_rad
+        + (float)m->config.param.pole_pairs * rt->open_loop_omega * gear_ratio * dt);
   }
 
   foc_voltage(m, rt->open_loop_uq, 0.0f, rt->open_loop_elec_angle_rad);

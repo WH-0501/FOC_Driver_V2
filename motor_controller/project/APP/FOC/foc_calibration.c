@@ -21,8 +21,11 @@ typedef struct
   motor_runtime_t *rt;
   cal_elec_align_cfg_t cfg;
   cal_elec_align_method_t method;
+  /** 对齐角度（默认 ALIGN_ELECTRICAL_ANGLE_RAD: 3π/2） */
   float align_angle;
+  /** 锁定电压（默认 ALIGN_ELECTRICAL_VOLTAGE_D_V） */
   float lock_ud;
+  /** 锁定电压（默认 ALIGN_ELECTRICAL_VOLTAGE_Q_V） */
   float lock_uq;
   int8_t dir;
   float raw_locked;
@@ -68,7 +71,7 @@ static float cal_encoder_raw_elec_rad(const motor_handle_t *m)
   }
 
   pole_pairs = (m->config.param.pole_pairs > 0u) ? (float)m->config.param.pole_pairs : 1.0f;
-  return m->state.shaft.angle_rad * pole_pairs;
+  return m->state.shaft.angle_rad * pole_pairs; // 电机轴单圈机械角度 × pole_pairs = 电机单圈电角度
 }
 
 static void cal_flip_direction(cal_ctx_t *ctx)
@@ -101,13 +104,12 @@ static bool cal_polarity_probe_needs_flip(float iq_probe, float iq_min_a)
     return false;
   }
 
-  // if (CURRENT_SENSE_PHASE_POLARITY < 0.0f)
-  // {
-  //   return (iq_probe > 0.0f);
-  // }
+  if (CURRENT_SENSE_PHASE_POLARITY < 0.0f)
+  {
+    return (iq_probe > 0.0f);
+  }
 
-  // return (iq_probe < 0.0f);
-  return (iq_probe > 0.0f);
+  return (iq_probe < 0.0f);
 }
 
 static bool cal_polarity_probe_aligned(float iq_probe, float iq_min_a)
@@ -117,13 +119,51 @@ static bool cal_polarity_probe_aligned(float iq_probe, float iq_min_a)
     return true;
   }
 
-  // if (CURRENT_SENSE_PHASE_POLARITY < 0.0f)
-  // {
-  //   return (iq_probe < 0.0f);
-  // }
+  if (CURRENT_SENSE_PHASE_POLARITY < 0.0f)
+  {
+    return (iq_probe < 0.0f);
+  }
 
-  // return (iq_probe > 0.0f);
-  return (iq_probe < 0.0f);
+  return (iq_probe > 0.0f);
+}
+
+
+
+static float cal_expected_theta_elec_rad(const cal_ctx_t *ctx)
+{
+  if (ctx == NULL)
+  {
+    return 0.0f;
+  }
+
+  switch (ctx->method)
+  {
+    case CAL_ELEC_ALIGN_UQ:
+    case CAL_ELEC_ALIGN_DUAL_POINT_UQ:
+      return 0.0f;
+
+    case CAL_ELEC_ALIGN_UD:
+    case CAL_ELEC_ALIGN_DUAL_POINT:
+    case CAL_ELEC_ALIGN_HFI:
+    default:
+      return ctx->align_angle;
+  }
+}
+
+static bool cal_theta_matches_expected(const cal_ctx_t *ctx, float tol_rad)
+{
+  float expect;
+  float err;
+
+  if ((ctx == NULL) || (ctx->m == NULL))
+  {
+    return false;
+  }
+
+  foc_sense_update(ctx->m);
+  expect = cal_expected_theta_elec_rad(ctx);
+  err = fabsf(angle_normalize(ctx->m->state.theta_elec_rad - expect + _PI) - _PI);
+  return err <= tol_rad;
 }
 
 static void cal_hold_voltage(cal_ctx_t *ctx, float ud, float uq, float angle_el, uint32_t hold_ms)
@@ -143,55 +183,31 @@ static void cal_hold_voltage(cal_ctx_t *ctx, float ud, float uq, float angle_el,
   }
 }
 
-static float cal_sample_raw_at_lock(cal_ctx_t *ctx,
-                                    float ud,
-                                    float uq,
-                                    float angle_el,
-                                    float *spread_out)
+static float cal_sample_raw_at_lock(cal_ctx_t *ctx, float ud, float uq,
+                                    float angle_el, float *spread_out)
 {
-  float sum = 0.0f;
-  float raw;
-  float raw_min = 1e9f;
-  float raw_max = -1e9f;
-  uint8_t count = ctx->cfg.sample_count;
+  uint8_t i;
+  float first = 0.0f, sum = 0.0f, lo = 0.0f, hi = 0.0f;
 
-  if (spread_out != NULL)
-  {
-    *spread_out = 0.0f;
-  }
-  if ((ctx == NULL) || (ctx->m == NULL) || (count == 0u))
-  {
-    return 0.0f;
-  }
+  if (spread_out != NULL) *spread_out = 1e9f;
+  if (ctx == NULL || ctx->m == NULL || ctx->cfg.sample_count == 0u) return 0.0f;
 
-  for (uint8_t i = 0u; i < count; i++)
+  for (i = 0; i < ctx->cfg.sample_count; ++i)
   {
+    float raw, delta;
     foc_voltage(ctx->m, uq, ud, angle_el);
     foc_sense_update(ctx->m);
-    raw = cal_encoder_raw_elec_rad(ctx->m);
-    sum += raw;
-    if (raw < raw_min)
-    {
-      raw_min = raw;
-    }
-    if (raw > raw_max)
-    {
-      raw_max = raw;
-    }
+    raw = angle_normalize(cal_encoder_raw_elec_rad(ctx->m)); // 电角度归一化
+    /** 记录初次采样值,后续多次采样计算相对该初值的 spread, 并计算平均差值修正采样值 */
+    if (i == 0u) first = raw;
+    delta = angle_normalize(raw - first + _PI) - _PI;
+    sum += delta;
+    if (delta < lo) lo = delta;
+    if (delta > hi) hi = delta;
     delay_ms(ctx->cfg.sample_interval_ms);
   }
-
-  if (spread_out != NULL)
-  {
-    float range = raw_max - raw_min;
-    if (range > _PI)
-    {
-      range = _2PI - range;
-    }
-    *spread_out = range;
-  }
-
-  return sum / (float)count;
+  if (spread_out != NULL) *spread_out = hi - lo;
+  return angle_normalize(first + sum / (float)ctx->cfg.sample_count);
 }
 
 static float cal_probe_iq(cal_ctx_t *ctx, float uq, float ud, float angle_el, uint16_t hold_ms)
@@ -224,7 +240,7 @@ static bool cal_spread_ok(const cal_ctx_t *ctx, float spread)
 
 static float cal_offset_friction_avg(float off0, float off1)
 {
-  return angle_normalize(0.5f * (off0 + off1));
+  return angle_normalize(off0 + 0.5f * (angle_normalize(off1 - off0 + _PI) - _PI));
 }
 
 static cal_lock_axis_t cal_ctx_lock_axis(const cal_ctx_t *ctx)
@@ -368,8 +384,10 @@ static error_t cal_lock_sample_hold(cal_ctx_t *ctx,
                                     float *spread_out)
 {
   float spread = 0.0f;
-
+  
+  // 保持电压，角度为angle_el，持续hold_ms时间
   cal_hold_voltage(ctx, ctx->lock_ud, ctx->lock_uq, angle_el, hold_ms);
+  // 采样编码器raw电角
   ctx->raw_locked = cal_sample_raw_at_lock(ctx,
                                            ctx->lock_ud,
                                            ctx->lock_uq,
@@ -387,6 +405,14 @@ static error_t cal_lock_sample_hold(cal_ctx_t *ctx,
   return ERR_NONE;
 }
 
+/**
+ * @brief 锁定采样。在角度为angle_el下，保持电压，采样编码器raw电角，检查分散度。
+ * 
+ * @param ctx 
+ * @param angle_el 
+ * @param spread_out 
+ * @return error_t 
+ */
 static error_t cal_lock_sample(cal_ctx_t *ctx, float angle_el, float *spread_out)
 {
   return cal_lock_sample_hold(ctx, angle_el, ctx->cfg.hold_ms, spread_out);
@@ -402,45 +428,7 @@ static error_t cal_lock_sample(cal_ctx_t *ctx, float angle_el, float *spread_out
  * @param spread_out 
  * @return uint8_t 
  */
-static uint8_t cal_check_rotor_engaged(cal_ctx_t *ctx,
-                                       float ud,
-                                       float raw_locked,
-                                       float *raw_engage_out,
-                                       float *spread_out)
-{
-  const float engage_angle = angle_normalize(ctx->align_angle + _PI);
-  float raw_engage;
-  float spread;
-  float delta;
 
-  /* 与旧 foc_align_check_rotor_engaged 一致：反相点仅 Ud，Uq=0；π 步进需更长保持 */
-  cal_hold_voltage(ctx, ud, 0.0f, engage_angle, ctx->cfg.hold_ms);
-  raw_engage = cal_sample_raw_at_lock(ctx,
-                                      ud,
-                                      0.0f,
-                                      engage_angle,
-                                      &spread);
-
-  if (raw_engage_out != NULL)
-  {
-    *raw_engage_out = raw_engage;
-  }
-  if (spread_out != NULL)
-  {
-    *spread_out = spread;
-  }
-
-  delta = fabsf(angle_normalize(raw_engage - raw_locked));
-  if (delta < _PI - ctx->cfg.rotor_engage_tol_rad)
-  {
-    return 0u;
-  }
-  if (spread > ctx->cfg.rotor_spread_max_rad)
-  {
-    return 0u;
-  }
-  return 1u;
-}
 
 /**
  * @brief 极性校正: 校正极性, 检查极性, 计算 offset。
@@ -551,107 +539,105 @@ static void cal_finish_hw(cal_ctx_t *ctx)
 }
 
 /**
- * @brief Ud 单点对齐（原 foc_align_electrical 流程）。
- *
- * 在 θ_open 下施加 Ud 锁定转子 d 轴，采样编码器 raw 电角 raw_locked，
- * 写 offset = normalize(raw_locked − θ_open)，使 theta_elec = θ_open。
+ * @brief 扫角。
+ *   1. 从 start 到 end，分 steps 步，每步 cal_hold_voltage sample_interval_ms 时间。
+ *   2. 终点在 hold_ms 稳定。
+ *   3. 扫角过程中，电机轴机械角度变化量 = 当前电机轴机械角度 - 上次电机轴机械角度 + π。
+ * 
+ * Sweep one electrical revolution each way. Mechanical increments are
+ * unwrapped before multiplying by pole pairs, including the one-pole case.
+ * Direction is measured from motion, never inferred from current polarity
  */
+static float cal_ud_sweep(cal_ctx_t *ctx, float start, float end)
+{
+  const uint32_t steps = 360u;
+  uint32_t i;
+  float prev, travel = 0.0f;
+  foc_sense_update(ctx->m);
+  prev = ctx->m->state.shaft.angle_rad;
+  for (i = 1u; i <= steps; ++i)
+  {
+    float angle = start + (end - start) * (float)i / (float)steps;
+    float now;
+    cal_hold_voltage(ctx, ctx->cfg.voltage_d_v, 0.0f,
+                     angle_normalize(angle), ctx->cfg.sample_interval_ms);
+    foc_sense_update(ctx->m);
+    now = ctx->m->state.shaft.angle_rad; // 电机轴单圈机械角度
+    /** 等价于把相邻两帧机械角差折到 (−π, π]，再 累加，得到 不绕 ±π 断层的总转角（unwrap 累加） */
+    travel += angle_normalize(now - prev + _PI) - _PI; // 每一步的增量累积
+    prev = now;
+  }
+  cal_hold_voltage(ctx, ctx->cfg.voltage_d_v, 0.0f,
+                   angle_normalize(end), ctx->cfg.hold_ms);
+  foc_sense_update(ctx->m);
+  /** 最后一步的增量累积，避免终点慢爬/微调没进循环最后一步 */
+  travel += angle_normalize(ctx->m->state.shaft.angle_rad - prev + _PI) - _PI;
+  return travel;
+}
+
 static error_t cal_method_ud(cal_ctx_t *ctx)
 {
-  error_t ret = ERR_NONE;
-  float spread = 0.0f;
-  float raw_engage = 0.0f;
-  float iq_probe = 0.0f;
-  const float ud = ctx->cfg.voltage_d_v;
-  const float uq_assist = ctx->cfg.voltage_q_v;
+  float forward, reverse, expected, spread, base, probe;
+  error_t ret;
 
-  if ((ctx == NULL) || (ctx->m == NULL) || (ctx->rt == NULL))
-  {
-    return ERR_NULL;
-  }
+  ctx->lock_ud = ctx->cfg.voltage_d_v;
+  ctx->lock_uq = 0.0f;
 
-  cal_hold_voltage(ctx, ud, uq_assist, ctx->align_angle, ctx->cfg.hold_ms);
-  ctx->raw_locked = cal_sample_raw_at_lock(ctx,
-                                           ud,
-                                           uq_assist,
-                                           ctx->align_angle,
-                                           &spread);
-  if (!cal_spread_ok(ctx, spread))
-  {
-    motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
-    return ERR_ALIGIN_SPREAD_OUT;
-  }
-  ctx->rt->align_raw_elec_rad = ctx->raw_locked;
-#if 1
-  /** 极性校正: 检查极性, 计算 offset。 
-   *  
-   *  目的是确定：编码器电角度方向和电机磁场旋转方向是否一致
+  ret = cal_lock_sample(ctx, ctx->align_angle, &spread);
+  if (ret != ERR_NONE) return ret;
+  /** 正向扫角。从对齐角度开始，扫到对齐角度 + 2π。分 360 步，每步 cal_hold_voltage 5ms */
+  forward = cal_ud_sweep(ctx, ctx->align_angle, ctx->align_angle + _2PI);
+  /** 反向扫角。从对齐角度 + 2π开始，扫到对齐角度 */
+  reverse = cal_ud_sweep(ctx, ctx->align_angle + _2PI, ctx->align_angle);
+  /** 期望值。2π / 极对数 = 电机单圈电角度 */
+  expected = _2PI / (float)ctx->m->config.param.pole_pairs;
+  /**
+   * Each leg must follow the field with the configured pole count (15%). 
+   * forward × reverse < 0：往返方向相反；
+   * |forward|、|reverse| ≈ 2π / pole_pairs（±15%）：与配置的 极对数 一致，且没有严重打滑/跟不全
    */
-  iq_probe = cal_probe_iq(ctx,
-                          ctx->cfg.polarity_test_uq_v,
-                          /*ud,*/ 0.0f,
-                          ctx->align_angle,
-                          ctx->cfg.polarity_test_ms);
-  if (cal_polarity_probe_needs_flip(iq_probe, ctx->cfg.polarity_iq_min_a))
-  {
-    cal_flip_direction(ctx);
+  if (!(forward * reverse < 0.0f) ||
+      fabsf(fabsf(forward) - expected) > 0.15f * expected ||
+      fabsf(fabsf(reverse) - expected) > 0.15f * expected)
+    return ERR_ALIGIN_FAILED;
+  /** forward > 0：场从 θ_open 增到 θ_open+2π 时，编码器认为转子沿 正方向 转了约 expected rad, 否则反向 */
+  if (forward < 0.0f) cal_flip_direction(ctx); // 正向扫角小于0，则翻转方向
+  
+  /**
+   * 再次正反扫角 π/2。作用：
+   * 1. 跟场（egage）：
+   *    只在 θ_open 锁一次只能证明「这一点吸合」；把场 +90° 电角 后，若转子 真的跟场，编码器 raw 电角也应 大约 +90°。
+   *    若 180° 级错、没跟转、只弹性形变，probe − base 不会接近 π/2 → 对齐失败。
+   *    non-antipodal: 用 90° 而不是 180° 作为检查点，避免和对称/对极点混淆时只靠 π 步进不够敏感。
+   * 2. 可重复/无滑移：
+   *    再扫回 θ_open 时，若转子 真的跟场，raw 应回到 base。
+   *    若跟场过程中 打滑、失步、或 spread 合格但平均 raw 漂移，回零对不上 → 失败。
+   *    避免「单点 raw 看起来稳，但一动就错、算出的 offset 不可信」
+   * 3. 若不使用 sweep, 直接在 θ_open + π/2 锁一次，转子可能还在旧位置，probe没有意义。
+   */
+  ret = cal_lock_sample(ctx, ctx->align_angle, &spread);
+  if (ret != ERR_NONE) return ret;
+  base = ctx->raw_locked;
+  /* Verify a non-antipodal point, then return before computing the offset. */
+  (void)cal_ud_sweep(ctx, ctx->align_angle, ctx->align_angle + 0.5f * _PI);
+  ret = cal_lock_sample(ctx, angle_normalize(ctx->align_angle + 0.5f * _PI), &spread);
+  if (ret != ERR_NONE) return ret;
+  probe = ctx->raw_locked;
+  if (fabsf(angle_normalize(probe - base - 0.5f * _PI + _PI) - _PI) >
+      ctx->cfg.rotor_engage_tol_rad) return ERR_ALIGIN_FAILED;
+  (void)cal_ud_sweep(ctx, ctx->align_angle + 0.5f * _PI, ctx->align_angle);
+  ret = cal_lock_sample(ctx, ctx->align_angle, &spread);
+  if (ret != ERR_NONE) return ret;
+  if (fabsf(angle_normalize(ctx->raw_locked - base + _PI) - _PI) >
+      ctx->cfg.rotor_engage_tol_rad) return ERR_ALIGIN_FAILED;
 
-    cal_hold_voltage(ctx, ud, 0.0f, ctx->align_angle, ctx->cfg.relock_ms);
-    ctx->raw_locked = cal_sample_raw_at_lock(ctx,
-                                             ud,
-                                             0.0f,
-                                             ctx->align_angle,
-                                             &spread);
-    if (!cal_spread_ok(ctx, spread))
-    {
-      motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
-      return ERR_ALIGIN_SPREAD_OUT;
-    }
-    ctx->rt->align_raw_elec_rad = ctx->raw_locked;
-    iq_probe = cal_probe_iq(ctx,
-                            ctx->cfg.polarity_test_uq_v,
-                            /*ud,*/ 0.0f,
-                            ctx->align_angle,
-                            ctx->cfg.polarity_test_ms);
-  }
-
-  /* 重新锁定转子 */
-  cal_hold_voltage(ctx, ud, 0.0f, ctx->align_angle, ctx->cfg.relock_ms);
-  ctx->raw_locked = cal_sample_raw_at_lock(ctx,
-                                           ud,
-                                           0.0f,
-                                           ctx->align_angle,
-                                           &spread);
-  if (!cal_spread_ok(ctx, spread))
-  {
-    motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
-    return ERR_ALIGIN_SPREAD_OUT;
-  }
-  ctx->rt->align_raw_elec_rad = ctx->raw_locked;
-
-  ctx->rt->align_engaged = cal_check_rotor_engaged(ctx,
-                                                   ud,
-                                                   ctx->raw_locked,
-                                                   &raw_engage,
-                                                   &spread);
-  ctx->rt->align_raw_engage_rad = raw_engage;
-  /* offset 仅由 θ_open 锁定采样决定；吸合验证为诊断项，不阻断 Ud 对齐 */
-
-  ctx->rt->align_polarity_test_iq = iq_probe;
-  if (cal_polarity_probe_aligned(iq_probe, ctx->cfg.polarity_iq_min_a))
-  {
-    ctx->rt->align_ok = true;
-  }
-  else
-  {
-    motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
-    ret = ERR_ALIGIN_FAILED;
-    return ret;
-  }
-#else
-  ctx->rt->align_ok = true;
-#endif
   ctx->offset_rad = angle_normalize(ctx->raw_locked - ctx->align_angle);
+  ctx->rt->align_raw_elec_rad = ctx->raw_locked;
+  ctx->rt->align_raw_engage_rad = probe;
+  ctx->rt->align_engaged = true;
+  /* No current-polarity probe is performed by the UD method. */
+  ctx->rt->align_polarity_test_iq = 0.0f;
+  ctx->rt->align_ok = true;
   return ERR_NONE;
 }
 
@@ -843,12 +829,19 @@ static error_t cal_method_hfi(cal_ctx_t *ctx)
 static error_t cal_elec_align_run(cal_ctx_t *ctx)
 {
   error_t ret;
+  float saved_offset;
+  int8_t saved_direction;
 
   if ((ctx == NULL) || (ctx->m == NULL) || (ctx->rt == NULL))
   {
     return ERR_NULL;
   }
 
+  saved_offset = ctx->m->config.param.theta_elec_offset_rad;
+  saved_direction = ctx->m->config.param.direction;
+  if (ctx->m->config.param.direction != DIR_CW &&
+      ctx->m->config.param.direction != DIR_CCW)
+    ctx->m->config.param.direction = DIR_CW;
   ret = cal_prepare(ctx);
   if (ret != ERR_NONE)
   {
@@ -882,7 +875,17 @@ static error_t cal_elec_align_run(cal_ctx_t *ctx)
   if ((ret == ERR_NONE) && ctx->rt->align_ok)
   {
     cal_commit_offset(ctx);
-    ctx->rt->electrical_align_done = true;
+    if (!cal_theta_matches_expected(ctx, 0.5f))
+    {
+      ctx->rt->align_ok = false;
+      ctx->rt->electrical_align_done = false;
+      motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
+      ret = ERR_ALIGIN_FAILED;
+    }
+    else
+    {
+      ctx->rt->electrical_align_done = true;
+    }
   }
   else
   {
@@ -897,6 +900,16 @@ static error_t cal_elec_align_run(cal_ctx_t *ctx)
   cal_finish_hw(ctx);
 
 exit:
+  if (ret != ERR_NONE)
+  {
+    ctx->m->config.param.theta_elec_offset_rad = saved_offset;
+    ctx->m->config.param.direction = saved_direction;
+    ctx->rt->align_ok = false;
+    ctx->rt->electrical_align_done = false;
+    motor_fault_raise(ctx->m, FAULT_ALIGN_FAILED);
+    foc_sense_update(ctx->m);
+    ctx->rt->open_loop_elec_angle_rad = ctx->m->state.theta_elec_rad;
+  }
   motor_disarm(ctx->m);
   return ret;
 }
@@ -927,6 +940,12 @@ error_t cal_elec_align_ex(motor_handle_t *m,
   }
   ctx.method = method;
 
+  if (ctx.cfg.sample_count == 0u || ctx.cfg.sample_interval_ms == 0u ||
+      ctx.cfg.sample_interval_ms > 100u || ctx.cfg.hold_ms == 0u ||
+      m->config.param.pole_pairs == 0u ||
+      !(ctx.cfg.rotor_spread_max_rad > 0.0f) ||
+      !(ctx.cfg.rotor_engage_tol_rad > 0.0f) ||
+      !(ctx.cfg.voltage_d_v > 0.0f)) return ERR_PARAM;
   return cal_elec_align_run(&ctx);
 }
 

@@ -180,7 +180,7 @@ V1 短格式：DATA 8 B → 线上总长 10 B → 按规则填充至 **DLC = 12*
 | 偏移 | 长 | 字段 | 说明 |
 | ---- | -- | ---- | ---- |
 | 0 | 2 | pos | Q7，**rad**，raw/128；控制系关节角 |
-| 2 | 2 | vel | 减速端转速相关 raw（见 `can_fd_codec_rad_s_to_vel_q7_rpm`） |
+| 2 | 2 | vel | 关节端转速 **RPM**（`int16` 大端），与 `0x02` 目标速度同单位；`rad/s = RPM_TO_RAD_PER_SEC(raw)` |
 | 4 | 2 | Iq | mA |
 | 6 | 2 | Id | mA |
 | 8 | 2 | Ia | mA |

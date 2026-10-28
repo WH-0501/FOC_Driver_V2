@@ -29,19 +29,29 @@ typedef enum
 /** 对齐流程参数（NULL 时使用 cal_elec_align_cfg_default） */
 typedef struct
 {
+  /** 对齐角度（默认 ALIGN_ELECTRICAL_ANGLE_RAD） */
   float align_angle_rad;
-  /** Ud 锁定电压（UD / DUAL_POINT）；Uq 锁定见 voltage_q_v */
+  /** Ud 锁定电压（UD / DUAL_POINT）；Uq 锁定见 voltage_q_v（默认 ALIGN_ELECTRICAL_VOLTAGE_D_V） */
   float voltage_d_v;
-  /** Uq 锁定电压（UQ / DUAL_POINT_UQ） */
+  /** Uq 锁定电压（UQ / DUAL_POINT_UQ）（默认 ALIGN_ELECTRICAL_VOLTAGE_Q_V） */
   float voltage_q_v;
+  /** 锁定时间（默认 ALIGN_HOLD_MS） */
   uint32_t hold_ms;
+  /** 采样点数（默认 ALIGN_SAMPLE_COUNT） */
   uint8_t sample_count;
+  /** 采样间隔（默认 ALIGN_SAMPLE_INTERVAL_MS） */
   uint32_t sample_interval_ms;
+  /** 重新锁定时间（默认 ALIGN_RELOCK_MS） */
   uint32_t relock_ms;
+  /** 极性测试电压（默认 ALIGN_POLARITY_TEST_UQ_V） */
   float polarity_test_uq_v;
+  /** 极性测试时间（默认 ALIGN_POLARITY_TEST_MS） */
   uint16_t polarity_test_ms;
+  /** 极性测试电流最小值（默认 ALIGN_POLARITY_IQ_MIN_A） */
   float polarity_iq_min_a;
+  /** 转子锁定容差（默认 ALIGN_ROTOR_ENGAGE_TOL_RAD） */
   float rotor_engage_tol_rad;
+  /** 转子分散最大值（默认 ALIGN_ROTOR_SPREAD_MAX_RAD） */
   float rotor_spread_max_rad;
   /** DUAL_POINT：第二点相对第一点的电角偏移，默认 π */
   float dual_point_delta_rad;
@@ -52,8 +62,11 @@ typedef struct
   float uq_d_axis_offset_rad;
   /** HFI：注入幅值 [V]、频率 [Hz]、每扫角点累积周期数、扫角步数 */
   float hfi_voltage_v;
+  /** HFI：频率（默认 ALIGN_HFI_FREQ_HZ） */
   float hfi_freq_hz;
+  /** HFI：每扫角点累积周期数（默认 ALIGN_HFI_CYCLES） */
   uint8_t hfi_cycles;
+  /** HFI：扫角步数（默认 ALIGN_HFI_SCAN_STEPS） */
   uint8_t hfi_scan_steps;
 } cal_elec_align_cfg_t;
 

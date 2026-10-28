@@ -40,6 +40,15 @@ error_t motor_hw_init(void)
   return ERR_NONE;
 }
 
+/**
+ * @brief 使能电机驱动器
+ * 
+ * @param m: 电机句柄
+ * 
+ * 1. 如果电机句柄为空，则返回
+ * 2. 如果电机处于故障状态，则返回
+ * 3. 使能电机驱动器
+ */
 void motor_arm(motor_handle_t *m)
 {
   if (motor_runtime(m) == NULL)

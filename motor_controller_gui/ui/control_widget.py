@@ -53,7 +53,7 @@ class MotorControlWidget(QGroupBox):
         self.target_pos.setSingleStep(0.01)
         self.send_pos_btn = QPushButton("发送位置")
 
-        self.vel_label = QLabel("目标速度(RPM):")
+        self.vel_label = QLabel("目标速度(关节RPM):")
         self.target_vel = QSpinBox()
         self.target_vel.setRange(-32768, 32767)
         self.send_vel_btn = QPushButton("发送速度")

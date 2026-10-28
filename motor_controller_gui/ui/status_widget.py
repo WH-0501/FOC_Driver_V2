@@ -59,7 +59,7 @@ class MotorStatusWidget(QGroupBox):
         self.pos_label.setText(
             f"位置: {data.get('position_deg', 0):.2f}° ({data.get('position_raw', 0)})"
         )
-        self.vel_label.setText(f"速度: {data.get('velocity', '--')} RPM")
+        self.vel_label.setText(f"速度(关节): {data.get('velocity', '--')} RPM")
         iq = data.get("iq_ma", data.get("current_ma", "--"))
         self.iq_label.setText(f"Iq: {iq if iq == '--' else f'{iq} mA'}")
         self.id_label.setText(f"Id: {self._format_current(data, 'id_ma')}")

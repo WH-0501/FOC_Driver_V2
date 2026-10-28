@@ -758,6 +758,8 @@ def format_align_result_lines(result: Dict[str, Any]) -> List[str]:
     lines.append(f"电角零偏: {_fmt_rad(float(result.get('theta_offset_rad', 0.0)))}")
     lines.append(f"极性探针 Iq: {float(result.get('polarity_iq_a', 0.0)):.3f} A")
     lines.append(f"转子吸合: {'是' if result.get('engaged') else '否'}")
+    if result.get("ok"):
+        lines.append("提示: 请在参数页保存；转矩模式请同时观察 Id（Id 过大通常表示电角仍偏 90°）。")
     return lines
 
 
