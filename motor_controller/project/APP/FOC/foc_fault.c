@@ -3,7 +3,26 @@
 #include "foc_fsm.h"
 #include "math_compat.h"
 #include "motor.h"
+#include "common.h"
 #include "gate/gate_driver.h"
+
+/* Independent shaft-speed absolute protection. Never uses gear ratio or a
+ * writable runtime ceiling. The caller must disarm immediately on true. */
+bool motor_fault_check_shaft_speed(motor_handle_t *m)
+{
+  float w;
+  if (m == NULL) return false;
+  w = m->state.shaft.velocity_rad_s;
+  if (!(w <= 0.0f || w >= 0.0f)) {
+    motor_fault_raise(m, FAULT_ENCODER);
+    return true;
+  }
+  if (fabsf(w) >= MAX_VELOCITY_RAD_S) {
+    motor_fault_raise(m, FAULT_OVER_SPEED);
+    return true;
+  }
+  return false;
+}
 
 void motor_fault_raise(motor_handle_t *m, fault_t bits)
 {
@@ -117,11 +136,7 @@ void motor_fault_protect(motor_handle_t *m)
     motor_fault_raise(m, FAULT_OVERTEMP_MOTOR);
   }
 
-  if (m->config.motion.max_speed_rad_s > 0.f &&
-      fabsf(S->joint.velocity_rad_s) > m->config.motion.max_speed_rad_s)
-  {
-    motor_fault_raise(m, FAULT_OVER_SPEED);
-  }
+  (void)motor_fault_check_shaft_speed(m);
 
   if (L->phase_diag_i_avg_min_a > 0.f &&
       (L->phase_imbalance_ratio_max > 0.f || L->phase_imbalance_warn_ratio > 0.f))

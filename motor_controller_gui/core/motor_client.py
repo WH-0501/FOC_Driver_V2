@@ -176,7 +176,7 @@ class MotorClient:
                 )
         return len(frames)
 
-    def _send(self, arb_id: int, cmd: CMD, payload: bytes = b"", *, exact_dlc: bool = False) -> bool:
+    def _send(self, arb_id: int, cmd: CMD, payload: bytes = b"", *, exact_dlc: bool = False, log: bool = True) -> bool:
         frame = pack_frame(cmd, payload, self.counter.next())
         profile = self.can.manager.profile
         is_fd = profile.fd if profile else True
@@ -192,7 +192,8 @@ class MotorClient:
             data = frame
         else:
             data = pad_canfd_payload(frame)
-        self._log_tx(arb_id, cmd, frame, data)
+        if log:
+            self._log_tx(arb_id, cmd, frame, data)
         return self.can.send_message(arb_id, data, is_fd=is_fd)
 
     def clear_iap_wait(self) -> None:
@@ -269,6 +270,14 @@ class MotorClient:
     def align_electric_angle(self, motor_id: int, method: int = 0) -> bool:
         """单播电角度对齐；method 见 ElecAlignMethod。"""
         return self._send(motor_id, CMD.ALIGN_ELECTRIC_ANGLE, bytes([method & 0xFF]))
+
+    def get_speed_limits(self, motor_id: int) -> bool:
+        return self._send(motor_id, CMD.GET_SPEED_LIMITS, log=False)
+
+    def set_current_soft_speed(self, motor_id: int, rpm: int) -> bool:
+        if motor_id == CAN_BROADCAST_ID or not 0 <= rpm <= 3000:
+            return False
+        return self._send(motor_id, CMD.SET_CURRENT_SOFT_SPEED, int(rpm).to_bytes(2, 'big'))
 
     def verify_electrical(self, motor_id: int, session: int) -> bool:
         if motor_id == CAN_BROADCAST_ID:

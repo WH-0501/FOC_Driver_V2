@@ -24,7 +24,7 @@
 #define RAD_PER_SEC_TO_RPM(rad_s) ((float)(rad_s) * (60.0f / _2PI))
 
 /* 限制参数 */
-#define MAX_VELOCITY_RPM   (3000.0f)                         ///< 最大速度 [RPM]
+#define MAX_VELOCITY_RPM   (3000.0f)                         ///< 电机轴绝对最高速度 [RPM]（非减速输出轴；GUI不可修改）
 #define MAX_VELOCITY_RAD_S (RPM_TO_RAD_PER_SEC(MAX_VELOCITY_RPM)) ///< 最大速度 [rad/s]
 #define MAX_ACC_RAD_S2 (100.0f) ///< 最大加速度 [rad/s²]
 #define MAX_JERK_RAD_S3 (1000.0f) ///< 最大加加速度 [rad/s³]

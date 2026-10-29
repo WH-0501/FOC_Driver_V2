@@ -380,6 +380,7 @@ class MainWindow(QMainWindow):
             self.motor_panel.motor_id = motor_id
             self.motor_panel.control_widget.motor_id = motor_id
             self.motor_panel.param_widget.motor_id = motor_id
+            self.motor_panel.control_widget.speed_limits.reset()
             self.motor_panel.iap_widget.set_motor_id(motor_id)
             self.motor_panel.status_widget.set_motor_id(motor_id)
             self.motor_panel.cal_widget.set_motor_id(motor_id)
@@ -461,7 +462,7 @@ class MainWindow(QMainWindow):
         #     print(f"timestamp: {timestamp}")
         #     print(f"parsed: {parsed}")
 
-        if cmd != CMD.VERIFY_SAMPLE:
+        if cmd not in (CMD.VERIFY_SAMPLE, CMD.GET_SPEED_LIMITS):
             self._log_rx(arb_id, cnt, cmd, data)
 
         if cmd == CMD.IAP_STATUS:
@@ -490,6 +491,10 @@ class MainWindow(QMainWindow):
 
         panel = self.motor_panel if arb_id == self._motor_id else None
 
+        if cmd in (CMD.GET_SPEED_LIMITS, CMD.SET_CURRENT_SOFT_SPEED):
+            if panel:
+                panel.control_widget.speed_limits.receive(payload, cmd == CMD.SET_CURRENT_SOFT_SPEED)
+            return
         if cmd == CMD.VERIFY_SAMPLE:
             if panel:
                 panel.cal_widget.show_verify_sample(payload)

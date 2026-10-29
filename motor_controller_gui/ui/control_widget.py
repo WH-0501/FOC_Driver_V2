@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core.motor_client import MotorClient
+from ui.speed_limit_widget import SpeedLimitWidget
 from protocol import (
     ProtocolVersion,
     encode_position,
@@ -90,6 +91,8 @@ class MotorControlWidget(QGroupBox):
         grid.addWidget(self.send_curr_btn, 6, 2)
 
         layout.addLayout(grid)
+        self.speed_limits = SpeedLimitWidget(lambda: self.motor_id, self.client)
+        layout.addWidget(self.speed_limits)
 
         self.mode_hint = QLabel("")
         self.mode_hint.setWordWrap(True)

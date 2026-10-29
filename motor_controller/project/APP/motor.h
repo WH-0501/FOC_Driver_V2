@@ -13,6 +13,10 @@ typedef struct
   uint32_t offset_cnt;
   uint8_t offset_active;
 
+  float current_soft_speed_rad_s; ///< 扭矩模式下，电机轴速度限制值; 0 disables soft only, RAM-only
+  float current_iq_limited;       ///< Final current-loop reference after all limits [A]
+  bool current_speed_limited;
+
   float open_loop_uq;              ///< 开环 Uq 参考值 VF
   float open_loop_iq;              ///< 开环 Iq 参考值 IF
   float open_loop_omega;           ///< 开环速度参考 [rad/s]（与 ref.speed_rad_s 同系）

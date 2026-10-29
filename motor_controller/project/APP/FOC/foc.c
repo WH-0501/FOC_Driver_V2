@@ -268,6 +268,8 @@ static void foc_control_run(motor_handle_t *m)
   t_ctrl_us = dwt_get_ticks_us();
   if (rt != NULL)
   {
+    rt->current_iq_limited = 0.0f;
+    rt->current_speed_limited = false;
     rt->foc_pos_loop_us = 0.0f;
     rt->foc_vel_loop_us = 0.0f;
     rt->foc_cur_loop_us = 0.0f;
@@ -283,6 +285,14 @@ static void foc_control_run(motor_handle_t *m)
       if (iq_limit > 0.0f)
       {
         iq_ref = CLAMP(iq_ref, -iq_limit, iq_limit);
+      }
+      if (rt != NULL) {
+        /** 扭矩模式下，电机轴速度限制值. 避免电机轴速度超过限制值，导致电机轴过热。 */
+        float limited = speed_limit_soft_iq(iq_ref, m->state.shaft.velocity_rad_s,
+                                            rt->current_soft_speed_rad_s);
+        rt->current_speed_limited = (limited != iq_ref);
+        iq_ref = limited;
+        rt->current_iq_limited = iq_ref;
       }
       foc_current(m, 0.0f, iq_ref, m->state.theta_elec_rad, 0.0f);
       break;
@@ -325,6 +335,7 @@ void foc_init(motor_handle_t *m, const motor_config_t *config)
 
   memset(m, 0, sizeof(*m));
   memset(rt, 0, sizeof(*rt));
+  rt->current_soft_speed_rad_s = 0.9f * MAX_VELOCITY_RAD_S;
   rt->electrical_align_done = false;
   foc_fsm_init(m);
 
@@ -387,6 +398,11 @@ void foc_control_loop(motor_handle_t *m)
 
   // foc_sense_poll_vbus(m);
   foc_sense_update(m);
+  /* Independent of mode, user speed commands, runtime config and gear ratio. */
+  if (motor_fault_check_shaft_speed(m)) {
+    foc_on_fault_latched(m);
+    return;
+  }
   foc_fsm_loop(m);
 
   if (m->fsm == STATE_RUNNING)

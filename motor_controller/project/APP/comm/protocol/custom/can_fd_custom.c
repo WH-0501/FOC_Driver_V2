@@ -363,6 +363,27 @@ static bool can_fd_verify_sample(const cal_verify_sample_t *sample, void *user)
   return can_fd_verify_send(CAN_FD_CMD_VERIFY_SAMPLE, p, sizeof(p));
 }
 
+static void can_fd_reply_speed_limits(uint8_t cmd, error_t error)
+{
+  motor_runtime_t *rt = motor_runtime(s_motor);
+  float gear = s_motor->config.param.gear_ratio;
+  uint8_t p[20] = {2u, 0u};
+  if (!(gear > 0.0f)) gear = 1.0f;
+  p[1] = (uint8_t)error;
+  can_fd_codec_write_u16_be(&p[2], (uint16_t)(MAX_VELOCITY_RPM / gear));
+  if (rt != NULL) {
+    can_fd_codec_write_u16_be(&p[4], (uint16_t)(RAD_PER_SEC_TO_RPM(rt->current_soft_speed_rad_s) / gear + 0.0001f));
+    p[7] = (s_motor->fsm == STATE_RUNNING && s_motor->ctrl_mode == CTRL_MODE_TORQUE && rt->current_speed_limited) ? 1u : 0u;
+    can_fd_write_i32_be(&p[16], (s_motor->fsm == STATE_RUNNING && s_motor->ctrl_mode == CTRL_MODE_TORQUE) ?
+                      can_fd_rad_to_urad(rt->current_iq_limited / 1000.0f) : 0);
+  }
+  p[6] = (uint8_t)s_motor->ctrl_mode;
+  /* Reuse saturating float conversion for signed milli-units. */
+  can_fd_write_i32_be(&p[8], can_fd_rad_to_urad(RAD_PER_SEC_TO_RPM(s_motor->state.shaft.velocity_rad_s) / gear / 1000.0f));
+  can_fd_write_i32_be(&p[12], can_fd_rad_to_urad(s_motor->ref.iq / 1000.0f));
+  can_fd_custom_reply(cmd, p, sizeof(p));
+}
+
 static void can_fd_custom_reply_align(error_t result, uint8_t method)
 {
   motor_handle_t *m = s_motor;
@@ -679,6 +700,24 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       }
       break;
 
+    case CAN_FD_CMD_GET_SPEED_LIMITS:
+      can_fd_reply_speed_limits(cmd, ERR_NONE);
+      break;
+    case CAN_FD_CMD_SET_CURRENT_SOFT_SPEED:
+      result = ERR_PARAM;
+      if (payload_len >= 2u) {
+        uint16_t rpm = can_fd_codec_read_u16_be(payload);
+        float gear = m->config.param.gear_ratio;
+        float shaft_rpm = (float)rpm * gear;
+        motor_runtime_t *rt = motor_runtime(m);
+        if (rt != NULL && gear > 0.0f && shaft_rpm <= MAX_VELOCITY_RPM) {
+          rt->current_soft_speed_rad_s = RPM_TO_RAD_PER_SEC(shaft_rpm);
+          result = ERR_NONE;
+        }
+      }
+      can_fd_reply_speed_limits(cmd, result);
+      break;
+
     case CAN_FD_CMD_VERIFY_ELECTRICAL:
       {
         uint8_t p[12] = {1u, 0u};
@@ -893,6 +932,7 @@ static void can_fd_custom_on_rx(const comm_frame_t *frame)
   }
 
   if (cmd == CAN_FD_CMD_VERIFY_ELECTRICAL && frame->id != s_node_id) return;
+  if ((cmd == CAN_FD_CMD_GET_SPEED_LIMITS || cmd == CAN_FD_CMD_SET_CURRENT_SOFT_SPEED) && frame->id != s_node_id) return;
   can_fd_custom_handle_command(cmd, payload, payload_len);
 }
 

@@ -10,6 +10,7 @@
 static motor_handle_t motor;
 static motor_runtime_t runtime;
 static unsigned armed,disarms,clears,sensed,executed;
+static float applied_iq;
 static unsigned reply_result,reply_len;
 typedef struct { void *gate; bool armed; } motor_driver_t;
 static unsigned pwm_stops,phase_off;
@@ -28,7 +29,7 @@ error_t foc_pid_clear(pid_state_t *p) { ++clears;p->last_integral=0;return ERR_N
 uint32_t dwt_get_ticks_us(void) { return 100; }
 static uint32_t foc_dwt_elapsed_us(uint32_t t) { (void)t;return 1; }
 void foc_sense_update(motor_handle_t *m) { (void)m;++sensed; }
-void foc_current(motor_handle_t *m,float d,float q,float a,float w) { (void)m;(void)d;(void)q;(void)a;(void)w;executed=CTRL_MODE_TORQUE; }
+void foc_current(motor_handle_t *m,float d,float q,float a,float w) { (void)m;(void)d;applied_iq=q;(void)a;(void)w;executed=CTRL_MODE_TORQUE; }
 static void foc_speed_closed_control(motor_handle_t *m,float v) { (void)m;(void)v;executed=CTRL_MODE_SPEED; }
 static void foc_position_closed_control(motor_handle_t *m,float p) { (void)m;(void)p;executed=CTRL_MODE_POSITION; }
 static void foc_speed_open_control(motor_handle_t *m,float v) { (void)m;(void)v;executed=CTRL_MODE_SPEED_OPEN_LOOP; }
@@ -80,6 +81,32 @@ int main(void) {
   reset();test_protocol_mode(NULL,0);assert(reply_result==ERR_PARAM);
   reset();motor.fsm=STATE_RUNNING;wire=CTRL_MODE_POSITION;test_protocol_mode(&wire,1);assert(reply_result==ERR_STATE);
   { motor_driver_t driver={(void*)1,true};motor_driver_disarm(&driver);assert(!driver.armed && pwm_stops==1 && phase_off==1); }
+  /* Actual control-loop cutoff must precede all supported mode dispatch. */
+  for(mode=1;mode<=5;++mode) if(expected(mode)) {
+    int sign;
+    for(sign=-1;sign<=1;sign+=2) {
+      reset(); motor.ctrl_mode=(control_mode_t)mode;motor.fsm=STATE_RUNNING;armed=1;
+      motor.state.shaft.velocity_rad_s=sign*MAX_VELOCITY_RAD_S;
+      foc_control_loop(&motor);
+      assert(!armed && !executed && motor.fsm==STATE_FAULT);
+      assert(motor.fault.latched & FAULT_OVER_SPEED);
+      assert(mc_enable()==ERR_FAULT_LATCHED);
+    }
+  }
+  reset();motor.fsm=STATE_RUNNING;armed=1;
+  motor.state.shaft.velocity_rad_s=MAX_VELOCITY_RAD_S-1.0f;
+  foc_control_loop(&motor);assert(armed && executed==CTRL_MODE_SPEED && !motor.fault.latched);
+  reset();motor.ctrl_mode=CTRL_MODE_TORQUE;motor.fsm=STATE_RUNNING;armed=1;
+  runtime.current_soft_speed_rad_s=100.0f;motor.ref.iq=2.0f;motor.config.limits.iq_limit=1.0f;
+  motor.state.shaft.velocity_rad_s=95.0f;foc_control_loop(&motor);
+  assert(fabsf(applied_iq-0.5f)<0.0001f && runtime.current_speed_limited);
+  motor.state.shaft.velocity_rad_s=100.0f;foc_control_loop(&motor);assert(applied_iq==0);
+  motor.ref.iq=-2.0f;foc_control_loop(&motor);assert(applied_iq==-1.0f && !runtime.current_speed_limited);
+  motor.state.shaft.velocity_rad_s=-95.0f;foc_control_loop(&motor);assert(fabsf(applied_iq+0.5f)<0.0001f);
+  runtime.current_soft_speed_rad_s=0;foc_control_loop(&motor);assert(applied_iq==-1.0f);
+  motor.state.shaft.velocity_rad_s=-MAX_VELOCITY_RAD_S;foc_control_loop(&motor);
+  assert(!armed && (motor.fault.latched&FAULT_OVER_SPEED));
+  puts("PASS speed limits: bidirectional hard cutoff, all modes, latch, soft taper, braking and disabled soft");
   puts("PASS C06: exhaustive mode admission/enable/dispatch, active/calibration/fault guards, PID reset, stale-output shutdown and CAN status");
   return 0;
 }
