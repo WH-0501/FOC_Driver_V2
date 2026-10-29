@@ -3,7 +3,7 @@
 #include "datatypes.h"
 typedef struct {
   float current_soft_speed_rad_s,current_iq_limited;
-  bool current_speed_limited;
+  bool current_speed_limited,shaft_hard_overspeed_enabled;
   uint8_t fsm_enter_pending;
   bool electrical_align_done;
   float open_loop_elec_angle_rad,open_loop_omega,open_loop_uq,open_loop_iq;

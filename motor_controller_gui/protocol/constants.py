@@ -264,6 +264,9 @@ def format_api_error_detail(code: int) -> str:
     return f"{api_error_name(code)} (error_t={code})"
 
 
+# B6 扩展：4 字节 = 输出轴软限速 RPM(u16) + 标志(u16)，bit0 硬超速保护使能
+SPEED_LIMIT_FLAG_HARD_OVERSPEED = 0x0001
+
 KTH71_ANLC_STATUS_NAMES = {
     0: "未开始",
     1: "校准中",

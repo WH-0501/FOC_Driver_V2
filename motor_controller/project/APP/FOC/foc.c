@@ -336,6 +336,7 @@ void foc_init(motor_handle_t *m, const motor_config_t *config)
   memset(m, 0, sizeof(*m));
   memset(rt, 0, sizeof(*rt));
   rt->current_soft_speed_rad_s = 0.9f * MAX_VELOCITY_RAD_S;
+  rt->shaft_hard_overspeed_enabled = true;
   rt->electrical_align_done = false;
   foc_fsm_init(m);
 

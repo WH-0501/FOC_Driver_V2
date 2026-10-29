@@ -323,10 +323,16 @@ class MotorClient:
     def get_speed_limits(self, motor_id: int) -> bool:
         return self._send(motor_id, CMD.GET_SPEED_LIMITS, log=False)
 
-    def set_current_soft_speed(self, motor_id: int, rpm: int) -> bool:
-        if motor_id == CAN_BROADCAST_ID or not 0 <= rpm <= 3000:
+    def set_current_soft_speed(
+        self, motor_id: int, rpm: int, *, hard_overspeed_enabled: Optional[bool] = None
+    ) -> bool:
+        if motor_id == CAN_BROADCAST_ID or rpm < 0:
             return False
-        return self._send(motor_id, CMD.SET_CURRENT_SOFT_SPEED, int(rpm).to_bytes(2, 'big'))
+        payload = int(rpm).to_bytes(2, "big")
+        if hard_overspeed_enabled is not None:
+            flag = 0x0001 if hard_overspeed_enabled else 0x0000
+            payload += int(flag).to_bytes(2, "big")
+        return self._send(motor_id, CMD.SET_CURRENT_SOFT_SPEED, payload)
 
     def verify_electrical(self, motor_id: int, session: int) -> bool:
         if motor_id == CAN_BROADCAST_ID:

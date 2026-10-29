@@ -1,8 +1,7 @@
 #include <math.h>
 #include "foc_fault.h"
-#include "foc_fsm.h"
-#include "math_compat.h"
 #include "motor.h"
+#include "math_compat.h"
 #include "common.h"
 #include "gate/gate_driver.h"
 
@@ -11,7 +10,13 @@
 bool motor_fault_check_shaft_speed(motor_handle_t *m)
 {
   float w;
+  motor_runtime_t *rt;
   if (m == NULL) return false;
+  rt = motor_runtime(m);
+  if (rt != NULL && !rt->shaft_hard_overspeed_enabled)
+  {
+    return false;
+  }
   w = m->state.shaft.velocity_rad_s;
   if (!(w <= 0.0f || w >= 0.0f)) {
     motor_fault_raise(m, FAULT_ENCODER);

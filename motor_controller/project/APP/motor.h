@@ -14,6 +14,7 @@ typedef struct
   uint8_t offset_active;
 
   float current_soft_speed_rad_s; ///< 扭矩模式下，电机轴速度限制值; 0 disables soft only, RAM-only
+  bool shaft_hard_overspeed_enabled; ///< 电机轴硬超速保护（MAX_VELOCITY）；RAM-only，默认开启
   float current_iq_limited;       ///< Final current-loop reference after all limits [A]
   bool current_speed_limited;
 

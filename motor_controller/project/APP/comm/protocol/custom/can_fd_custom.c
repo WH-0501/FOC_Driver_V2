@@ -396,17 +396,28 @@ static bool can_fd_verify_sample(const cal_verify_sample_t *sample, void *user)
   return can_fd_verify_send(CAN_FD_CMD_VERIFY_SAMPLE, p, sizeof(p));
 }
 
+#define CAN_FD_SPEED_LIMIT_FLAG_HARD_OVERSPEED  0x0001u
+
 static void can_fd_reply_speed_limits(uint8_t cmd, error_t error)
 {
   motor_runtime_t *rt = motor_runtime(s_motor);
   float gear = s_motor->config.param.gear_ratio;
-  uint8_t p[20] = {2u, 0u};
+  uint8_t p[20] = {3u, 0u};
+  uint8_t status = 0u;
   if (!(gear > 0.0f)) gear = 1.0f;
   p[1] = (uint8_t)error;
   can_fd_codec_write_u16_be(&p[2], (uint16_t)(MAX_VELOCITY_RPM / gear));
   if (rt != NULL) {
     can_fd_codec_write_u16_be(&p[4], (uint16_t)(RAD_PER_SEC_TO_RPM(rt->current_soft_speed_rad_s) / gear + 0.0001f));
-    p[7] = (s_motor->fsm == STATE_RUNNING && s_motor->ctrl_mode == CTRL_MODE_TORQUE && rt->current_speed_limited) ? 1u : 0u;
+    if (rt->shaft_hard_overspeed_enabled)
+    {
+      status |= 2u;
+    }
+    if (s_motor->fsm == STATE_RUNNING && s_motor->ctrl_mode == CTRL_MODE_TORQUE && rt->current_speed_limited)
+    {
+      status |= 1u;
+    }
+    p[7] = status;
     can_fd_write_i32_be(&p[16], (s_motor->fsm == STATE_RUNNING && s_motor->ctrl_mode == CTRL_MODE_TORQUE) ?
                       can_fd_rad_to_urad(rt->current_iq_limited / 1000.0f) : 0);
   }
@@ -738,6 +749,10 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         motor_runtime_t *rt = motor_runtime(m);
         if (rt != NULL && gear > 0.0f && shaft_rpm <= MAX_VELOCITY_RPM) {
           rt->current_soft_speed_rad_s = RPM_TO_RAD_PER_SEC(shaft_rpm);
+          if (payload_len >= 4u) {
+            uint16_t flags = can_fd_codec_read_u16_be(&payload[2]);
+            rt->shaft_hard_overspeed_enabled = (flags & CAN_FD_SPEED_LIMIT_FLAG_HARD_OVERSPEED) != 0u;
+          }
           result = ERR_NONE;
         }
       }

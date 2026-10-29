@@ -41,6 +41,7 @@ static void can_fd_custom_reply(unsigned cmd,const uint8_t *payload,unsigned len
 #include "c06_impl.inc"
 static void reset(void) {
   memset(&motor,0,sizeof motor);memset(&runtime,0,sizeof runtime);
+  runtime.shaft_hard_overspeed_enabled=true;
   motor.current_offset_cal_done=true;motor.ctrl_mode=CTRL_MODE_SPEED;motor.fsm=STATE_IDLE;
   armed=disarms=clears=sensed=executed=0;reply_result=999;reply_len=0;
 }
@@ -115,7 +116,11 @@ int main(void) {
   motor.state.shaft.velocity_rad_s=100.0f;foc_control_loop(&motor);assert(applied_iq==0);
   motor.ref.iq=-2.0f;foc_control_loop(&motor);assert(applied_iq==-1.0f && !runtime.current_speed_limited);
   motor.state.shaft.velocity_rad_s=-95.0f;foc_control_loop(&motor);assert(fabsf(applied_iq+0.5f)<0.0001f);
-  runtime.current_soft_speed_rad_s=0;foc_control_loop(&motor);assert(applied_iq==-1.0f);
+  reset();motor.ctrl_mode=CTRL_MODE_TORQUE;motor.fsm=STATE_RUNNING;armed=1;
+  runtime.shaft_hard_overspeed_enabled=false;
+  motor.state.shaft.velocity_rad_s=-MAX_VELOCITY_RAD_S;foc_control_loop(&motor);
+  assert(armed && !(motor.fault.latched&FAULT_OVER_SPEED));
+  runtime.shaft_hard_overspeed_enabled=true;
   motor.state.shaft.velocity_rad_s=-MAX_VELOCITY_RAD_S;foc_control_loop(&motor);
   assert(!armed && (motor.fault.latched&FAULT_OVER_SPEED));
   puts("PASS speed limits: bidirectional hard cutoff, all modes, latch, soft taper, braking and disabled soft");
