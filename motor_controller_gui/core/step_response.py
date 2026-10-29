@@ -1,4 +1,4 @@
-"""Offline current-step measurements on raw telemetry (seconds and mA)."""
+"""Unit-independent step measurements; legacy *_ma keys use the selected unit."""
 from dataclasses import dataclass
 import math
 import numpy as np
@@ -12,6 +12,8 @@ class StepSettings:
     hold_ms: float = 5.0
     noise_ma: float = 5.0
     target_relative: bool = True
+    window_ms: float = 0.0  # 0: until next command / end of capture
+    crossing_hold_ms: float = 0.0
 
 
 def analyze_steps(times, reference, current, settings=None, manual_start_s=None, manual_end_s=None):
@@ -24,7 +26,7 @@ def analyze_steps(times, reference, current, settings=None, manual_start_s=None,
     """
     cfg = settings or StepSettings()
     params = (cfg.min_step_ma, cfg.band_percent, cfg.absolute_band_ma,
-              cfg.hold_ms, cfg.noise_ma)
+              cfg.hold_ms, cfg.noise_ma, cfg.window_ms, cfg.crossing_hold_ms)
     if not all(np.isfinite(params)) or min(params) < 0 or cfg.min_step_ma <= 0 or cfg.hold_ms <= 0:
         raise ValueError('阈值必须有限且非负，最小阶跃和保持时间必须大于零')
     t, r, y = [np.asarray(v, dtype=float) for v in (times, reference, current)]
@@ -33,7 +35,7 @@ def analyze_steps(times, reference, current, settings=None, manual_start_s=None,
     if not np.all(np.isfinite(t)) or np.any(np.diff(t) <= 0):
         raise ValueError('时间必须有限且严格递增')
     if not np.all(np.isfinite(r)):
-        raise ValueError('目标电流包含无效数据')
+        raise ValueError('目标值包含无效数据')
     changes = np.flatnonzero(np.diff(r) != 0) + 1
     manual = manual_start_s is not None
     if manual:
@@ -53,6 +55,8 @@ def analyze_steps(times, reference, current, settings=None, manual_start_s=None,
     results = []
     for j, start in enumerate(changes):
         end = int(changes[j+1]) if j+1 < len(changes) else len(t)
+        if cfg.window_ms > 0:
+            end = min(end, int(np.searchsorted(t, t[start]+cfg.window_ms/1000, side='right')))
         prev = int(changes[j-1]) if j else 0
         if not manual and abs(r[start] - r[start-1]) < cfg.min_step_ma:
             continue
@@ -60,7 +64,8 @@ def analyze_steps(times, reference, current, settings=None, manual_start_s=None,
                    baseline_ma=None, rise_ms=None, overshoot_pct=None, settling_ms=None,
                    oscillations=None, oscillation_ma=None, oscillation_pct=None,
                    band_ma=None, sample_ms=None, window_ms=float((t[end-1]-t[start])*1000),
-                   source='手动响应起点（非指令时刻）' if manual else '目标指令变化', status='')
+                   source='手动响应起点（非指令时刻）' if manual else '目标指令变化',
+                   tail_mean=None, tail_error=None, tail_pp=None, status='')
         results.append(row)
         pre = y[max(prev, start-20):start]
         v = y[start:end]
@@ -77,8 +82,16 @@ def analyze_steps(times, reference, current, settings=None, manual_start_s=None,
         band = max(cfg.absolute_band_ma, cfg.band_percent/100*scale)
         row['band_ma'] = band
         warnings = ['手动起点估算；未确认指令生效时刻'] if manual else []
-        if np.ptp(pre) > 2*max(band, cfg.noise_ma) or (not manual and abs(baseline-r[start-1]) > band):
-            warnings.append('初始未稳态')
+        tail = v[-max(5, int(np.ceil(len(v)*.2))):]
+        row['tail_mean'] = float(np.mean(tail))
+        row['tail_error'] = row['tail_mean']-float(r[start])
+        row['tail_pp'] = float(np.ptp(tail))
+        if abs(row['tail_error']) > band:
+            warnings.append('末段均值偏离目标（非已确认稳态）')
+        if np.ptp(pre) > 2*max(band, cfg.noise_ma):
+            warnings.append('初始波动较大')
+        if not manual and abs(baseline-r[start-1]) > band:
+            warnings.append('初值偏离原指令')
         tx = t[start:end]
         dt = np.diff(t[start-1:end])
         median_dt = float(np.median(dt))
@@ -88,11 +101,16 @@ def analyze_steps(times, reference, current, settings=None, manual_start_s=None,
         z = (v-baseline)/delta
 
         def crossing(level):
-            hits = np.flatnonzero(z >= level)
-            if not len(hits) or hits[0] == 0:
-                return None
-            k = int(hits[0])
-            return float(tx[k-1]+(level-z[k-1])/(z[k]-z[k-1])*(tx[k]-tx[k-1]))
+            above = z >= level
+            starts = np.flatnonzero(above & np.r_[True, ~above[:-1]])
+            stops = np.flatnonzero(above & np.r_[~above[1:], True])
+            for k, stop in zip(starts, stops):
+                if tx[stop]-tx[k]+1e-12 < cfg.crossing_hold_ms/1000:
+                    continue
+                if k == 0:
+                    return None
+                return float(tx[k-1]+(level-z[k-1])/(z[k]-z[k-1])*(tx[k]-tx[k-1]))
+            return None
 
         a, b = crossing(.1), crossing(.9)
         if a is not None and b is not None:
@@ -100,7 +118,7 @@ def analyze_steps(times, reference, current, settings=None, manual_start_s=None,
             if b-a < 5*median_dt:
                 warnings.append('上升段少于5个采样间隔')
         else:
-            warnings.append('10%/90%交越未完整捕获')
+            warnings.append('10%/90%交越未完整捕获或未持续达到')
         row['overshoot_pct'] = max(0.0, float(np.max(z)-1)*100)
         outside = np.flatnonzero(np.abs(v-r[start]) > band)
         settle = int(outside[-1]+1) if len(outside) else 0
@@ -128,6 +146,8 @@ def analyze_steps(times, reference, current, settings=None, manual_start_s=None,
         row['oscillation_pct'] = row['oscillation_ma']/scale*100 if scale > 0 else None
         if scale == 0:
             warnings.append('目标为零：幅值百分比不适用，使用mA')
+        if cfg.window_ms > 0:
+            warnings.append('按限定观察窗统计；原始峰值可能含尖峰')
         row['status'] = '；'.join(warnings) if warnings else '观察窗内已收敛'
     return results
 

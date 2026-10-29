@@ -9,8 +9,10 @@ from PyQt5.QtCore import Qt, QTime, QTimer, pyqtSignal
 
 from PyQt5.QtWidgets import (
     QApplication,
+    QDialog,
     QGroupBox,
     QDockWidget,
+    QMenu,
     QScrollArea,
     QHBoxLayout,
     QLabel,
@@ -89,15 +91,34 @@ class MainWindow(QMainWindow):
         self.connection_panel = ConnectionPanel(
             device_info_fn=lambda: self.can_thread.manager.device_info_text()
         )
-        connection_dock = QDockWidget("连接与设备", self)
-        connection_dock.setObjectName("connectionDock")
-        connection_dock.setWidget(self.connection_panel)
-        self.addDockWidget(Qt.TopDockWidgetArea, connection_dock)
+        self.connection_dialog = QDialog(self)
+        self.connection_dialog.setWindowTitle("连接与设备")
+        connection_layout = QVBoxLayout(self.connection_dialog)
+        connection_layout.addWidget(self.connection_panel)
+        self.connection_dialog.resize(850, 260)
+        self.connection_menu = self.menuBar().addMenu("连接与设备")
+        self.connection_settings_action = self.connection_menu.addAction("连接设置…")
+        self.connection_settings_action.triggered.connect(self._show_connection_settings)
+        self.connection_menu.addSeparator()
+        self._connection_actions = []
+        for label, button in (("打开设备", self.connection_panel.open_btn),
+                              ("启动通道", self.connection_panel.start_btn),
+                              ("停止通道", self.connection_panel.stop_btn),
+                              ("关闭设备", self.connection_panel.close_btn),
+                              ("设备信息…", self.connection_panel.info_btn)):
+            action = self.connection_menu.addAction(label)
+            action.triggered.connect(lambda checked=False, b=button: b.click())
+            self._connection_actions.append((action, button))
+        self.connection_menu.aboutToShow.connect(self._update_connection_menu)
+        self.analysis_menu = self.menuBar().addMenu("分析")
+        self.step_analysis_action = self.analysis_menu.addAction("阶跃响应分析…")
+        self.step_analysis_action.triggered.connect(lambda: self.waveform_widget._show_step_analysis())
         self._view_menu = self.menuBar().addMenu("视图")
-        self._view_menu.addAction(connection_dock.toggleViewAction())
 
-        mgr = QGroupBox("电机")
-        mgr_layout = QHBoxLayout()
+        # Inline selector in the menu bar; no dedicated motor-management row.
+        motor_corner = QWidget(self)
+        mgr_layout = QHBoxLayout(motor_corner)
+        mgr_layout.setContentsMargins(4, 0, 4, 0)
         self.motor_id_spin = QSpinBox()
         self.motor_id_spin.setRange(1, 0x7FE)
         self.motor_id_spin.setValue(1)
@@ -106,9 +127,7 @@ class MainWindow(QMainWindow):
         mgr_layout.addWidget(QLabel("Node-ID:"))
         mgr_layout.addWidget(self.motor_id_spin)
         mgr_layout.addWidget(self.scan_btn)
-        mgr_layout.addStretch()
-        mgr.setLayout(mgr_layout)
-        root.addWidget(mgr)
+        self.menuBar().setCornerWidget(motor_corner, Qt.TopRightCorner)
 
         # 主体：中间波形 + 右侧控制
         body_splitter = QSplitter()
@@ -143,16 +162,29 @@ class MainWindow(QMainWindow):
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.document().setMaximumBlockCount(2000)
+        self.log_text.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.log_text.customContextMenuRequested.connect(self._show_log_context_menu)
         log_layout.addWidget(self.log_text)
         log_group.setLayout(log_layout)
         log_dock = QDockWidget("通信日志", self)
         log_dock.setObjectName("logDock")
         log_dock.setWidget(log_group)
+        # 仅保留拖动停靠；去掉标题栏关闭/浮动（浮动窗带放大、关闭）
+        log_dock.setFeatures(QDockWidget.DockWidgetMovable)
         self.addDockWidget(Qt.BottomDockWidgetArea, log_dock)
         self._view_menu.addAction(log_dock.toggleViewAction())
 
         central.setLayout(root)
         self.setCentralWidget(central)
+
+    def _show_connection_settings(self):
+        self.connection_dialog.show()
+        self.connection_dialog.raise_()
+        self.connection_dialog.activateWindow()
+
+    def _update_connection_menu(self):
+        for action, button in self._connection_actions:
+            action.setEnabled(button.isEnabled())
 
     def _init_connections(self) -> None:
         panel = self.connection_panel
@@ -265,6 +297,18 @@ class MainWindow(QMainWindow):
         from protocol.time_util import format_log_timestamp
 
         self.log_text.append(f"[{format_log_timestamp()}] {msg}")
+
+    def _clear_comm_log(self) -> None:
+        self.log_text.clear()
+
+    def _show_log_context_menu(self, pos) -> None:
+        menu = self.log_text.createStandardContextMenu()
+        if menu is None:
+            menu = QMenu(self)
+        menu.addSeparator()
+        clear_action = menu.addAction("清除日志")
+        clear_action.triggered.connect(self._clear_comm_log)
+        menu.exec_(self.log_text.mapToGlobal(pos))
 
     def _on_protocol_version_changed(self, version_text: str) -> None:
         try:

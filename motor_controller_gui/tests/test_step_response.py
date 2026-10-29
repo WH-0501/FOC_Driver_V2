@@ -132,6 +132,48 @@ class StepResponseTests(unittest.TestCase):
         finally:
             dialog.close()
 
+    def test_window_excludes_late_disturbance_without_hiding_raw_peak(self):
+        t = np.arange(-.01, .5, .001)
+        r = np.where(t < 0, 0., 1000.)
+        y = 1000*(1-np.exp(-np.maximum(t, 0)/.005))
+        y[np.argmin(abs(t-.3))] = 2000
+        full = analyze_steps(t, r, y)[0]
+        limited = analyze_steps(t, r, y, StepSettings(window_ms=100))[0]
+        self.assertAlmostEqual(full['overshoot_pct'], 100)
+        self.assertEqual(limited['overshoot_pct'], 0)
+        self.assertLessEqual(limited['window_ms'], 100.001)
+        self.assertAlmostEqual(limited['tail_error'], 0, delta=.001)
+
+    def test_isolated_spike_does_not_confirm_ninety_percent(self):
+        t = np.arange(-.01, .1, .001)
+        r = np.where(t < 0, 0., 250.)
+        y = 200*(1-np.exp(-np.maximum(t, 0)/.005))
+        y[np.argmin(abs(t-.03))] = 500
+        row = analyze_steps(t, r, y, StepSettings(crossing_hold_ms=2))[0]
+        self.assertIsNone(row['rise_ms'])
+        self.assertIsNone(row['settling_ms'])
+        self.assertGreater(row['overshoot_pct'], 90)  # raw spike stays visible
+        self.assertAlmostEqual(row['tail_error'], -50, delta=.01)
+
+    def test_position_velocity_channel_units_and_independent_limits(self):
+        from PyQt5.QtWidgets import QApplication
+        from ui.step_analysis_dialog import StepAnalysisDialog
+        app = QApplication.instance() or QApplication([])
+        t, r, y = self.signal()
+        data = dict(times=t, target_iq=r, iq=y, target_vel=r/10, actual_vel=y/10,
+                    target_pos=r/1000, actual_pos=y/1000)
+        dialog = StepAnalysisDialog(data, 1)
+        try:
+            for index, unit, target in [(1, 'RPM', 100), (2, 'rad', 1)]:
+                dialog.loop.setCurrentIndex(index)
+                self.assertEqual(dialog.unit, unit)
+                self.assertEqual(dialog.rows[0]['to_ma'], target)
+                self.assertAlmostEqual(dialog.rows[0]['rise_ms'], np.log(9), delta=.01)
+                self.assertEqual(dialog.limits['rise_ms'].value(), 0)
+                self.assertIn(unit, dialog.table.horizontalHeaderItem(3).text())
+        finally:
+            dialog.close()
+
 
 if __name__ == '__main__':
     unittest.main()
