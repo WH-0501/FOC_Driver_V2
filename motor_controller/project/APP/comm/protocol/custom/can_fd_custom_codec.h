@@ -27,6 +27,13 @@ void can_fd_codec_unpack_pid(const uint8_t in[6], float *kp, float *ki, float *k
 void can_fd_codec_pack_protect(const motor_limits_t *lim, uint8_t out[6]);
 void can_fd_codec_unpack_protect(const uint8_t in[6], motor_limits_t *lim);
 
+/**
+ * 周期上报 error 字节：BIT7=0 保护子码，BIT7=1 IAP 子码（IAP 场景由其它帧携带）。
+ * V2 在 V1 子码 0x00~0x0F 基础上扩展 0x10~；多 fault 位时按优先级取主因（方案 A）。
+ */
+#define CAN_FD_ERR_IAP_FLAG       0x80u
+#define CAN_FD_ERR_PROTECT(sub)   ((uint8_t)((sub) & 0x7Fu))
+
 uint8_t can_fd_codec_fault_to_error(fault_t fault);
 
 uint8_t can_fd_codec_pad_canfd_len(uint8_t len);

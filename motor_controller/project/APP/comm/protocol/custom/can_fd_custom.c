@@ -913,9 +913,9 @@ static bool can_fd_custom_init(uint16_t node_id)
   s_request_unicast = false;
   s_reply_head = s_reply_tail = s_reply_count = 0u;
   s_reply_drops = 0u;
+  s_mcu_temp_cal_c = 0.0f;
   s_report_interval_us = 1000000u / (uint32_t)CAN_FD_REPORT_HZ_DEFAULT;
   s_saved_report_interval_us = s_report_interval_us;
-  s_mcu_temp_cal_c = 0.0f;
   can_fd_iap_setup(can_fd_custom_send_frame, &s_node_id, can_fd_custom_cycle_set);
   return (node_id <= 0x7FFu);
 }

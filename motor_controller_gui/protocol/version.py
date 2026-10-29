@@ -7,9 +7,10 @@ from enum import Enum, IntEnum
 from typing import Dict, Tuple
 
 from .constants import (
-    ERROR_NAMES,
     ControlMode,
+    ERROR_NAMES,
     MODE_NAMES,
+    MotorError,
     SELECTABLE_CONTROL_MODES,
     mode_needs_current as _v2_needs_current,
     mode_needs_position as _v2_needs_position,
@@ -55,22 +56,7 @@ V1_MODE_NAMES = {opt.wire: opt.label for opt in V1_MODE_OPTIONS}
 
 # V1.0.0 周期上报错误字节：BIT7=0 保护错误，BIT7=1 IAP 错误；BIT6~0 为子码
 V1_PROTECTION_ERROR_NAMES: Dict[int, str] = {
-    0x00: "正常",
-    0x01: "硬件过流",
-    0x02: "软件过流",
-    0x03: "硬件过压",
-    0x04: "软件过压",
-    0x05: "硬件欠压",
-    0x06: "软件欠压",
-    0x07: "缺相",
-    0x08: "编码器故障",
-    0x09: "软件、硬件过温",
-    0x0A: "通信故障",
-    0x0B: "位置命令异常",
-    0x0C: "速度命令异常",
-    0x0D: "电流命令异常",
-    0x0E: "回零超时 (10s)",
-    0x0F: "丢帧",
+    sub: ERROR_NAMES[MotorError(sub)] for sub in range(0x10)
 }
 
 V1_IAP_ERROR_NAMES: Dict[int, str] = {
@@ -89,6 +75,12 @@ V1_IAP_ERROR_NAMES: Dict[int, str] = {
     0x0C: "拒绝升级",
     0x0D: "内存分配失败",
     0x0E: "Flash 切换错误",
+    0x0F: "丢帧",
+}
+
+# V2.0.0 周期上报：BIT7=0 时在 V1 子码基础上扩展（can_fd_codec_fault_to_error 主因映射）
+V2_PROTECTION_WIRE_ERROR_NAMES: Dict[int, str] = {
+    int(code): name for code, name in ERROR_NAMES.items()
 }
 
 V1_IAP_STATUS_NAMES: Dict[int, str] = {
@@ -186,37 +178,30 @@ def parse_status_byte(version: ProtocolVersion, status: int) -> Tuple[int, bool,
 
 
 def parse_error_byte(version: ProtocolVersion, error: int) -> Dict[str, object]:
-    """按协议版本解析错误字节。"""
-    if version == ProtocolVersion.V1_0_0:
-        is_iap = bool(error & 0x80)
-        subcode = error & 0x7F
-        if is_iap:
-            name = V1_IAP_ERROR_NAMES.get(subcode, f"IAP 未知 (0x{subcode:02X})")
-            error_type = "IAP"
-        else:
-            name = V1_PROTECTION_ERROR_NAMES.get(subcode, f"未知 (0x{subcode:02X})")
-            error_type = "保护"
-        if subcode == 0 and not is_iap:
-            display = "正常"
-        elif subcode == 0 and is_iap:
-            display = f"[{error_type}] 正常"
-        else:
-            display = f"[{error_type}] {name}"
-        return {
-            "error_code": error,
-            "error_subcode": subcode,
-            "error_is_iap": is_iap,
-            "error_type": error_type,
-            "error_name": display,
-        }
-
-    name = ERROR_NAMES.get(error, f"未知 ({error})")
+    """周期上报 error：BIT7=0 保护子码，BIT7=1 IAP 子码（与 V1 线格式一致）。"""
+    is_iap = bool(error & 0x80)
+    subcode = error & 0x7F
+    if is_iap:
+        name = V1_IAP_ERROR_NAMES.get(subcode, f"IAP 未知 (0x{subcode:02X})")
+        error_type = "IAP"
+    elif version == ProtocolVersion.V1_0_0:
+        name = V1_PROTECTION_ERROR_NAMES.get(subcode, f"未知 (0x{subcode:02X})")
+        error_type = "保护"
+    else:
+        name = V2_PROTECTION_WIRE_ERROR_NAMES.get(subcode, f"未知 (0x{subcode:02X})")
+        error_type = "保护"
+    if subcode == 0 and not is_iap:
+        display = "正常"
+    elif subcode == 0 and is_iap:
+        display = f"[{error_type}] 正常"
+    else:
+        display = f"[{error_type}] {name}"
     return {
         "error_code": error,
-        "error_subcode": error,
-        "error_is_iap": False,
-        "error_type": "保护",
-        "error_name": name,
+        "error_subcode": subcode,
+        "error_is_iap": is_iap,
+        "error_type": error_type,
+        "error_name": display,
     }
 
 

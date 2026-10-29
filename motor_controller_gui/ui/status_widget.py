@@ -15,6 +15,8 @@ class MotorStatusWidget(QGroupBox):
         self.enable_label = QLabel("使能: --")
         self.mode_label = QLabel("模式: --")
         self.error_label = QLabel("错误: --")
+        self.error_label.setWordWrap(True)
+        self.feedback_label = QLabel("状态反馈: 等待设备")
         self.pos_label = QLabel("位置: --")
         self.vel_label = QLabel("速度: --")
         self.iq_label = QLabel("Iq: --")
@@ -33,7 +35,12 @@ class MotorStatusWidget(QGroupBox):
         layout.addWidget(self.ia_label, 4, 1)
         layout.addWidget(self.ib_label, 5, 0)
         layout.addWidget(self.ic_label, 5, 1)
+        layout.addWidget(self.feedback_label, 6, 0, 1, 2)
         self.setLayout(layout)
+
+    def set_feedback_stale(self, stale: bool) -> None:
+        self.feedback_label.setText("状态反馈: 超过1秒未更新（显示上次状态）" if stale else "状态反馈: 接收中")
+        self.feedback_label.setStyleSheet("color: #d68910;" if stale else "")
 
     def _format_current(self, data: Dict[str, Any], key: str) -> str:
         if not data.get("has_phase_current", True) and key != "iq_ma":
@@ -46,12 +53,14 @@ class MotorStatusWidget(QGroupBox):
     def update_status(self, data: Dict[str, Any]) -> None:
         if not data:
             return
+        self.set_feedback_stale(False)
         self._enabled = bool(data.get("enable"))
         enable = "是" if self._enabled else "否"
         self.enable_label.setText(f"使能: {enable}")
         self.mode_label.setText(f"模式: {data.get('mode_name', '--')}")
         error_code = data.get("error_code", 0)
         self.error_label.setText(f"错误: {data.get('error_name', '--')}")
+        self.error_label.setToolTip(f"周期 error 字节: 0x{error_code:02X}")
         if error_code:
             self.error_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
         else:

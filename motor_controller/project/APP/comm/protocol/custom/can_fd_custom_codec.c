@@ -4,6 +4,35 @@
 #include "foc_math.h"
 #include <stddef.h>
 
+/* V1 保护子码（周期 error：BIT7=0，BIT6~0=子码） */
+#define CAN_FD_PROT_HW_OCP           0x01u
+#define CAN_FD_PROT_SW_OCP           0x02u
+#define CAN_FD_PROT_SW_OVP           0x04u
+#define CAN_FD_PROT_SW_UVP           0x06u
+#define CAN_FD_PROT_PHASE_LOSS       0x07u
+#define CAN_FD_PROT_ENCODER          0x08u
+#define CAN_FD_PROT_OVERTEMP         0x09u
+#define CAN_FD_PROT_COMM             0x0Au
+#define CAN_FD_PROT_POS_CMD          0x0Bu
+#define CAN_FD_PROT_SHAFT_OVERSPEED  0x10u
+#define CAN_FD_PROT_ALIGN_FAILED     0x11u
+#define CAN_FD_PROT_CALIBRATION      0x12u
+#define CAN_FD_PROT_CTRL_SATURATION  0x13u
+#define CAN_FD_PROT_WATCHDOG         0x14u
+#define CAN_FD_PROT_PARAM            0x15u
+#define CAN_FD_PROT_SHORT_CIRCUIT    0x16u
+#define CAN_FD_PROT_STALL            0x17u
+#define CAN_FD_PROT_CURR_IMBALANCE   0x18u
+#define CAN_FD_PROT_CURR_SENSOR      0x19u
+#define CAN_FD_PROT_STORAGE          0x1Au
+#define CAN_FD_PROT_BRAKE            0x1Bu
+#define CAN_FD_PROT_DESAT            0x1Cu
+#define CAN_FD_PROT_GATE_NFAULT      0x1Du
+#define CAN_FD_PROT_LOGIC_UV         0x1Eu
+#define CAN_FD_PROT_PHASE_W_OPEN     0x1Fu
+#define CAN_FD_PROT_USER_CMD         0x20u
+#define CAN_FD_PROT_UNCLASSIFIED     0x7Fu
+
 uint16_t can_fd_codec_read_u16_be(const uint8_t *p)
 {
   return (uint16_t)(((uint16_t)p[0] << 8) | (uint16_t)p[1]);
@@ -173,39 +202,115 @@ uint8_t can_fd_codec_fault_to_error(fault_t fault)
 {
   if (fault == FAULT_NONE)
   {
-    return 0u;
+    return CAN_FD_ERR_PROTECT(0u);
   }
 
-  if (fault & (FAULT_OVERTEMP_MOTOR | FAULT_OVERTEMP_DRIVER))
+  if (fault & FAULT_SHORT_CIRCUIT)
   {
-    return 1u;
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_SHORT_CIRCUIT);
+  }
+  if (fault & FAULT_HW_OVERCURRENT)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_HW_OCP);
+  }
+  if (fault & FAULT_GATE_DRIVER)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_GATE_NFAULT);
+  }
+  if (fault & FAULT_DESATURATION)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_DESAT);
   }
   if (fault & FAULT_SW_OVERCURRENT)
   {
-    return 2u;
-  }
-  if (fault & FAULT_BUS_UV)
-  {
-    return 3u;
-  }
-  if (fault & FAULT_BUS_OV)
-  {
-    return 4u;
-  }
-  if (fault & (FAULT_HW_OVERCURRENT | FAULT_GATE_DRIVER | FAULT_SHORT_CIRCUIT))
-  {
-    return 5u;
-  }
-  if (fault & FAULT_ENCODER)
-  {
-    return 6u;
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_SW_OCP);
   }
   if (fault & FAULT_PHASE_LOSS)
   {
-    return 7u;
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_PHASE_LOSS);
+  }
+  if (fault & FAULT_PHASE_W_OPEN)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_PHASE_W_OPEN);
+  }
+  if (fault & FAULT_BUS_OV)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_SW_OVP);
+  }
+  if (fault & FAULT_BUS_UV)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_SW_UVP);
+  }
+  if (fault & FAULT_UNDER_VOLTAGE_LOGIC)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_LOGIC_UV);
+  }
+  if (fault & (FAULT_OVERTEMP_MOTOR | FAULT_OVERTEMP_DRIVER))
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_OVERTEMP);
+  }
+  if (fault & FAULT_ENCODER)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_ENCODER);
+  }
+  if (fault & FAULT_CURRENT_SENSOR)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_CURR_SENSOR);
+  }
+  if (fault & FAULT_OVER_SPEED)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_SHAFT_OVERSPEED);
+  }
+  if (fault & FAULT_STALL)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_STALL);
+  }
+  if (fault & FAULT_CURRENT_IMBALANCE)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_CURR_IMBALANCE);
+  }
+  if (fault & FAULT_POSITION_TRACK)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_POS_CMD);
+  }
+  if (fault & FAULT_ALIGN_FAILED)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_ALIGN_FAILED);
+  }
+  if (fault & FAULT_CALIBRATION)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_CALIBRATION);
+  }
+  if (fault & FAULT_CONTROL_SATURATION)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_CTRL_SATURATION);
+  }
+  if (fault & FAULT_WATCHDOG)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_WATCHDOG);
+  }
+  if (fault & FAULT_PARAM)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_PARAM);
+  }
+  if (fault & FAULT_COMM_TIMEOUT)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_COMM);
+  }
+  if (fault & FAULT_STORAGE)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_STORAGE);
+  }
+  if (fault & FAULT_BRAKE)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_BRAKE);
+  }
+  if (fault & FAULT_USER_CMD)
+  {
+    return CAN_FD_ERR_PROTECT(CAN_FD_PROT_USER_CMD);
   }
 
-  return 0u;
+  return CAN_FD_ERR_PROTECT(CAN_FD_PROT_UNCLASSIFIED);
 }
 
 uint8_t can_fd_codec_pad_canfd_len(uint8_t len)

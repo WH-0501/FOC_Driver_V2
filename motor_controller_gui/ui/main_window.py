@@ -53,6 +53,7 @@ from protocol import (
     parse_stiff_damp_response,
     parse_protocol_version,
 )
+from protocol.version import mode_display_name
 from ui.connection_panel import ConnectionPanel
 from ui.motor_panel import MotorPanel
 from ui.waveform_widget import WaveformWidget
@@ -71,6 +72,8 @@ class MainWindow(QMainWindow):
         self.motor_panel: Optional[MotorPanel] = None
         self._motor_id = 1
         self._scan_pending = False
+        self._fault_log_state = {}
+        self._status_received_at = {}
         self._status_latest: Dict[int, dict] = {}
         self._status_last_ui: Dict[int, float] = {}
         self._status_displayed: Dict[int, dict] = {}
@@ -257,6 +260,9 @@ class MainWindow(QMainWindow):
 
     def _flush_pending_status(self) -> None:
         motor_id = self._motor_id
+        if self.motor_panel is not None:
+            age = time.perf_counter() - self._status_received_at.get(motor_id, float("-inf"))
+            self.motor_panel.status_widget.set_feedback_stale(age > 1.0)
         if not self._status_pending.get(motor_id):
             return
         report = self._status_latest.get(motor_id)
@@ -342,6 +348,8 @@ class MainWindow(QMainWindow):
             self.connection_panel.set_busy_opening(False)
         self.log(msg)
         if ok and "已启动" in msg:
+            self._fault_log_state.clear()
+            self._status_received_at.clear()
             ch = self.can_thread.manager.channel
             self.connection_panel.set_device_state(
                 DeviceState.RUNNING,
@@ -473,9 +481,19 @@ class MainWindow(QMainWindow):
         for mid in range(1, 22): 
             self.client.scan_motor(mid)
 
+    def _log_fault_change(self, motor_id, report):
+        key = report.get("error_code")
+        previous = self._fault_log_state.get(motor_id)
+        if key == previous:
+            return
+        self._fault_log_state[motor_id] = key
+        if key or (previous is not None and previous):
+            self.log(f"电机 {motor_id} 故障状态: {report.get('error_name', '--')}")
+
     def _maybe_update_status(self, motor_id: int, report: dict) -> None:
         if motor_id != self._motor_id or self.motor_panel is None:
             return
+        self._status_received_at[motor_id] = time.perf_counter()
         self._status_latest[motor_id] = report
         force = self._status_force_update(motor_id, report)
         now = time.perf_counter()
@@ -503,6 +521,7 @@ class MainWindow(QMainWindow):
         if cmd == CMD.PERIOD_REPORT:
             report = parse_period_report(payload, self.client.protocol_version)
             if report:
+                self._log_fault_change(arb_id, report)
                 if self._scan_pending:
                     self._set_scan_motor_id(arb_id)
                     self._ensure_motor_panel(arb_id)

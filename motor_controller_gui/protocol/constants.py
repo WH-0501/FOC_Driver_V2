@@ -165,16 +165,42 @@ def mode_needs_current(mode: ControlMode) -> bool:
 
 
 class MotorError(IntEnum):
-    """周期上报错误字节（fault_t 经 can_fd_codec_fault_to_error 压缩，非 error_t）。"""
+    """V2 周期保护子码（BIT7=0），与 can_fd_codec_fault_to_error / V2_PROTECTION_WIRE_ERROR_NAMES 一致。"""
 
     NORMAL = 0
-    OTP_ERR = 1
-    OCP_ERR = 2
-    UVLO_ERR = 3
-    OVP_ERR = 4
-    NFAULT_ERR = 5
-    ENCODER_ERR = 6
-    PHASE_LOSS_ERR = 7
+    HW_OCP = 0x01
+    SW_OCP = 0x02
+    HW_OVP = 0x03
+    SW_OVP = 0x04
+    HW_UVP = 0x05
+    SW_UVP = 0x06
+    PHASE_LOSS = 0x07
+    ENCODER = 0x08
+    OVERTEMP = 0x09
+    COMM = 0x0A
+    POS_CMD = 0x0B
+    VEL_CMD = 0x0C
+    CURR_CMD = 0x0D
+    HOMING_TIMEOUT = 0x0E
+    FRAME_LOSS = 0x0F
+    SHAFT_OVERSPEED = 0x10
+    ALIGN_FAILED = 0x11
+    CALIBRATION = 0x12
+    CTRL_SATURATION = 0x13
+    WATCHDOG = 0x14
+    PARAM = 0x15
+    SHORT_CIRCUIT = 0x16
+    STALL = 0x17
+    CURR_IMBALANCE = 0x18
+    CURR_SENSOR = 0x19
+    STORAGE = 0x1A
+    BRAKE = 0x1B
+    DESAT = 0x1C
+    GATE_NFAULT = 0x1D
+    LOGIC_UV = 0x1E
+    PHASE_W_OPEN = 0x1F
+    USER_CMD = 0x20
+    UNCLASSIFIED = 0x7F
 
 
 class ErrorCode(IntEnum):
@@ -248,13 +274,39 @@ KTH71_ANLC_STATUS_NAMES = {
 
 ERROR_NAMES = {
     MotorError.NORMAL: "正常",
-    MotorError.OTP_ERR: "过温",
-    MotorError.OCP_ERR: "过流",
-    MotorError.UVLO_ERR: "欠压",
-    MotorError.OVP_ERR: "过压",
-    MotorError.NFAULT_ERR: "驱动故障",
-    MotorError.ENCODER_ERR: "编码器故障",
-    MotorError.PHASE_LOSS_ERR: "缺相",
+    MotorError.HW_OCP: "硬件过流",
+    MotorError.SW_OCP: "软件过流",
+    MotorError.HW_OVP: "硬件过压",
+    MotorError.SW_OVP: "软件过压",
+    MotorError.HW_UVP: "硬件欠压",
+    MotorError.SW_UVP: "软件欠压",
+    MotorError.PHASE_LOSS: "缺相",
+    MotorError.ENCODER: "编码器故障",
+    MotorError.OVERTEMP: "软件、硬件过温",
+    MotorError.COMM: "通信故障",
+    MotorError.POS_CMD: "位置命令异常",
+    MotorError.VEL_CMD: "速度命令异常",
+    MotorError.CURR_CMD: "电流命令异常",
+    MotorError.HOMING_TIMEOUT: "回零超时 (10s)",
+    MotorError.FRAME_LOSS: "丢帧",
+    MotorError.SHAFT_OVERSPEED: "电机轴硬超速",
+    MotorError.ALIGN_FAILED: "电角对齐失败",
+    MotorError.CALIBRATION: "校准失败",
+    MotorError.CTRL_SATURATION: "控制饱和",
+    MotorError.WATCHDOG: "控制看门狗",
+    MotorError.PARAM: "参数非法",
+    MotorError.SHORT_CIRCUIT: "输出短路",
+    MotorError.STALL: "堵转",
+    MotorError.CURR_IMBALANCE: "三相电流不平衡",
+    MotorError.CURR_SENSOR: "电流采样异常",
+    MotorError.STORAGE: "存储异常",
+    MotorError.BRAKE: "制动异常",
+    MotorError.DESAT: "去饱和保护",
+    MotorError.GATE_NFAULT: "驱动 nFAULT 有效",
+    MotorError.LOGIC_UV: "逻辑电源欠压",
+    MotorError.PHASE_W_OPEN: "W 相开路",
+    MotorError.USER_CMD: "用户故障指令",
+    MotorError.UNCLASSIFIED: "未分类保护故障",
 }
 
 # 广播地址与 IAP 地址
