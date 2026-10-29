@@ -1067,7 +1067,8 @@ error_t cal_verify_electrical(motor_handle_t *m, cal_verify_report_fn report,
       ret = cal_verify_tick(&v, from + (target - from) * (float)i / 90.0f, phase, false);
       if (ret != ERR_NONE) goto cleanup;
     }
-    for (hold = 0u; hold < 70u; ++hold) {
+    /* 70 samples x 5 ms = 350 ms locked settling at each endpoint. */
+    for (hold = 0u; hold < 200u; ++hold) {
       ret = cal_verify_tick(&v, target, phase, hold == 69u);
       if (ret != ERR_NONE) goto cleanup;
     }

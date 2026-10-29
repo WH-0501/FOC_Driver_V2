@@ -39,7 +39,7 @@
 
 /* 电角度对齐时的电压参数 */
 #define ALIGN_ELECTRICAL_ANGLE_RAD     (_3PI_2)
-#define ALIGN_ELECTRICAL_VOLTAGE_D_V   (3.0f)
+#define ALIGN_ELECTRICAL_VOLTAGE_D_V   (3.5f)
 /** Uq 锁定拖拽电压；Ud 模式在代码中固定 Uq=0 */
 #define ALIGN_ELECTRICAL_VOLTAGE_Q_V   (1.5f)
 #define ALIGN_HOLD_MS                  (700u)
