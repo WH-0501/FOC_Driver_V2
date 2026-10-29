@@ -58,6 +58,7 @@ class WaveformWidget(QGroupBox):
         self.clear_btn = QPushButton("清空")
         self.reset_zoom_btn = QPushButton("重置视图")
         self.export_btn = QPushButton("导出 CSV")
+        self.step_btn = QPushButton("电流阶跃分析")
         for button in (self.pause_btn, self.resume_btn, self.clear_btn, self.reset_zoom_btn, self.export_btn):
             row.addWidget(button)
         self.capacity = QComboBox()
@@ -67,6 +68,8 @@ class WaveformWidget(QGroupBox):
         row.addWidget(self.capacity)
         row.addStretch()
         layout.addLayout(row)
+        layout.addWidget(self.step_btn)
+        self.step_btn.clicked.connect(self._show_step_analysis)
         row = QHBoxLayout()
         self.mode = QComboBox()
         self.mode.addItems(["时域", "FFT", "XY", "直方图", "条形图"])
@@ -272,6 +275,16 @@ class WaveformWidget(QGroupBox):
             return None
         latest = buf.latest_time
         return buf.snapshot_window(max(0, latest - self.window.value()), latest)
+
+    def _show_step_analysis(self):
+        from ui.step_analysis_dialog import StepAnalysisDialog
+        buf = self._buffers.get(self._motor_id)
+        data = self._frozen if self._paused else (buf.snapshot() if buf is not None else None)
+        if data is None or not len(data['times']):
+            QMessageBox.information(self, '电流阶跃分析', '当前电机没有缓存数据')
+            return
+        cursor_start = self._cursors[0].value() if self.cursor_cb.isChecked() else None
+        StepAnalysisDialog(data, self._motor_id, self, cursor_start=cursor_start).exec_()
 
     def _export_csv(self):
         buf = self._buffers.get(self._motor_id)
