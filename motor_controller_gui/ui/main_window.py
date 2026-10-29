@@ -177,11 +177,20 @@ class MainWindow(QMainWindow):
         self._status_flush_timer.start()
 
     def _drain_telemetry(self):
-        for arb_id, data, timestamp in self.can_thread.take_telemetry():
-            self._handle_can_message(arb_id, data, timestamp)
+        self.client.expire_command_acks()
+        # Yield regularly to buttons and command responses, even during overload.
+        deadline = time.perf_counter() + .004
+        while True:
+            batch = self.can_thread.take_telemetry(64, max_age=.250, with_received_time=True)
+            for arb_id, data, timestamp, received_at in batch:
+                self._handle_can_message(arb_id, data, timestamp, received_at)
+            if len(batch) < 64 or time.perf_counter() >= deadline:
+                break
         self.statusBar().showMessage(
             f"接收队列 {self.can_thread.telemetry_pending}/32768 | "
-            f"过载丢弃 {self.can_thread.telemetry_dropped} 帧")
+            f"队列最旧 {self.can_thread.telemetry_age_ms:.1f} ms | "
+            f"过载/过期丢弃 {self.can_thread.telemetry_dropped} 帧（过期 {self.can_thread.telemetry_stale}） | "
+            f"最近发送调用 {self.can_thread.last_send_ms:.1f} ms")
 
     def closeEvent(self, event):
         self.can_thread.running = False
@@ -432,7 +441,7 @@ class MainWindow(QMainWindow):
             return
         self._apply_status_ui(motor_id, report)
 
-    def _handle_can_message(self, arb_id: int, data: bytes, timestamp: float) -> None:
+    def _handle_can_message(self, arb_id: int, data: bytes, timestamp: float, received_at=None) -> None:
         parsed = parse_frame(data)
         if parsed is None:
             if data:
@@ -443,6 +452,10 @@ class MainWindow(QMainWindow):
             return
         cnt, cmd, payload = parsed
 
+        if cmd == CMD.COMMAND_ACK:
+            self.client.command_ack(arb_id, payload)
+            return
+
         if cmd == CMD.PERIOD_REPORT:
             report = parse_period_report(payload, self.client.protocol_version)
             if report:
@@ -451,7 +464,7 @@ class MainWindow(QMainWindow):
                     self._ensure_motor_panel(arb_id)
                 if arb_id == self._motor_id:
                     self._maybe_update_status(arb_id, report)
-                self.waveform_widget.append_sample(arb_id, report, timestamp=timestamp)
+                self.waveform_widget.append_sample(arb_id, report, timestamp=timestamp, received_at=received_at)
             return
         # else:
         #     print(f"cmd: {cmd}")
@@ -570,6 +583,8 @@ class MainWindow(QMainWindow):
                     f"电机 {arb_id} 恢复出厂: 恢复失败"
                     + (f" (应答={raw})" if raw is not None else " (无应答)")
                 )
+        elif cmd in (CMD.ENABLE, CMD.CONTROL_MODE):
+            self._log_api_result(arb_id, '使能/失能' if cmd == CMD.ENABLE else '设置模式', payload)
         elif cmd == CMD.CLEAR_FAULT:
             self._log_api_result(arb_id, "清除故障", payload, no_fault_label="无锁存故障")
         elif cmd == CMD.FAULT_RESET:

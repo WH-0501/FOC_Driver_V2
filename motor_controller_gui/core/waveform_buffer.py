@@ -1,5 +1,7 @@
 """Bounded NumPy ring. GUI consumer owns writes; snapshots are independent arrays."""
 import numpy as np
+import time
+from collections import deque
 from core.waveform_curves import CURVE_KEYS
 
 WAVEFORM_WINDOW_SECONDS = 6.0
@@ -17,6 +19,8 @@ class WaveformBuffer:
         self._last_raw_ts = None
         self._time = 0.0
         self._last_target = dict(pos=0.0, vel=0.0, iq=0.0)
+        self._received_target = dict(self._last_target)
+        self._target_events = deque()
         self.generation = self.total_samples = 0
 
     def __len__(self):
@@ -30,12 +34,14 @@ class WaveformBuffer:
     def times(self):
         return self.snapshot(keys=())["times"]
 
-    def set_target(self, pos=None, vel=None, iq=None):
+    def set_target(self, pos=None, vel=None, iq=None, changed_at=None):
         for key, value in (("pos", pos), ("vel", vel), ("iq", iq)):
             if value is not None:
                 self._last_target[key] = float(value)
+        self._target_events.append((time.monotonic() if changed_at is None else changed_at,
+                                    dict(self._last_target)))
 
-    def append_sample(self, sample, timestamp=None):
+    def append_sample(self, sample, timestamp=None, received_at=None):
         if self._size:
             dt = NOMINAL_REPORT_PERIOD
             if timestamp is not None and self._last_raw_ts is not None:
@@ -45,7 +51,14 @@ class WaveformBuffer:
             self._time += dt
         if timestamp is not None and np.isfinite(timestamp):
             self._last_raw_ts = timestamp
-        target = self._last_target
+        if received_at is None:
+            target = self._last_target
+            self._target_events.clear()
+            self._received_target = dict(target)
+        else:
+            while self._target_events and self._target_events[0][0] <= received_at:
+                _, self._received_target = self._target_events.popleft()
+            target = self._received_target
         self._data[:, self._head] = (
             self._time, target['pos'], sample.get('position_plot', sample.get('position_rad', np.nan)),
             target['vel'], sample.get('velocity', np.nan), target['iq'],
@@ -62,6 +75,8 @@ class WaveformBuffer:
         self._head = self._size = self.total_samples = 0
         self._last_raw_ts = None
         self._time = 0.0
+        self._target_events.clear()
+        self._received_target = dict(self._last_target)
         self.generation += 1
 
     def resize(self, max_points):

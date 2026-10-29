@@ -29,6 +29,9 @@ impl+=function((app/'Driver/motor_driver.c').read_text(encoding='utf-8'),'motor_
 start=protocol.index('    case CAN_FD_CMD_CONTROL_MODE:')
 end=protocol.index('    case ',start+10)
 impl+='static void test_protocol_mode(const uint8_t *payload,uint8_t payload_len) { error_t result; uint8_t reply_payload[1]; switch(CAN_FD_CMD_CONTROL_MODE) {\n'+protocol[start:end]+'}\n}\n'
+start=protocol.index('    case CAN_FD_CMD_ENABLE:')
+end=protocol.index('    case ',start+10)
+impl+='static void test_protocol_enable(const uint8_t *payload,uint8_t payload_len) { error_t result; uint8_t reply_payload[1]; switch(CAN_FD_CMD_ENABLE) {\n'+protocol[start:end]+'}\n}\n'
 from contextlib import nullcontext
 if args.build_dir: args.build_dir.mkdir(parents=True,exist_ok=True)
 with (nullcontext(str(args.build_dir.resolve())) if args.build_dir else tempfile.TemporaryDirectory(prefix='foc_c06_',ignore_cleanup_errors=True)) as temp:

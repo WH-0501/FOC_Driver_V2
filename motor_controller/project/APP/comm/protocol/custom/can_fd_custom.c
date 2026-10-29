@@ -9,6 +9,7 @@
 #include "foc_fault.h"
 #include "board.h"
 #include "common.h"
+#include <string.h>
 
 static uint16_t s_node_id;
 static bool (*s_send)(const comm_frame_t *frame);
@@ -19,6 +20,14 @@ static uint32_t s_saved_report_interval_us;
 static float s_mcu_temp_cal_c;
 static motor_handle_t *s_motor;
 static uint8_t s_tx_buf[COMM_FRAME_MAX_LEN];
+static bool s_request_unicast;
+/* Foreground-only response queue. PTB can be busy with a periodic report;
+ * retry replies on subsequent polls instead of silently dropping them. */
+#define REPLY_QUEUE_DEPTH 16u
+static struct { uint16_t id; uint8_t cmd, len, data[COMM_FRAME_MAX_LEN - 2u]; }
+    s_replies[REPLY_QUEUE_DEPTH];
+static uint8_t s_reply_head, s_reply_tail, s_reply_count;
+static uint32_t s_reply_drops;
 
 /**
  * @brief 发送 CAN-FD 帧
@@ -74,9 +83,33 @@ static bool can_fd_custom_send_frame(uint32_t id, uint8_t cmd, const uint8_t *pa
  * @param payload 有效数据
  * @param payload_len 有效数据长度
  */
+static void can_fd_custom_flush_reply(void)
+{
+  if (s_reply_count != 0u &&
+      can_fd_custom_send_frame(s_replies[s_reply_tail].id, s_replies[s_reply_tail].cmd,
+                              s_replies[s_reply_tail].data, s_replies[s_reply_tail].len))
+  {
+    s_reply_tail = (uint8_t)((s_reply_tail + 1u) % REPLY_QUEUE_DEPTH);
+    --s_reply_count;
+  }
+}
+
 static void can_fd_custom_reply(uint8_t cmd, const uint8_t *payload, uint8_t payload_len)
 {
-  (void)can_fd_custom_send_frame(s_node_id, cmd, payload, payload_len);
+  if (!s_request_unicast) return;
+  can_fd_custom_flush_reply();
+  if (s_reply_count >= REPLY_QUEUE_DEPTH || payload_len > COMM_FRAME_MAX_LEN - 2u)
+  {
+    ++s_reply_drops;
+    return;
+  }
+  s_replies[s_reply_head].id = s_node_id;
+  s_replies[s_reply_head].cmd = cmd;
+  s_replies[s_reply_head].len = payload_len;
+  if (payload_len != 0u) memcpy(s_replies[s_reply_head].data, payload, payload_len);
+  s_reply_head = (uint8_t)((s_reply_head + 1u) % REPLY_QUEUE_DEPTH);
+  ++s_reply_count;
+  can_fd_custom_flush_reply();
 }
 
 static bool can_fd_custom_require_disabled(void)
@@ -488,17 +521,10 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       break;
 
     case CAN_FD_CMD_ENABLE:
-      if (payload_len >= 1u)
-      {
-        if (payload[0] != 0u)
-        {
-          (void)mc_enable();
-        }
-        else
-        {
-          (void)mc_disable();
-        }
-      }
+      result = (payload_len >= 1u && payload[0] <= 1u)
+          ? (payload[0] ? mc_enable() : mc_disable()) : ERR_PARAM;
+      reply_payload[0] = (uint8_t)result;
+      can_fd_custom_reply(CAN_FD_CMD_ENABLE, reply_payload, 1u);
       break;
 
     case CAN_FD_CMD_CONTROL_MODE:
@@ -884,6 +910,9 @@ static bool can_fd_custom_init(uint16_t node_id)
   s_motor = motor_get_handler();
   s_last_report_us = board_time_us();
   s_tx_cnt = 0u;
+  s_request_unicast = false;
+  s_reply_head = s_reply_tail = s_reply_count = 0u;
+  s_reply_drops = 0u;
   s_report_interval_us = 1000000u / (uint32_t)CAN_FD_REPORT_HZ_DEFAULT;
   s_saved_report_interval_us = s_report_interval_us;
   s_mcu_temp_cal_c = 0.0f;
@@ -933,7 +962,16 @@ static void can_fd_custom_on_rx(const comm_frame_t *frame)
 
   if (cmd == CAN_FD_CMD_VERIFY_ELECTRICAL && frame->id != s_node_id) return;
   if ((cmd == CAN_FD_CMD_GET_SPEED_LIMITS || cmd == CAN_FD_CMD_SET_CURRENT_SOFT_SPEED) && frame->id != s_node_id) return;
+  s_request_unicast = (frame->id == s_node_id);
+  if (cmd == CAN_FD_CMD_COMMAND_ACK) return; /* response-only; no ACK loops */
   can_fd_custom_handle_command(cmd, payload, payload_len);
+  if (s_request_unicast && !can_fd_iap_is_active())
+  {
+    /* Dispatch completion, NOT operation success. Preserve existing typed
+     * replies for API results. Echo request identity for host RTT matching. */
+    uint8_t ack[2] = {frame->data[0], cmd};
+    can_fd_custom_reply(CAN_FD_CMD_COMMAND_ACK, ack, sizeof(ack));
+  }
 }
 
 static void can_fd_custom_poll(void)
@@ -941,6 +979,8 @@ static void can_fd_custom_poll(void)
   uint32_t now;
 
   can_fd_iap_poll();
+  can_fd_custom_flush_reply();
+  if (s_reply_count != 0u) return; /* replies before periodic telemetry */
 
   if (s_report_interval_us == 0u)
   {

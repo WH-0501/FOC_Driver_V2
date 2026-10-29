@@ -18,9 +18,9 @@ static float speed_limit_soft_iq(float iq, float shaft_rad_s, float soft_rad_s)
   speed = fabsf(shaft_rad_s);
   /** 电机轴速度超过限速值，则限制为限速值 */
   if (speed >= soft_rad_s) return 0.0f;
-  /** 电机轴速度低于限速值的85%，则不限制 */
-  if (speed <= 0.85f * soft_rad_s) return iq;
-  /** 电机轴速度在限速值的85%到100%之间，则线性限制 */
+  /** Below 90%, preserve torque. Use the same 10% span as the divisor. */
+  if (speed <= 0.9f * soft_rad_s) return iq;
+  /** Taper from 90% to 100%; never amplify the requested current. */
   scale = (soft_rad_s - speed) / (0.1f * soft_rad_s);
   return iq * scale;
 }

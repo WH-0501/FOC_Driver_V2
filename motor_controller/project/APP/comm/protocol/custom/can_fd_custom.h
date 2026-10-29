@@ -57,6 +57,7 @@ typedef enum
   CAN_FD_CMD_GET_MOTOR_TYPE = 0x52,
   CAN_FD_CMD_GET_MOTOR_PARAM = 0x53,
   CAN_FD_CMD_SET_REPORT_RATE = 0x7F,
+  CAN_FD_CMD_COMMAND_ACK = 0x7E, /* unicast dispatch completion: request CNT,CMD */
 
 /** 0x53 应答：电机本体只读参数（大端） */
 #define CAN_FD_MOTOR_PARAM_REPLY_LEN  16u

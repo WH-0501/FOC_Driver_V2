@@ -14,11 +14,11 @@ from PyQt5.QtWidgets import (
 )
 
 from core.motor_client import MotorClient
-from protocol import ProtocolVersion, encode_position, pos_uses_rad
+from protocol import CMD, ProtocolVersion, encode_position, pos_uses_rad
 
 
 class MultiMotorWidget(QGroupBox):
-    """向多个电机同时下发目标指令。"""
+    """向多个电机依次单播下发目标指令。"""
 
     def __init__(
         self,
@@ -44,12 +44,12 @@ class MultiMotorWidget(QGroupBox):
         btn_row = QHBoxLayout()
         self.refresh_btn = QPushButton("刷新电机列表")
         self.add_row_btn = QPushButton("添加行")
-        self.send_pos_btn = QPushButton("广播发送位置")
-        self.send_vel_btn = QPushButton("广播发送速度")
-        self.send_curr_btn = QPushButton("广播发送电流")
-        self.enable_all_btn = QPushButton("广播使能")
-        self.disable_all_btn = QPushButton("广播失能")
-        self.fault_reset_all_btn = QPushButton("广播异常复位")
+        self.send_pos_btn = QPushButton("逐台单播发送位置")
+        self.send_vel_btn = QPushButton("逐台单播发送速度")
+        self.send_curr_btn = QPushButton("逐台单播发送电流")
+        self.enable_all_btn = QPushButton("逐台单播使能")
+        self.disable_all_btn = QPushButton("逐台单播失能")
+        self.fault_reset_all_btn = QPushButton("逐台单播异常复位")
         btn_row.addWidget(self.refresh_btn)
         btn_row.addWidget(self.add_row_btn)
         btn_row.addWidget(self.send_pos_btn)
@@ -66,9 +66,9 @@ class MultiMotorWidget(QGroupBox):
         self.send_pos_btn.clicked.connect(self._send_positions)
         self.send_vel_btn.clicked.connect(self._send_velocities)
         self.send_curr_btn.clicked.connect(self._send_currents)
-        self.enable_all_btn.clicked.connect(lambda: self.client.broadcast_enable(True))
-        self.disable_all_btn.clicked.connect(lambda: self.client.broadcast_enable(False))
-        self.fault_reset_all_btn.clicked.connect(self._broadcast_fault_reset)
+        self.enable_all_btn.clicked.connect(lambda: self._set_enabled(True))
+        self.disable_all_btn.clicked.connect(lambda: self._set_enabled(False))
+        self.fault_reset_all_btn.clicked.connect(self._reset_selected_faults)
 
     def apply_protocol_version(self, version: ProtocolVersion) -> None:
         self._pos_header = "位置(rad)" if pos_uses_rad(version) else "位置(°)"
@@ -122,6 +122,14 @@ class MultiMotorWidget(QGroupBox):
                 rows.append(row)
         return rows
 
+    def _selected_motor_ids(self):
+        return list(dict.fromkeys(self.table.cellWidget(row, 0).value()
+                                  for row in self._collect_enabled_rows()))
+
+    def _set_enabled(self, enable):
+        for mid in self._selected_motor_ids():
+            self.client.set_enable(mid, enable)
+
     def _send_positions(self) -> None:
         targets = []
         for row in self._collect_enabled_rows():
@@ -129,8 +137,9 @@ class MultiMotorWidget(QGroupBox):
             pos_val = self.table.cellWidget(row, 1).value()
             targets.append((mid, encode_position(self.client.protocol_version, pos_val)))
         if targets:
-            self.client.broadcast_target_positions(targets)
-            self.log(f"广播位置指令 -> {targets}")
+            for mid, value in targets:
+                self.client.set_single_target(mid, CMD.TAR_POS, value)
+            self.log(f"逐台单播位置指令 -> {targets}")
 
     def _send_velocities(self) -> None:
         targets = []
@@ -139,12 +148,14 @@ class MultiMotorWidget(QGroupBox):
             vel = self.table.cellWidget(row, 2).value()
             targets.append((mid, vel))
         if targets:
-            self.client.broadcast_target_velocities(targets)
-            self.log(f"广播速度指令 -> {targets}")
+            for mid, value in targets:
+                self.client.set_single_target(mid, CMD.TAR_VEL, value)
+            self.log(f"逐台单播速度指令 -> {targets}")
 
-    def _broadcast_fault_reset(self) -> None:
-        self.client.broadcast_fault_reset()
-        self.log("已广播异常复位 (0x39)")
+    def _reset_selected_faults(self) -> None:
+        for mid in self._selected_motor_ids():
+            self.client.fault_reset(mid)
+        self.log("已向勾选电机逐台单播异常复位 (0x39)")
 
     def _send_currents(self) -> None:
         targets = []
@@ -153,5 +164,6 @@ class MultiMotorWidget(QGroupBox):
             curr = self.table.cellWidget(row, 3).value()
             targets.append((mid, curr))
         if targets:
-            self.client.broadcast_target_currents(targets)
-            self.log(f"广播电流指令 -> {targets}")
+            for mid, value in targets:
+                self.client.set_single_target(mid, CMD.TAR_CURR, value)
+            self.log(f"逐台单播电流指令 -> {targets}")

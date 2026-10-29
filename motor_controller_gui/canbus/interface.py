@@ -1,6 +1,7 @@
 """CAN/CANFD 通信线程。"""
 
 import threading
+import time
 from collections import deque
 from protocol import CMD
 
@@ -27,14 +28,28 @@ class CanThread(QThread):
         self._telemetry_lock = threading.Lock()
         self._telemetry = deque(maxlen=32768)
         self.telemetry_dropped = 0
+        self.telemetry_stale = 0
+        self.last_send_ms = 0.0
 
     def clear_telemetry(self):
         with self._telemetry_lock:
             self._telemetry.clear()
 
-    def take_telemetry(self, limit=1024):
+    def take_telemetry(self, limit=1024, max_age=None, with_received_time=False):
         with self._telemetry_lock:
-            return [self._telemetry.popleft() for _ in range(min(limit, len(self._telemetry)))]
+            if max_age is not None:
+                cutoff = time.monotonic() - max_age
+                while self._telemetry and self._telemetry[0][3] < cutoff:
+                    self._telemetry.popleft()
+                    self.telemetry_stale += 1
+                    self.telemetry_dropped += 1
+            items = [self._telemetry.popleft() for _ in range(min(limit, len(self._telemetry)))]
+            return items if with_received_time else [item[:3] for item in items]
+
+    @property
+    def telemetry_age_ms(self):
+        with self._telemetry_lock:
+            return max(0.0, (time.monotonic()-self._telemetry[0][3])*1000) if self._telemetry else 0.0
 
     @property
     def telemetry_pending(self):
@@ -105,8 +120,12 @@ class CanThread(QThread):
         threading.Thread(target=task, daemon=True).start()
 
     def send_message(self, arbitration_id: int, data: bytes, is_fd: bool = True) -> bool:
-        with self._send_lock:
-            return self.manager.send(arbitration_id, data, is_fd)
+        started = time.perf_counter()
+        try:
+            with self._send_lock:
+                return self.manager.send(arbitration_id, data, is_fd)
+        finally:
+            self.last_send_ms = (time.perf_counter()-started)*1000
 
     def send_messages_burst(self, frames: list[tuple[int, bytes]], is_fd: bool = True) -> bool:
         """连续发送多帧；发送/接收分锁，避免周期上报阻塞 IAP。"""
@@ -129,7 +148,7 @@ class CanThread(QThread):
                             with self._telemetry_lock:
                                 if len(self._telemetry) == self._telemetry.maxlen:
                                     self.telemetry_dropped += 1
-                                self._telemetry.append((msg.arbitration_id, data, msg.timestamp))
+                                self._telemetry.append((msg.arbitration_id, data, msg.timestamp, time.monotonic()))
                         else:
                             self.msg_received.emit(msg.arbitration_id, data, msg.timestamp)
                     drained += len(batch)

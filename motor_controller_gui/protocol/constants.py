@@ -19,6 +19,7 @@ class CMD(IntEnum):
 
     ENABLE = 0x40
     CONTROL_MODE = 0x41
+    COMMAND_ACK = 0x7E
     SET_POS_PID = 0x42
     SET_VEL_PID = 0x43
     SET_CUR_PID = 0x44

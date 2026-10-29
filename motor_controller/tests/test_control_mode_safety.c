@@ -36,6 +36,7 @@ static void foc_speed_open_control(motor_handle_t *m,float v) { (void)m;(void)v;
 error_t mc_disable(void) { motor_disarm(&motor);foc_fsm_next_state(&motor,STATE_IDLE);return ERR_NONE; }
 static void can_fd_custom_reply(unsigned cmd,const uint8_t *payload,unsigned len) { (void)cmd;reply_result=payload[0];reply_len=len; }
 #define CAN_FD_CMD_CONTROL_MODE 0x41
+#define CAN_FD_CMD_ENABLE 0x40
 /* Exact API/dispatch/loop functions and protocol case extracted by the runner. */
 #include "c06_impl.inc"
 static void reset(void) {
@@ -77,6 +78,17 @@ int main(void) {
   for(mode=0;mode<=255;++mode) {
     reset();wire=(uint8_t)mode;test_protocol_mode(&wire,1);
     assert(reply_len==1 && reply_result==(unsigned)(expected(mode)?ERR_NONE:ERR_CTRL_MODE));
+  }
+  reset(); wire=1; test_protocol_enable(&wire,1); assert(reply_len==1 && reply_result==ERR_NONE);
+  reset(); wire=1; motor.fault.latched=FAULT_PARAM; test_protocol_enable(&wire,1); assert(reply_result==ERR_FAULT_LATCHED);
+  reset(); wire=2; test_protocol_enable(&wire,1); assert(reply_result==ERR_PARAM);
+  reset(); test_protocol_enable(NULL,0); assert(reply_result==ERR_PARAM);
+  reset(); wire=0; armed=1; test_protocol_enable(&wire,1); assert(reply_result==ERR_NONE && !armed);
+  for (mode=0;mode<=1000;++mode) {
+    float speed=(float)mode/10.0f;
+    float q=speed_limit_soft_iq(1.0f,speed,100.0f);
+    assert(q>=0.0f && q<=1.00001f);
+    assert(speed_limit_soft_iq(-1.0f,-speed,100.0f)>=-1.00001f);
   }
   reset();test_protocol_mode(NULL,0);assert(reply_result==ERR_PARAM);
   reset();motor.fsm=STATE_RUNNING;wire=CTRL_MODE_POSITION;test_protocol_mode(&wire,1);assert(reply_result==ERR_STATE);

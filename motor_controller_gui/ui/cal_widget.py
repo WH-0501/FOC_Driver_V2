@@ -101,7 +101,7 @@ class MotorCalWidget(QWidget):
         # --- 机械零点 ---
         origin_group = QGroupBox("机械零点")
         origin_layout = QVBoxLayout()
-        self.origin_btn = QPushButton("广播设原点")
+        self.origin_btn = QPushButton("当前电机设原点")
         origin_hint = QLabel("失能状态下将当前关节位置设为零点（更新 theta_offset_rad）。")
         origin_hint.setWordWrap(True)
         origin_hint.setStyleSheet("color: #666;")
@@ -169,7 +169,7 @@ class MotorCalWidget(QWidget):
 
         self.align_method_combo.currentIndexChanged.connect(self._on_align_method_changed)
         self.align_local_btn.clicked.connect(self._align_local)
-        self.origin_btn.clicked.connect(self.client.broadcast_set_origin)
+        self.origin_btn.clicked.connect(lambda: self.client.set_origin(self.motor_id))
         self.kth71_cal_start_btn.clicked.connect(
             lambda: self.client.kth71_cal_start(self.motor_id)
         )

@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
 from core.motor_client import MotorClient
 from ui.speed_limit_widget import SpeedLimitWidget
 from protocol import (
+    CMD,
     ProtocolVersion,
     encode_position,
     pos_uses_rad,
@@ -40,12 +41,12 @@ class MotorControlWidget(QGroupBox):
     def _build_ui(self) -> None:
         layout = QVBoxLayout()
 
-        self.enable_btn = QPushButton("广播使能")
-        self.disable_btn = QPushButton("广播失能")
+        self.enable_btn = QPushButton("当前电机使能")
+        self.disable_btn = QPushButton("当前电机失能")
         self.fault_reset_btn = QPushButton("异常复位")
         self.mode_combo = QComboBox()
-        self.set_mode_btn = QPushButton("广播设置模式")
-        self.sync_btn = QPushButton("同步信号")
+        self.set_mode_btn = QPushButton("当前电机设置模式")
+        self.sync_btn = QPushButton("当前电机同步")
 
         self.pos_label = QLabel("目标位置:")
         self.target_pos = QDoubleSpinBox()
@@ -100,11 +101,11 @@ class MotorControlWidget(QGroupBox):
 
         self.setLayout(layout)
 
-        self.enable_btn.clicked.connect(lambda: self.client.broadcast_enable(True))
-        self.disable_btn.clicked.connect(lambda: self.client.broadcast_enable(False))
+        self.enable_btn.clicked.connect(lambda: self._send_enable(True))
+        self.disable_btn.clicked.connect(lambda: self._send_enable(False))
         self.fault_reset_btn.clicked.connect(lambda: self.client.fault_reset(self.motor_id))
         self.set_mode_btn.clicked.connect(self._send_mode)
-        self.sync_btn.clicked.connect(self.client.broadcast_sync)
+        self.sync_btn.clicked.connect(lambda: self.client.sync_motor(self.motor_id))
         self.send_pos_btn.clicked.connect(self._send_position)
         self.send_vel_btn.clicked.connect(self._send_velocity)
         self.send_curr_btn.clicked.connect(self._send_current)
@@ -198,8 +199,11 @@ class MotorControlWidget(QGroupBox):
 
     def _send_mode(self) -> None:
         wire = self._current_mode_wire()
-        self.client.broadcast_mode(wire)
+        self.client.set_mode(self.motor_id, wire)
         self._on_mode_changed()
+
+    def _send_enable(self, enable):
+        self.client.set_enable(self.motor_id, enable)
 
     def _send_position(self) -> None:
         version = self._protocol_version()
@@ -208,7 +212,7 @@ class MotorControlWidget(QGroupBox):
             return
         raw = encode_position(version, self.target_pos.value())
         self._notify_target(pos=self.target_pos.value())
-        self.client.broadcast_target_positions([(self.motor_id, raw)])
+        self.client.set_single_target(self.motor_id, CMD.TAR_POS, raw)
 
     def _send_velocity(self) -> None:
         version = self._protocol_version()
@@ -216,7 +220,7 @@ class MotorControlWidget(QGroupBox):
         if not mode_needs_velocity(version, wire):
             return
         self._notify_target(vel=float(self.target_vel.value()))
-        self.client.broadcast_target_velocities([(self.motor_id, self.target_vel.value())])
+        self.client.set_single_target(self.motor_id, CMD.TAR_VEL, self.target_vel.value())
 
     def _send_current(self) -> None:
         version = self._protocol_version()
@@ -224,4 +228,4 @@ class MotorControlWidget(QGroupBox):
         if not mode_needs_current(version, wire):
             return
         self._notify_target(curr=float(self.target_curr.value()))
-        self.client.broadcast_target_currents([(self.motor_id, self.target_curr.value())])
+        self.client.set_single_target(self.motor_id, CMD.TAR_CURR, self.target_curr.value())

@@ -235,9 +235,9 @@ class WaveformWidget(QGroupBox):
     def set_target(self, motor_id, pos=None, vel=None, curr=None, iq=None):
         self._get_buffer(motor_id).set_target(pos, vel, iq if iq is not None else curr)
 
-    def append_sample(self, motor_id, sample, timestamp=None):
+    def append_sample(self, motor_id, sample, timestamp=None, received_at=None):
         if self.collect_cb.isChecked():
-            self._get_buffer(motor_id).append_sample(sample, timestamp)
+            self._get_buffer(motor_id).append_sample(sample, timestamp, received_at)
 
     def clear_current(self):
         if self._motor_id in self._buffers:
