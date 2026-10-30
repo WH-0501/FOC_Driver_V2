@@ -42,6 +42,17 @@ class MotorClient:
         self._iap_responses: Deque[tuple] = deque()
         self._command_pending = {}
 
+    def configure_pid_debug(self, motor_id, mask, hz=100, log=True):
+        import struct
+        if motor_id <= 0 or mask < 0 or mask > 7 or not 1 <= hz <= 1000 or hz * int(mask).bit_count() > 1000:
+            raise ValueError("调试需单电机Node-ID，掩码0..7，每环频率1..1000Hz，调试总帧率不超过1000Hz")
+        if self._iap_session or not self.can.manager.is_running:
+            return False
+        profile = self.can.manager.profile
+        if profile is not None and not profile.fd:
+            return False
+        return self._send(motor_id, CMD.DEBUG_CONFIG, struct.pack('>BBH', 1, mask, hz), log=log)
+
     def command_ack(self, motor_id, payload):
         if len(payload) < 2:
             return

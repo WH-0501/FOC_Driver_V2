@@ -81,6 +81,7 @@ class MainWindow(QMainWindow):
         self._status_pending: Dict[int, bool] = {}
         self._traffic_sample: Optional[tuple] = None
         self._traffic_display = (0.0, 0.0, 0.0, 0.0)
+        self._pid_debug_dialogs = {}
         self._init_ui()
         self._init_connections()
         self._ensure_motor_panel(self._motor_id)
@@ -116,6 +117,9 @@ class MainWindow(QMainWindow):
             action.triggered.connect(lambda checked=False, b=button: b.click())
             self._connection_actions.append((action, button))
         self.connection_menu.aboutToShow.connect(self._update_connection_menu)
+        self.debug_menu = self.menuBar().addMenu("调试")
+        self.pid_debug_action = self.debug_menu.addAction("运行模式 / 三环 PID 调试…")
+        self.pid_debug_action.triggered.connect(self._show_pid_debug)
         self.analysis_menu = self.menuBar().addMenu("分析")
         self.step_analysis_action = self.analysis_menu.addAction("阶跃响应分析…")
         self.step_analysis_action.triggered.connect(lambda: self.waveform_widget._show_step_analysis())
@@ -279,7 +283,19 @@ class MainWindow(QMainWindow):
         )
         return f"{self._traffic_status_text()}  ||  {queue_part}"
 
+    def _show_pid_debug(self):
+        from ui.pid_debug_dialog import PidDebugDialog
+        dialog = self._pid_debug_dialogs.get(self._motor_id)
+        if dialog is None:
+            dialog = PidDebugDialog(self.client, self._motor_id, self)
+            self._pid_debug_dialogs[self._motor_id] = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
     def closeEvent(self, event):
+        for dialog in self._pid_debug_dialogs.values():
+            dialog.close()
         self.can_thread.running = False
         if not self.can_thread.wait(2000):
             event.ignore()
@@ -565,6 +581,12 @@ class MainWindow(QMainWindow):
                 )
             return
         cnt, cmd, payload = parsed
+
+        if cmd in (CMD.DEBUG_CONFIG, CMD.DEBUG_CURRENT, CMD.DEBUG_SPEED, CMD.DEBUG_POSITION):
+            dialog = self._pid_debug_dialogs.get(arb_id)
+            if dialog is not None:
+                dialog.receive(cmd, payload, timestamp)
+            return
 
         if cmd == CMD.COMMAND_ACK:
             self.client.command_ack(arb_id, payload)

@@ -184,7 +184,7 @@ class CanThread(QThread):
                     for msg in batch:
                         data = bytes(msg.data)
                         self._record_rx(len(data))
-                        if len(data) >= 2 and data[1] == CMD.PERIOD_REPORT:
+                        if len(data) >= 2 and data[1] in (CMD.PERIOD_REPORT, CMD.DEBUG_CURRENT, CMD.DEBUG_SPEED, CMD.DEBUG_POSITION):
                             with self._telemetry_lock:
                                 if len(self._telemetry) == self._telemetry.maxlen:
                                     self.telemetry_dropped += 1
