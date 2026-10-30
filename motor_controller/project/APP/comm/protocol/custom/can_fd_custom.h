@@ -56,6 +56,7 @@ typedef enum
   CAN_FD_CMD_SET_ORIGIN = 0x50,
   CAN_FD_CMD_GET_MOTOR_TYPE = 0x52,
   CAN_FD_CMD_GET_MOTOR_PARAM = 0x53,
+  CAN_FD_CMD_RESET_PID_TO_FACTORY = 0x54,
   CAN_FD_CMD_SET_REPORT_RATE = 0x7F,
   CAN_FD_CMD_COMMAND_ACK = 0x7E, /* unicast dispatch completion: request CNT,CMD */
 

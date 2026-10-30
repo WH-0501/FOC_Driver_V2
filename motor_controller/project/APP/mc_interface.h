@@ -19,6 +19,8 @@ fsm_state_t mc_get_fsm_state(void);
 
 error_t mc_enable(void);
 error_t mc_disable(void);
+/** 清除运行中三环 PID 积分/状态（config.pid 不变）。 */
+void mc_clear_pid_state(void);
 bool mc_is_enabled(void);
 
 typedef enum

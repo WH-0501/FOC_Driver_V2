@@ -298,6 +298,16 @@ error_t mc_disable(void)
   return ERR_NONE;
 }
 
+void mc_clear_pid_state(void)
+{
+  motor_handle_t *m = motor_get_handler();
+
+  (void)foc_pid_clear(&m->id_pid);
+  (void)foc_pid_clear(&m->iq_pid);
+  (void)foc_pid_clear(&m->velocity_pid);
+  (void)foc_pid_clear(&m->position_pid);
+}
+
 bool mc_is_enabled(void)
 {
   motor_handle_t *m = motor_get_handler();

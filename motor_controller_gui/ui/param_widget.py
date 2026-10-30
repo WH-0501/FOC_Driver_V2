@@ -181,9 +181,11 @@ class MotorParamWidget(QGroupBox):
 
         btn_row = QHBoxLayout()
         self.save_btn = QPushButton("保存参数")
-        self.reset_btn = QPushButton("恢复出厂")
+        self.reset_btn = QPushButton("恢复全参数出厂")
+        self.reset_pid_btn = QPushButton("恢复 PID 出厂")
         btn_row.addWidget(self.save_btn)
         btn_row.addWidget(self.reset_btn)
+        btn_row.addWidget(self.reset_pid_btn)
         btn_row.addStretch()
         layout.addLayout(btn_row)
 
@@ -202,6 +204,7 @@ class MotorParamWidget(QGroupBox):
         self.set_node_id_btn.clicked.connect(self._set_node_id)
         self.save_btn.clicked.connect(self._save_params)
         self.reset_btn.clicked.connect(self._reset_factory)
+        self.reset_pid_btn.clicked.connect(self._reset_pid_factory)
         self.get_motor_param_btn.clicked.connect(self._get_motor_param)
 
     def _require_disabled(self) -> bool:
@@ -240,7 +243,32 @@ class MotorParamWidget(QGroupBox):
     def _reset_factory(self) -> None:
         if not self._require_disabled():
             return
+        ans = QMessageBox.question(
+            self,
+            "恢复全参数出厂",
+            "将整份 motor_config 恢复为出厂默认值并写入 Flash，"
+            "包含电角度零偏、方向、保护阈值、Node-ID、PID 等。\n\n是否继续？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            return
         self.client.reset_factory(self.motor_id)
+
+    def _reset_pid_factory(self) -> None:
+        if not self._require_disabled():
+            return
+        ans = QMessageBox.question(
+            self,
+            "恢复 PID 出厂",
+            "仅将位置 / 速度 / 电流三环 PID 恢复为默认值并写入 Flash，"
+            "不会改变电角度对齐、电机本体参数、保护阈值、Node-ID 等。\n\n是否继续？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+        self.client.reset_pid_factory(self.motor_id)
 
     def _validate_pid(self, p: float, i: float, d: float) -> bool:
         err = pid_params_in_range(p, i, d, self.client.protocol_version)

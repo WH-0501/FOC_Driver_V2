@@ -691,11 +691,25 @@ class MainWindow(QMainWindow):
         elif cmd == CMD.RESET_TO_FACTORY:
             ok = parse_bool_result(payload)
             if ok:
-                self.log(f"电机 {arb_id} 恢复出厂: 成功")
+                self.log(f"电机 {arb_id} 恢复全参数出厂: 成功")
+                if arb_id == self._motor_id:
+                    self.client.read_all_params(arb_id)
             else:
                 raw = payload[0] if payload else None
                 self.log(
-                    f"电机 {arb_id} 恢复出厂: 恢复失败"
+                    f"电机 {arb_id} 恢复全参数出厂: 失败"
+                    + (f" (应答={raw})" if raw is not None else " (无应答)")
+                )
+        elif cmd == CMD.RESET_PID_TO_FACTORY:
+            ok = parse_bool_result(payload)
+            if ok:
+                self.log(f"电机 {arb_id} 恢复 PID 出厂: 成功")
+                if arb_id == self._motor_id:
+                    self.client.read_all_params(arb_id)
+            else:
+                raw = payload[0] if payload else None
+                self.log(
+                    f"电机 {arb_id} 恢复 PID 出厂: 失败"
                     + (f" (应答={raw})" if raw is not None else " (无应答)")
                 )
         elif cmd in (CMD.ENABLE, CMD.CONTROL_MODE):

@@ -25,5 +25,7 @@ bool motor_config_init(motor_config_t *config);
 bool motor_config_load(motor_config_t *config);
 bool motor_config_save(const motor_config_t *config);
 bool motor_config_reset(motor_config_t *config);
+/** 仅将三环 PID 恢复为默认值并写入 Flash；保留 param/limits/motion/comm 等。 */
+bool motor_config_reset_pid(motor_config_t *config);
 
 #endif /* __MOTOR_CONFIG_H__ */

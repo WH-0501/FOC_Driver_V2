@@ -404,6 +404,9 @@ class MotorClient:
     def broadcast_reset_factory(self) -> bool:
         return self._send(CAN_BROADCAST_ID, CMD.RESET_TO_FACTORY)
 
+    def broadcast_reset_pid_factory(self) -> bool:
+        return self._send(CAN_BROADCAST_ID, CMD.RESET_PID_TO_FACTORY)
+
     def broadcast_clear_fault(self) -> bool:
         return self._send(CAN_BROADCAST_ID, CMD.CLEAR_FAULT)
 
@@ -548,6 +551,9 @@ class MotorClient:
 
     def reset_factory(self, motor_id: int) -> bool:
         return self._send(motor_id, CMD.RESET_TO_FACTORY)
+
+    def reset_pid_factory(self, motor_id: int) -> bool:
+        return self._send(motor_id, CMD.RESET_PID_TO_FACTORY)
 
     def clear_fault(self, motor_id: int) -> bool:
         return self._send(motor_id, CMD.CLEAR_FAULT)

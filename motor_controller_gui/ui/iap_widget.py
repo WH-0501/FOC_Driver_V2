@@ -126,7 +126,7 @@ class IapWidget(QWidget):
             self,
             "选择固件",
             "",
-            "固件二进制 (*.bin);;所有文件 (*.*)",
+            "固件二进制 (*.efw);;固件二进制 (*.bin);;所有文件 (*.*)",
         )
         if not path:
             return

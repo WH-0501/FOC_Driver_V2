@@ -665,6 +665,18 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       }
       break;
 
+    case CAN_FD_CMD_RESET_PID_TO_FACTORY:
+      if (can_fd_custom_require_disabled())
+      {
+        reply_payload[0] = motor_config_reset_pid(&m->config) ? 1u : 0u;
+        if (reply_payload[0] != 0u)
+        {
+          (void)mc_clear_pid_state();
+        }
+        can_fd_custom_reply(CAN_FD_CMD_RESET_PID_TO_FACTORY, reply_payload, 1u);
+      }
+      break;
+
     case CAN_FD_CMD_CLEAR_FAULT:
       result = mc_try_recover_from_fault();
       reply_payload[0] = (uint8_t)result;

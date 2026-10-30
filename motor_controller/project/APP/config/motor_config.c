@@ -291,6 +291,23 @@ bool motor_config_save(const motor_config_t *config)
   return (any_write && all_ok);
 }
 
+static void motor_config_apply_default_pid_only(motor_config_t *config)
+{
+  motor_config_t defaults;
+
+  motor_config_set_defaults(&defaults);
+  config->pid = defaults.pid;
+
+  config->pid.id.limit = config->limits.vd_limit;
+  config->pid.id.i_limit = config->limits.vd_limit * DEF_I_LIMIT_FACTOR;
+  config->pid.iq.limit = config->limits.vq_limit;
+  config->pid.iq.i_limit = config->limits.vq_limit * DEF_I_LIMIT_FACTOR;
+  config->pid.velocity.limit = config->limits.iq_limit;
+  config->pid.velocity.i_limit = config->pid.velocity.limit * DEF_I_LIMIT_FACTOR;
+  config->pid.position.limit = config->motion.max_speed_rad_s;
+  config->pid.position.i_limit = config->pid.position.limit * DEF_I_LIMIT_FACTOR;
+}
+
 bool motor_config_reset(motor_config_t *config)
 {
   motor_config_t defaults;
@@ -310,4 +327,21 @@ bool motor_config_reset(motor_config_t *config)
   }
 
   return saved_ok;
+}
+
+bool motor_config_reset_pid(motor_config_t *config)
+{
+  if (config == NULL)
+  {
+    return false;
+  }
+
+  motor_config_apply_default_pid_only(config);
+
+  if (!motor_config_has_storage())
+  {
+    return true;
+  }
+
+  return motor_config_save(config);
 }
