@@ -552,6 +552,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         {
           can_fd_codec_unpack_pid(payload, &m->config.pid.position.kp, &m->config.pid.position.ki,
                                   &m->config.pid.position.kd);
+          mc_clear_pid_state();
           can_fd_custom_reply_pid(CAN_FD_CMD_GET_POS_PID, &m->config.pid.position);
         }
       }
@@ -564,6 +565,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         {
           can_fd_codec_unpack_pid(payload, &m->config.pid.velocity.kp, &m->config.pid.velocity.ki,
                                   &m->config.pid.velocity.kd);
+          mc_clear_pid_state();
           can_fd_custom_reply_pid(CAN_FD_CMD_GET_VEL_PID, &m->config.pid.velocity);
         }
       }
@@ -575,6 +577,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         if (can_fd_custom_require_disabled())
         {
           can_fd_codec_unpack_pid(payload, &m->config.pid.iq.kp, &m->config.pid.iq.ki, &m->config.pid.iq.kd);
+          mc_clear_pid_state();
           can_fd_custom_reply_pid(CAN_FD_CMD_GET_CUR_PID, &m->config.pid.iq);
         }
       }
