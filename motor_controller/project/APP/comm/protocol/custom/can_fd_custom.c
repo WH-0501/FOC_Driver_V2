@@ -577,6 +577,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         if (can_fd_custom_require_disabled())
         {
           can_fd_codec_unpack_pid(payload, &m->config.pid.iq.kp, &m->config.pid.iq.ki, &m->config.pid.iq.kd);
+          can_fd_codec_unpack_pid(payload, &m->config.pid.id.kp, &m->config.pid.id.ki, &m->config.pid.id.kd);
           mc_clear_pid_state();
           can_fd_custom_reply_pid(CAN_FD_CMD_GET_CUR_PID, &m->config.pid.iq);
         }
