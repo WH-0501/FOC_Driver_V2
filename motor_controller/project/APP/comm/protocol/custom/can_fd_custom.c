@@ -28,6 +28,11 @@ static struct { uint16_t id; uint8_t cmd, len, data[COMM_FRAME_MAX_LEN - 2u]; }
     s_replies[REPLY_QUEUE_DEPTH];
 static uint8_t s_reply_head, s_reply_tail, s_reply_count;
 static uint32_t s_reply_drops;
+/* Diagnostic streaming is foreground only; a 3 s lease prevents orphan traffic. */
+static uint8_t s_debug_mask, s_debug_next;
+static uint16_t s_debug_clock;
+static uint32_t s_debug_age, s_debug_elapsed[3], s_debug_period = 10000u;
+
 
 /**
  * @brief 发送 CAN-FD 帧
@@ -472,6 +477,77 @@ static void can_fd_custom_reply_align(error_t result, uint8_t method)
   can_fd_custom_reply(CAN_FD_CMD_ALIGN_ELECTRIC_ANGLE, reply, CAN_FD_ALIGN_REPLY_LEN);
 }
 
+/* Snapshot under a short IRQ mask; serialization/transmission occurs outside it. */
+static bool can_fd_debug_send(unsigned loop)
+{
+  pid_state_t pid;
+  pid_param_t cfg;
+  float f[14];
+  uint8_t p[62] = {1u, 0u};
+  uint32_t irq, stamp, raw;
+  unsigned i;
+  bool active;
+  control_mode_t mode;
+  if (s_motor == NULL) return false;
+  irq = __get_PRIMASK();
+  __disable_irq();
+  mode = s_motor->ctrl_mode;
+  if (loop == 0u) { pid = s_motor->iq_pid; cfg = s_motor->config.pid.iq; }
+  else if (loop == 1u) { pid = s_motor->velocity_pid; cfg = s_motor->config.pid.velocity; }
+  else { pid = s_motor->position_pid; cfg = s_motor->config.pid.position; }
+  active = s_motor->fsm == STATE_RUNNING &&
+    (loop == 0u ? (mode == CTRL_MODE_TORQUE || mode == CTRL_MODE_SPEED || mode == CTRL_MODE_POSITION) :
+     loop == 1u ? (mode == CTRL_MODE_SPEED || mode == CTRL_MODE_POSITION) : mode == CTRL_MODE_POSITION);
+  f[0] = pid.target; f[1] = pid.feedback;
+  f[2] = s_motor->state.i_q; f[3] = s_motor->state.i_d;
+  f[4] = pid.dt; f[5] = pid.last_integral; f[6] = pid.last_output;
+  f[7] = s_motor->state.vbus_filtered; f[8] = s_motor->state.shaft.velocity_rad_s;
+  f[9] = cfg.kp; f[10] = cfg.ki; f[11] = cfg.limit;
+  f[12] = cfg.i_limit; f[13] = cfg.ramp;
+  stamp = pid.timestamp;
+  p[1] = (active ? 1u : 0u) | (cfg.ramp > 0.0f ? 2u : 0u) |
+    (s_motor->fsm == STATE_FAULT ? 4u : 0u);
+  __set_PRIMASK(irq);
+  p[2] = (uint8_t)(stamp >> 24); p[3] = (uint8_t)(stamp >> 16);
+  p[4] = (uint8_t)(stamp >> 8); p[5] = (uint8_t)stamp;
+  for (i = 0u; i < 14u; ++i) {
+    memcpy(&raw, &f[i], 4u);
+    p[6u+4u*i] = (uint8_t)(raw >> 24); p[7u+4u*i] = (uint8_t)(raw >> 16);
+    p[8u+4u*i] = (uint8_t)(raw >> 8); p[9u+4u*i] = (uint8_t)raw;
+  }
+  return can_fd_custom_send_frame(s_node_id, (uint8_t)(CAN_FD_CMD_DEBUG_CURRENT+loop), p, sizeof(p));
+}
+
+static void can_fd_debug_clock(void)
+{
+  uint16_t now = (uint16_t)board_time_us();
+  uint16_t delta = (uint16_t)(now-s_debug_clock);
+  unsigned i;
+  s_debug_clock = now;
+  if (!s_debug_mask) return;
+  s_debug_age += delta;
+  for (i=0u; i<3u; ++i) {
+    if (s_debug_elapsed[i] < s_debug_period) s_debug_elapsed[i] += delta;
+  }
+  if (s_debug_age >= 3000000u || can_fd_iap_is_active()) s_debug_mask = 0u;
+}
+
+static void can_fd_debug_poll(void)
+{
+  unsigned j, loop;
+  if (!s_debug_mask) return;
+  for (j=0u; j<3u; ++j) {
+    loop = (s_debug_next+j)%3u;
+    if ((s_debug_mask & (1u<<loop)) && s_debug_elapsed[loop] >= s_debug_period) {
+      if (can_fd_debug_send(loop)) {
+        s_debug_elapsed[loop] = 0u;
+        s_debug_next = (uint8_t)((loop+1u)%3u);
+      }
+      return; /* at most one frame per foreground poll; retry on busy */
+    }
+  }
+}
+
 static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, uint8_t payload_len)
 {
   motor_handle_t *m = s_motor;
@@ -493,6 +569,29 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
 
   switch (cmd)
   {
+    case CAN_FD_CMD_DEBUG_CONFIG:
+    {
+      uint8_t reply[5] = {1u, 0u, s_debug_mask, 0u, 0u};
+      uint16_t hz = payload_len >= 4u ? can_fd_codec_read_u16_be(&payload[2]) : 0u;
+      if (!s_request_unicast) break;
+      if (payload_len < 4u || payload[0] != 1u || (payload[1] & ~7u) ||
+          (payload[1] && (hz < 1u || hz > 1000u ||
+           hz * ((payload[1]&1u) + ((payload[1]>>1)&1u) + ((payload[1]>>2)&1u)) > 1000u))) {
+        reply[1] = (uint8_t)ERR_PARAM;
+      } else {
+        if (s_debug_mask != payload[1] || (hz && s_debug_period != 1000000u/hz)) {
+          memset(s_debug_elapsed, 0, sizeof(s_debug_elapsed));
+        }
+        s_debug_mask = payload[1]; s_debug_age = 0u;
+        s_debug_clock = (uint16_t)board_time_us();
+        if (hz) s_debug_period = 1000000u/hz;
+        reply[2] = s_debug_mask;
+      }
+      can_fd_codec_write_u16_be(&reply[3], (uint16_t)(1000000u/s_debug_period));
+      can_fd_custom_reply(cmd, reply, sizeof(reply));
+      break;
+    }
+
     case CAN_FD_CMD_SYNC:
       s_last_report_us = board_time_us();
       break;
@@ -937,6 +1036,10 @@ static void can_fd_custom_period_report(void)
 
 static bool can_fd_custom_init(uint16_t node_id)
 {
+  s_debug_mask = 0u; s_debug_age = 0u; s_debug_next = 0u;
+  s_debug_clock = (uint16_t)board_time_us();
+  memset(s_debug_elapsed, 0, sizeof(s_debug_elapsed));
+
   s_node_id = node_id;
   s_motor = motor_get_handler();
   s_last_report_us = board_time_us();
@@ -1010,11 +1113,13 @@ static void can_fd_custom_poll(void)
   uint32_t now;
 
   can_fd_iap_poll();
+  can_fd_debug_clock();
   can_fd_custom_flush_reply();
   if (s_reply_count != 0u) return; /* replies before periodic telemetry */
 
   if (s_report_interval_us == 0u)
   {
+    can_fd_debug_poll();
     return;
   }
 
@@ -1024,6 +1129,7 @@ static void can_fd_custom_poll(void)
     s_last_report_us = now;
     can_fd_custom_period_report();
   }
+  can_fd_debug_poll();
 }
 
 static void can_fd_custom_bind_transport(bool (*send_fn)(const comm_frame_t *frame))
