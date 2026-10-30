@@ -110,6 +110,10 @@ class MotorParamWidget(QGroupBox):
         self.pos_p, self.pos_i, self.pos_d = self._make_pid_row(grid, 1, "位置环:")
         self.vel_p, self.vel_i, self.vel_d = self._make_pid_row(grid, 2, "速度环:")
         self.cur_p, self.cur_i, self.cur_d = self._make_pid_row(grid, 3, "电流环:")
+        self.cur_i.setToolTip("缩放后的配置值，与固件上报一致；实际 Ki = I × 10000。800 Hz 示例：I≈0.1508。")
+        ki_hint = QLabel("电流环 I 为缩放值：实际 Ki = I × 10000（例：0.1508 → 1508 V/(A·s)）")
+        ki_hint.setWordWrap(True)
+        layout.addWidget(ki_hint)
 
         self.set_pos_pid_btn = QPushButton("设置")
         self.get_pos_pid_btn = QPushButton("读取")

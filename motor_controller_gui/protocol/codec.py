@@ -28,8 +28,6 @@ from .constants import (
     ErrorCode,
     format_api_error_detail,
     MotorError,
-    CUR_PID_KI_PHYS_MAX,
-    CUR_PID_KI_SCALE,
     PID_FORMAT,
     PID_RAW_MAX,
     PID_VALUE_MAX,
@@ -423,35 +421,26 @@ def pack_pid_params(
 
 
 def cur_pid_params_in_range(
-    p: float,
-    i_phys: float,
-    d: float,
+    p: float, i: float, d: float,
     protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION,
 ) -> Optional[str]:
-    """电流环：P/D 为物理值；I 为物理 Ki，线值为 I / CUR_PID_KI_SCALE。"""
-    err = pid_params_in_range(p, i_phys / CUR_PID_KI_SCALE, d, protocol_version)
-    if err is not None:
-        return err
-    if i_phys > CUR_PID_KI_PHYS_MAX:
-        return f"I={i_phys} 超出电流环物理 Ki 上限 {CUR_PID_KI_PHYS_MAX:.4f}"
-    return None
+    """I is the firmware configuration value; runtime Ki = I * 10000."""
+    return pid_params_in_range(p, i, d, protocol_version)
 
 
 def pack_cur_pid_params(
-    p: float,
-    i_phys: float,
-    d: float,
+    p: float, i: float, d: float,
     protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION,
 ) -> bytes:
-    return pack_pid_params(p, i_phys / CUR_PID_KI_SCALE, d, protocol_version)
+    """Send scaled configuration Ki directly as Q12, without extra scaling."""
+    return pack_pid_params(p, i, d, protocol_version)
 
 
 def parse_cur_pid_response(
     payload: bytes, protocol_version: ProtocolVersion = DEFAULT_PROTOCOL_VERSION
 ) -> dict[str, float]:
-    pid = parse_pid_response(payload, protocol_version)
-    pid["I"] = pid["I"] * CUR_PID_KI_SCALE
-    return pid
+    """Return the same scaled Ki stored and reported by the firmware."""
+    return parse_pid_response(payload, protocol_version)
 
 
 def pack_stiff_damp(stiff: float, damp: float) -> bytes:
