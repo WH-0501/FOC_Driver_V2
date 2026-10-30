@@ -8,7 +8,10 @@ from core.step_response import StepSettings, analyze_steps, summarize
 
 
 FIELDS = [('source', '起点来源'), ('start_s', '阶跃时刻(s)'), ('from_ma', '原指令(mA)'), ('to_ma', '目标(mA)'),
-          ('baseline_ma', '实际初值(mA)'), ('rise_ms', '上升时间(ms)'),
+          ('baseline_ma', '实际初值(mA)'), ('rise_ms', '首次10%→90%(ms)'),
+          ('qualified_rise_ms', '保持交越10%→90%(ms)'),
+          ('t10_s', '首次10%时刻(s)'), ('t90_s', '首次90%时刻(s)'),
+          ('level10', '10%阈值(mA)'), ('level90', '90%阈值(mA)'),
           ('overshoot_pct', '原始峰值超调(%)'), ('settling_ms', '调节时间(ms)'),
           ('oscillations', '交替波动次数'), ('oscillation_ma', '振荡幅值(mA)'),
           ('oscillation_pct', '振荡幅值(%)'), ('band_ma', '误差带±mA'),
@@ -27,7 +30,7 @@ class StepAnalysisDialog(QDialog):
         layout = QVBoxLayout(self)
         note = QLabel('分析原始缓存快照，不发送指令；请选择与记录工作模式匹配的通道。位置直接使用记录值，不自动处理角度回绕。\n'
             '当前协议未提供设备侧指令生效时间/高速采样时间戳；目标曲线为上位机记录，所有结果均为遥测估算，不能直接用于控制环验收。\n'
-            '上升时间按实际初值→目标的10%～90%计算；超调按该阶跃幅值归一化。调节时间仅证明当前观察窗内保持。\n'
+            '上升时间按实际初值→目标的首次10%～90%交越计算；保持交越另列（可能因噪声回落而延后），不是另加保持时长。超调按该阶跃幅值归一化。调节时间仅证明当前观察窗内保持。\n'
             '超调取观察窗内原始峰值，可能包含尖峰；交替波动次数含扰动，不能等同于欠阻尼振铃次数。末段统计取窗口最后20%（至少5点）。')
         note.setWordWrap(True)
         layout.addWidget(note)
@@ -162,7 +165,7 @@ class StepAnalysisDialog(QDialog):
             row['exceeded'] = '、'.join(exceeded) or '无已观测超限（非合格判定）'
             for col, key in enumerate([k for k, _ in self.fields]+['exceeded']):
                 value = row[key]
-                text = '—' if value is None else (f'{value:.6g}' if isinstance(value, float) else str(value))
+                text = '—' if value is None else ((f'{value:.6f}' if key in ('start_s', 't10_s', 't90_s') else f'{value:.6g}') if isinstance(value, float) else str(value))
                 self.table.setItem(i, col, QTableWidgetItem(text))
         self.table.resizeColumnsToContents()
         stats = summarize(self.rows)

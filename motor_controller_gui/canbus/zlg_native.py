@@ -625,6 +625,8 @@ class ZlgCanSession:
         self.channel: int = 0
         self.channel_count: int = 1
         self.use_merge_recv: bool = False
+        self.timestamp_origin_us = None
+        self.last_timestamp_us = None
         self._abit_baud: int = CANFD_ABIT_BAUD_HZ
         self._dbit_baud: int = CANFD_DBIT_BAUD_HZ
         self._resistance: bool = True
@@ -944,6 +946,8 @@ class ZlgCanSession:
             )
 
     def stop_channel(self) -> None:
+        self.timestamp_origin_us = None
+        self.last_timestamp_us = None
         if self.api and self.channel_handle:
             self.api.reset_can(self.channel_handle)
             self.channel_handle = 0
@@ -1012,6 +1016,15 @@ class ZlgCanSession:
         batch = self.recv_batch(max_messages=1, timeout=timeout)
         return batch[0] if batch else None
 
+    def _timestamp_seconds(self, raw_us: int) -> float:
+        # Subtract in integer space BEFORE float conversion. Large uint64
+        # offsets otherwise quantize millisecond frames into 3.90625 ms steps.
+        raw_us = int(raw_us)
+        if self.timestamp_origin_us is None:
+            self.timestamp_origin_us = raw_us
+        self.last_timestamp_us = raw_us
+        return (raw_us - self.timestamp_origin_us) / 1_000_000.0
+
     def _recv_one_type(
         self,
         frame_type: int,
@@ -1031,7 +1044,7 @@ class ZlgCanSession:
             for idx in range(ret):
                 frame = msgs[idx].frame
                 data = bytes(frame.data[: frame.can_dlc])
-                ts = msgs[idx].timestamp / 1_000_000.0 if msgs[idx].timestamp else time.time()
+                ts = self._timestamp_seconds(msgs[idx].timestamp)
                 results.append((frame.can_id, data, ts))
         else:
             msgs, ret = self.api.receive_fd(self.channel_handle, count, timeout_ms)
@@ -1040,7 +1053,7 @@ class ZlgCanSession:
             for idx in range(ret):
                 frame = msgs[idx].frame
                 data = bytes(frame.data[: frame.len])
-                ts = msgs[idx].timestamp / 1_000_000.0 if msgs[idx].timestamp else time.time()
+                ts = self._timestamp_seconds(msgs[idx].timestamp)
                 results.append((frame.can_id, data, ts))
         return results
 
@@ -1062,7 +1075,7 @@ class ZlgCanSession:
                 continue
             frame = obj.zcanCANFDData.frame
             data = bytes(frame.data[: frame.len])
-            ts = obj.zcanCANFDData.timestamp / 1_000_000.0 if obj.zcanCANFDData.timestamp else time.time()
+            ts = self._timestamp_seconds(obj.zcanCANFDData.timestamp)
             results.append((frame.can_id, data, ts))
         return results
 

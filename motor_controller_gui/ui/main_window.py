@@ -59,6 +59,7 @@ from ui.motor_panel import MotorPanel
 from ui.waveform_widget import WaveformWidget
 
 STATUS_UI_INTERVAL = 0.05  # 20 Hz
+TRAFFIC_RATE_INTERVAL_S = 0.5
 
 
 class MainWindow(QMainWindow):
@@ -78,6 +79,8 @@ class MainWindow(QMainWindow):
         self._status_last_ui: Dict[int, float] = {}
         self._status_displayed: Dict[int, dict] = {}
         self._status_pending: Dict[int, bool] = {}
+        self._traffic_sample: Optional[tuple] = None
+        self._traffic_display = (0.0, 0.0, 0.0, 0.0)
         self._init_ui()
         self._init_connections()
         self._ensure_motor_panel(self._motor_id)
@@ -169,13 +172,17 @@ class MainWindow(QMainWindow):
         self.log_text.customContextMenuRequested.connect(self._show_log_context_menu)
         log_layout.addWidget(self.log_text)
         log_group.setLayout(log_layout)
-        log_dock = QDockWidget("通信日志", self)
-        log_dock.setObjectName("logDock")
-        log_dock.setWidget(log_group)
-        # 仅保留拖动停靠；去掉标题栏关闭/浮动（浮动窗带放大、关闭）
-        log_dock.setFeatures(QDockWidget.DockWidgetMovable)
-        self.addDockWidget(Qt.BottomDockWidgetArea, log_dock)
-        self._view_menu.addAction(log_dock.toggleViewAction())
+        self.log_dock = QDockWidget("通信日志", self)
+        self.log_dock.setObjectName("logDock")
+        self.log_dock.setWidget(log_group)
+        # 可拖动停靠；不用 Closable/Floatable，避免标题栏关闭/浮动按钮
+        self.log_dock.setFeatures(QDockWidget.DockWidgetMovable)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.log_dock)
+        self.log_dock_view_action = self._view_menu.addAction("通信日志")
+        self.log_dock_view_action.setCheckable(True)
+        self.log_dock_view_action.setChecked(True)
+        self.log_dock_view_action.triggered.connect(self._on_log_dock_view_toggled)
+        self.log_dock.visibilityChanged.connect(self._sync_log_dock_view_action)
 
         central.setLayout(root)
         self.setCentralWidget(central)
@@ -184,6 +191,15 @@ class MainWindow(QMainWindow):
         self.connection_dialog.show()
         self.connection_dialog.raise_()
         self.connection_dialog.activateWindow()
+
+    def _on_log_dock_view_toggled(self, checked: bool) -> None:
+        self.log_dock.setVisible(checked)
+
+    def _sync_log_dock_view_action(self, visible: bool) -> None:
+        if self.log_dock_view_action.isChecked() != visible:
+            self.log_dock_view_action.blockSignals(True)
+            self.log_dock_view_action.setChecked(visible)
+            self.log_dock_view_action.blockSignals(False)
 
     def _update_connection_menu(self):
         for action, button in self._connection_actions:
@@ -221,11 +237,47 @@ class MainWindow(QMainWindow):
                 self._handle_can_message(arb_id, data, timestamp, received_at)
             if len(batch) < 64 or time.perf_counter() >= deadline:
                 break
-        self.statusBar().showMessage(
-            f"接收队列 {self.can_thread.telemetry_pending}/32768 | "
-            f"队列最旧 {self.can_thread.telemetry_age_ms:.1f} ms | "
-            f"过载/过期丢弃 {self.can_thread.telemetry_dropped} 帧（过期 {self.can_thread.telemetry_stale}） | "
-            f"最近发送调用 {self.can_thread.last_send_ms:.1f} ms")
+        self._update_traffic_rates()
+        self.statusBar().showMessage(self._status_bar_message())
+
+    def _update_traffic_rates(self) -> None:
+        now = time.monotonic()
+        tx_f, tx_b, rx_f, rx_b = self.can_thread.snapshot_traffic()
+        if self._traffic_sample is None:
+            self._traffic_sample = (now, tx_f, tx_b, rx_f, rx_b)
+            return
+        t0, f0, b0, rf0, rb0 = self._traffic_sample
+        dt = now - t0
+        if dt < TRAFFIC_RATE_INTERVAL_S:
+            return
+        if dt > 0.0:
+            self._traffic_display = (
+                (tx_f - f0) / dt,
+                (tx_b - b0) / dt / 1024.0,
+                (rx_f - rf0) / dt,
+                (rx_b - rb0) / dt / 1024.0,
+            )
+        self._traffic_sample = (now, tx_f, tx_b, rx_f, rx_b)
+
+    def _traffic_status_text(self) -> str:
+        # 以上位机为中心：下行=本机发送(TX)，上行=本机接收(RX)
+        if not self.can_thread.manager.is_running:
+            return "下行(发) — · 上行(收) —"
+        tx_fps, tx_kbs, rx_fps, rx_kbs = self._traffic_display
+        return (
+            f"下行(发) {tx_fps:.1f} fps · {tx_kbs:.1f} KB/s | "
+            f"上行(收) {rx_fps:.1f} fps · {rx_kbs:.1f} KB/s"
+        )
+
+    def _status_bar_message(self) -> str:
+        ct = self.can_thread
+        queue_part = (
+            f"接收队列 {ct.telemetry_pending}/32768 | "
+            f"队列最旧 {ct.telemetry_age_ms:.1f} ms | "
+            f"过载/过期丢弃 {ct.telemetry_dropped} 帧（过期 {ct.telemetry_stale}） | "
+            f"最近发送调用 {ct.last_send_ms:.1f} ms"
+        )
+        return f"{self._traffic_status_text()}  ||  {queue_part}"
 
     def closeEvent(self, event):
         self.can_thread.running = False

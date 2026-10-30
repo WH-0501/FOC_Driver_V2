@@ -26,14 +26,46 @@ class CanThread(QThread):
         self._recv_lock = threading.Lock()
         self._lifecycle_lock = threading.Lock()
         self._telemetry_lock = threading.Lock()
+        self._traffic_lock = threading.Lock()
         self._telemetry = deque(maxlen=32768)
         self.telemetry_dropped = 0
         self.telemetry_stale = 0
         self.last_send_ms = 0.0
+        self.traffic_tx_frames = 0
+        self.traffic_tx_bytes = 0
+        self.traffic_rx_frames = 0
+        self.traffic_rx_bytes = 0
+
+    def reset_traffic_stats(self) -> None:
+        with self._traffic_lock:
+            self.traffic_tx_frames = 0
+            self.traffic_tx_bytes = 0
+            self.traffic_rx_frames = 0
+            self.traffic_rx_bytes = 0
+
+    def _record_tx(self, nbytes: int) -> None:
+        with self._traffic_lock:
+            self.traffic_tx_frames += 1
+            self.traffic_tx_bytes += max(0, int(nbytes))
+
+    def _record_rx(self, nbytes: int) -> None:
+        with self._traffic_lock:
+            self.traffic_rx_frames += 1
+            self.traffic_rx_bytes += max(0, int(nbytes))
+
+    def snapshot_traffic(self) -> tuple[int, int, int, int]:
+        with self._traffic_lock:
+            return (
+                self.traffic_tx_frames,
+                self.traffic_tx_bytes,
+                self.traffic_rx_frames,
+                self.traffic_rx_bytes,
+            )
 
     def clear_telemetry(self):
         with self._telemetry_lock:
             self._telemetry.clear()
+        self.reset_traffic_stats()
 
     def take_telemetry(self, limit=1024, max_age=None, with_received_time=False):
         with self._telemetry_lock:
@@ -123,14 +155,21 @@ class CanThread(QThread):
         started = time.perf_counter()
         try:
             with self._send_lock:
-                return self.manager.send(arbitration_id, data, is_fd)
+                ok = self.manager.send(arbitration_id, data, is_fd)
+            if ok:
+                self._record_tx(len(data))
+            return ok
         finally:
             self.last_send_ms = (time.perf_counter()-started)*1000
 
     def send_messages_burst(self, frames: list[tuple[int, bytes]], is_fd: bool = True) -> bool:
         """连续发送多帧；发送/接收分锁，避免周期上报阻塞 IAP。"""
         with self._send_lock:
-            return self.manager.send_burst(frames, is_fd)
+            ok = self.manager.send_burst(frames, is_fd)
+        if ok:
+            for _arb_id, payload in frames:
+                self._record_tx(len(payload))
+        return ok
 
     def run(self) -> None:
         while self.running and self.manager.is_running:
@@ -144,6 +183,7 @@ class CanThread(QThread):
                         break
                     for msg in batch:
                         data = bytes(msg.data)
+                        self._record_rx(len(data))
                         if len(data) >= 2 and data[1] == CMD.PERIOD_REPORT:
                             with self._telemetry_lock:
                                 if len(self._telemetry) == self._telemetry.maxlen:

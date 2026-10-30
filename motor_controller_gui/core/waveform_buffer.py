@@ -17,6 +17,8 @@ class WaveformBuffer:
         self._data = np.empty((len(CURVE_KEYS) + 1, self.max_points), dtype=np.float64)
         self._head = self._size = 0
         self._last_raw_ts = None
+        self.timestamp_fallbacks = 0
+        self.frame_intervals = deque(maxlen=256)
         self._time = 0.0
         self._last_target = dict(pos=0.0, vel=0.0, iq=0.0)
         self._received_target = dict(self._last_target)
@@ -44,13 +46,17 @@ class WaveformBuffer:
     def append_sample(self, sample, timestamp=None, received_at=None):
         if self._size:
             dt = NOMINAL_REPORT_PERIOD
+            valid_delta = False
             if timestamp is not None and self._last_raw_ts is not None:
                 delta = timestamp - self._last_raw_ts
                 if np.isfinite(delta) and delta > 0:
                     dt = delta
+                    valid_delta = True
+                    self.frame_intervals.append(delta)
+            if not valid_delta:
+                self.timestamp_fallbacks += 1
             self._time += dt
-        if timestamp is not None and np.isfinite(timestamp):
-            self._last_raw_ts = timestamp
+        self._last_raw_ts = timestamp if timestamp is not None and np.isfinite(timestamp) else None
         if received_at is None:
             target = self._last_target
             self._target_events.clear()
@@ -72,6 +78,8 @@ class WaveformBuffer:
         self.generation += 1
 
     def clear(self):
+        self.timestamp_fallbacks = 0
+        self.frame_intervals.clear()
         self._head = self._size = self.total_samples = 0
         self._last_raw_ts = None
         self._time = 0.0

@@ -20,6 +20,38 @@ MAX_MOTOR_BUFFERS = 32
 MAX_RING_BYTES = 384 * 1024 * 1024
 
 
+class TimeScaleAxis(pg.AxisItem):
+    """Display-only scaling; curve coordinates and cursor values remain seconds."""
+    def __init__(self):
+        self.time_mode = True
+        self.time_factor = 1.0
+        self.time_origin = 0.0
+        super().__init__(orientation='bottom')
+        self.enableAutoSIPrefix(False)
+
+    def setRange(self, minimum, maximum):
+        super().setRange(minimum, maximum)
+        self.update_time_scale()
+
+    def update_time_scale(self):
+        if not self.time_mode:
+            return
+        lo, hi = self.range
+        self.time_factor = 1000.0 if hi-lo < 1.0 else 1.0
+        self.time_origin = float(np.floor(lo)) if self.time_factor == 1000 and abs(lo) >= 1 else 0.0
+        label = f'时间（相对 {self.time_origin:.0f} s）' if self.time_origin else '时间'
+        self.setLabel(label, units='ms' if self.time_factor == 1000 else 's')
+        self.picture = None
+        self.update()
+
+    def tickStrings(self, values, scale, spacing):
+        if not self.time_mode:
+            return super().tickStrings(values, scale, spacing)
+        step = abs(spacing*self.time_factor)
+        decimals = max(0, int(np.ceil(-np.log10(step)))) if step > 0 else 0
+        return [f'{(v-self.time_origin)*self.time_factor:.{min(decimals, 9)}f}' for v in values]
+
+
 class WaveformViewBox(pg.ViewBox):
     """Only a pan gesture requests history; wheel zoom keeps live acquisition visible."""
     history_requested = pyqtSignal()
@@ -110,9 +142,12 @@ class WaveformWidget(QGroupBox):
         pg.setConfigOptions(antialias=False)
         self._view_box = WaveformViewBox()
         self._view_box.history_requested.connect(self._on_pause)
-        self._plot = pg.PlotWidget(background="#101923", viewBox=self._view_box)
+        self._time_axis = TimeScaleAxis()
+        self._plot = pg.PlotWidget(background="#101923", viewBox=self._view_box,
+                                   axisItems={"bottom": self._time_axis})
         self._plot.showGrid(x=True, y=True, alpha=0.18)
         self._plot.setLabel('bottom', '时间', units='s')
+        self._plot.getAxis('bottom').enableAutoSIPrefix(False)
         self._plot.setMouseEnabled(x=True, y=True)
         self._plot.enableAutoRange(enable=False)
         self._curves = {}
@@ -122,12 +157,17 @@ class WaveformWidget(QGroupBox):
         self._analysis_curve = self._plot.plot(pen=pg.mkPen('#50dbbd', width=1), connect='finite')
         self._bars = pg.BarGraphItem(x=[], height=[], width=0.8, brush='#50dbbd')
         self._plot.addItem(self._bars)
-        self._cursors = [pg.InfiniteLine(pos=v, angle=90, movable=True,
-                         pen=pg.mkPen(c, style=Qt.DashLine)) for v, c in ((2, '#f5c76b'), (4, '#66caff'))]
-        for cursor in self._cursors:
-            self._plot.addItem(cursor)
-            cursor.hide()
-            cursor.sigPositionChanged.connect(self._schedule_refresh)
+        self._cursor_region = pg.LinearRegionItem(
+            values=(2, 4), movable=True,
+            pen=pg.mkPen('#87cefa', width=1.5),
+            hoverPen=pg.mkPen('#b5e5ff', width=2),
+            brush=pg.mkBrush(135, 206, 250, 35),
+            hoverBrush=pg.mkBrush(135, 206, 250, 65))
+        self._cursor_region.setZValue(10)
+        self._plot.addItem(self._cursor_region, ignoreBounds=True)
+        self._cursor_region.hide()
+        self._cursors = self._cursor_region.lines
+        self._cursor_region.sigRegionChanged.connect(self._schedule_refresh)
         self._curve_selector = CurveSelectorWidget()
         self._curve_selector.selection_changed.connect(self._schedule_refresh)
         split = QSplitter()
@@ -146,7 +186,7 @@ class WaveformWidget(QGroupBox):
         for spin in (self.window, self.sample_dt):
             spin.valueChanged.connect(self._schedule_refresh)
         self.auto_y.toggled.connect(self._schedule_refresh)
-        self.cursor_cb.toggled.connect(self._schedule_refresh)
+        self.cursor_cb.toggled.connect(self._cursor_visibility_changed)
         self._plot.getViewBox().sigRangeChangedManually.connect(self._manual_range)
         self.pause_btn.clicked.connect(self._on_pause)
         self.resume_btn.clicked.connect(self._on_resume)
@@ -170,6 +210,14 @@ class WaveformWidget(QGroupBox):
             self._evict_for(max(0, size * 88 - buf._data.nbytes), self._motor_id)
             buf.resize(size)
         self._dirty = True
+
+    def _cursor_visibility_changed(self, enabled):
+        if enabled:
+            lo, hi = self._view_box.viewRange()[0]
+            if np.isfinite(hi-lo) and hi > lo:
+                self._cursor_region.setRegion((lo+(hi-lo)/3, lo+2*(hi-lo)/3))
+        self._cursor_region.setVisible(enabled and self.mode.currentText() == '时域')
+        self._schedule_refresh()
 
     def _schedule_refresh(self, *_):
         self._dirty = True
@@ -324,13 +372,14 @@ class WaveformWidget(QGroupBox):
         self._dirty = False
         self._last_render = token
         mode = self.mode.currentText()
+        self._time_axis.time_mode = mode == '时域'
+        self._time_axis.update_time_scale()
         visible = self._curve_selector.visible_keys()
         for key, curve in self._curves.items():
             curve.setVisible(mode == '时域' and key in visible)
         self._analysis_curve.setVisible(mode in ('FFT', 'XY', '直方图'))
         self._bars.setVisible(mode == '条形图')
-        for cursor in self._cursors:
-            cursor.setVisible(self.cursor_cb.isChecked() and mode == '时域')
+        self._cursor_region.setVisible(self.cursor_cb.isChecked() and mode == '时域')
         data = self._source()
         if data is None or not len(data['times']):
             for curve in list(self._curves.values()) + [self._analysis_curve]:
@@ -343,7 +392,7 @@ class WaveformWidget(QGroupBox):
         y = data[self.channel.currentData()]
         info = ''
         if mode == '时域':
-            self._plot.setLabel('bottom', '时间', units='s')
+            self._time_axis.update_time_scale()
             self._plot.setLabel('left', '原始数值（各通道单位见选择器）')
             self._plot.enableAutoRange(x=False, y=self.auto_y.isChecked())
             for key in visible:
@@ -362,7 +411,8 @@ class WaveformWidget(QGroupBox):
                 if t[0] <= a <= t[-1] and t[0] <= b <= t[-1]:
                     dy_text = f'{y[min(ib, len(t)-1)] - y[min(ia, len(t)-1)]:.5g}'
                 freq = f'{1/abs(dt):.5g}' if abs(dt) > 1e-12 else '--'
-                info += f"  |  Δt {dt:.6g} s  1/|Δt| {freq} Hz  Δy {dy_text}"
+                dt_text = f'{dt*1000:.6g} ms' if abs(dt) < 1 else f'{dt:.6g} s'
+                info += f"  |  Δt {dt_text}  1/|Δt| {freq} Hz  Δy {dy_text}"
         elif mode == 'FFT':
             n = int(self.fft_size.currentText())
             x, amplitude = spectrum(y, n, self.sample_dt.value()/1000)
@@ -388,4 +438,14 @@ class WaveformWidget(QGroupBox):
             self._plot.setLabel('bottom', ' / '.join(keys))
             self._plot.setLabel('left', '最新值（混合单位）')
         self.measurement.setText(info or self.channel.currentText())
-        self.metrics.setText(f"{'冻结' if self._paused else '实时'} | 可视 {len(t):,} 点 | 缓存 {len(buf) if buf is not None else 0:,}/{buf.max_points if buf is not None else 0:,} | 更新 {(time.perf_counter()-start)*1000:.1f} ms（不含绘制）")
+        clock_info = ''
+        if buf is not None:
+            intervals = np.asarray(buf.frame_intervals)
+            if intervals.size:
+                interval = float(np.median(intervals))
+                clock_info = (f' | 接收帧时间戳 Δt中位数 {interval*1000:.4g} ms'
+                              f' / 均值频率 {1/float(np.mean(intervals)):.5g} Hz')
+            clock_info += f' | 时间戳异常/缺失补点 {buf.timestamp_fallbacks}'
+            if buf.timestamp_fallbacks:
+                clock_info += '（含1ms估算，阶跃时长需核对）'
+        self.metrics.setText(f"{'冻结' if self._paused else '实时'} | 可视 {len(t):,} 点 | 缓存 {len(buf) if buf is not None else 0:,}/{buf.max_points if buf is not None else 0:,} | 更新 {(time.perf_counter()-start)*1000:.1f} ms（不含绘制）{clock_info}")

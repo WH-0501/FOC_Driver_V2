@@ -150,10 +150,25 @@ class StepResponseTests(unittest.TestCase):
         y = 200*(1-np.exp(-np.maximum(t, 0)/.005))
         y[np.argmin(abs(t-.03))] = 500
         row = analyze_steps(t, r, y, StepSettings(crossing_hold_ms=2))[0]
-        self.assertIsNone(row['rise_ms'])
+        self.assertIsNotNone(row['rise_ms'])
+        self.assertIsNone(row['qualified_rise_ms'])
+        self.assertAlmostEqual(row['rise_ms'], (row['t90_s']-row['t10_s'])*1000)
         self.assertIsNone(row['settling_ms'])
         self.assertGreater(row['overshoot_pct'], 90)  # raw spike stays visible
         self.assertAlmostEqual(row['tail_error'], -50, delta=.01)
+
+    def test_long_capture_seconds_and_held_crossing_are_distinct(self):
+        t = 1005.0 + np.arange(-20, 101)*.001
+        r = np.where(t < 1005.0, 0., 250.)
+        y = np.where(t < 1005.0, 0., 200.)
+        y[np.argmin(abs(t-1005.010))] = 230
+        y[t >= 1005.050] = 250
+        row = analyze_steps(t, r, y, StepSettings(crossing_hold_ms=2))[0]
+        self.assertLess(row['rise_ms'], 12)
+        self.assertGreater(row['qualified_rise_ms'], 45)
+        self.assertAlmostEqual(row['level10'], 25)
+        self.assertAlmostEqual(row['level90'], 225)
+        self.assertAlmostEqual(row['rise_ms'], (row['t90_s']-row['t10_s'])*1000)
 
     def test_position_velocity_channel_units_and_independent_limits(self):
         from PyQt5.QtWidgets import QApplication

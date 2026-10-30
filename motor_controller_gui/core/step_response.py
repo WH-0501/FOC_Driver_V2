@@ -61,7 +61,8 @@ def analyze_steps(times, reference, current, settings=None, manual_start_s=None,
         if not manual and abs(r[start] - r[start-1]) < cfg.min_step_ma:
             continue
         row = dict(start_s=float(t[start]), from_ma=float(r[start-1]), to_ma=float(r[start]),
-                   baseline_ma=None, rise_ms=None, overshoot_pct=None, settling_ms=None,
+                   baseline_ma=None, rise_ms=None, qualified_rise_ms=None, t10_s=None, t90_s=None,
+                   level10=None, level90=None, overshoot_pct=None, settling_ms=None,
                    oscillations=None, oscillation_ma=None, oscillation_pct=None,
                    band_ma=None, sample_ms=None, window_ms=float((t[end-1]-t[start])*1000),
                    source='手动响应起点（非指令时刻）' if manual else '目标指令变化',
@@ -100,25 +101,37 @@ def analyze_steps(times, reference, current, settings=None, manual_start_s=None,
             warnings.append('采样不均匀/疑似丢点')
         z = (v-baseline)/delta
 
-        def crossing(level):
+        row["level10"] = baseline + .1*delta
+        row["level90"] = baseline + .9*delta
+
+        def crossing(level, hold_ms=0.0):
             above = z >= level
             starts = np.flatnonzero(above & np.r_[True, ~above[:-1]])
             stops = np.flatnonzero(above & np.r_[~above[1:], True])
             for k, stop in zip(starts, stops):
-                if tx[stop]-tx[k]+1e-12 < cfg.crossing_hold_ms/1000:
+                if tx[stop]-tx[k]+1e-12 < hold_ms/1000:
                     continue
                 if k == 0:
-                    return None
+                    before = (y[start-1]-baseline)/delta
+                    if before >= level:
+                        return None  # crossing was already outside this segment
+                    return float(t[start-1]+(level-before)/(z[0]-before)*(tx[0]-t[start-1]))
                 return float(tx[k-1]+(level-z[k-1])/(z[k]-z[k-1])*(tx[k]-tx[k-1]))
             return None
 
         a, b = crossing(.1), crossing(.9)
-        if a is not None and b is not None:
+        row['t10_s'], row['t90_s'] = a, b
+        qa, qb = crossing(.1, cfg.crossing_hold_ms), crossing(.9, cfg.crossing_hold_ms)
+        if qa is not None and qb is not None and qb >= qa and qb > tx[0]:
+            row['qualified_rise_ms'] = (qb-qa)*1000
+        if cfg.crossing_hold_ms > 0:
+            warnings.append('首次交越可能含噪声；保持交越时间另列')
+        if a is not None and b is not None and b > tx[0]:
             row['rise_ms'] = (b-a)*1000
             if b-a < 5*median_dt:
                 warnings.append('上升段少于5个采样间隔')
         else:
-            warnings.append('10%/90%交越未完整捕获或未持续达到')
+            warnings.append('首次10%/90%交越未完整捕获')
         row['overshoot_pct'] = max(0.0, float(np.max(z)-1)*100)
         outside = np.flatnonzero(np.abs(v-r[start]) > band)
         settle = int(outside[-1]+1) if len(outside) else 0
