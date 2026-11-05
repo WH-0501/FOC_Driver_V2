@@ -13,7 +13,8 @@
 
 static uint16_t s_node_id;
 static bool (*s_send)(const comm_frame_t *frame);
-static uint32_t s_last_report_us;
+static uint16_t s_report_clock;
+static uint32_t s_report_elapsed;
 static uint8_t s_tx_cnt;
 static uint32_t s_report_interval_us = 1000u;
 static uint32_t s_saved_report_interval_us;
@@ -31,7 +32,7 @@ static uint32_t s_reply_drops;
 /* Diagnostic streaming is foreground only; a 3 s lease prevents orphan traffic. */
 static uint8_t s_debug_mask, s_debug_next;
 static uint16_t s_debug_clock;
-static uint32_t s_debug_age, s_debug_elapsed[3], s_debug_period = 10000u;
+static uint32_t s_debug_elapsed[3], s_debug_period = 10000u;
 
 
 /**
@@ -498,14 +499,20 @@ static bool can_fd_debug_send(unsigned loop)
   active = s_motor->fsm == STATE_RUNNING &&
     (loop == 0u ? (mode == CTRL_MODE_TORQUE || mode == CTRL_MODE_SPEED || mode == CTRL_MODE_POSITION) :
      loop == 1u ? (mode == CTRL_MODE_SPEED || mode == CTRL_MODE_POSITION) : mode == CTRL_MODE_POSITION);
-  f[0] = pid.target; f[1] = pid.feedback;
+  /* Report the accepted upper-layer command, before current/speed limits.
+   * This does not change the reference actually used by the control loops.
+   * In cascaded modes these commands differ from outer-loop PID outputs. */
+  f[0] = loop == 0u ? s_motor->ref.iq :
+         loop == 1u ? s_motor->ref.speed_rad_s : s_motor->ref.position_rad;
+  f[1] = pid.feedback;
   f[2] = s_motor->state.i_q; f[3] = s_motor->state.i_d;
   f[4] = pid.dt; f[5] = pid.last_integral; f[6] = pid.last_output;
   f[7] = s_motor->state.vbus_filtered; f[8] = s_motor->state.shaft.velocity_rad_s;
   f[9] = cfg.kp; f[10] = cfg.ki; f[11] = cfg.limit;
   f[12] = cfg.i_limit; f[13] = cfg.ramp;
   stamp = pid.timestamp;
-  p[1] = (active ? 1u : 0u) | (cfg.ramp > 0.0f ? 2u : 0u) |
+  /* Bit 3 identifies the upper-layer command reference (legacy: pid.target). */
+  p[1] = 8u | (active ? 1u : 0u) | (cfg.ramp > 0.0f ? 2u : 0u) |
     (s_motor->fsm == STATE_FAULT ? 4u : 0u);
   __set_PRIMASK(irq);
   p[2] = (uint8_t)(stamp >> 24); p[3] = (uint8_t)(stamp >> 16);
@@ -525,11 +532,10 @@ static void can_fd_debug_clock(void)
   unsigned i;
   s_debug_clock = now;
   if (!s_debug_mask) return;
-  s_debug_age += delta;
   for (i=0u; i<3u; ++i) {
     if (s_debug_elapsed[i] < s_debug_period) s_debug_elapsed[i] += delta;
   }
-  if (s_debug_age >= 3000000u || can_fd_iap_is_active()) s_debug_mask = 0u;
+  if (can_fd_iap_is_active()) s_debug_mask = 0u;
 }
 
 static void can_fd_debug_poll(void)
@@ -582,7 +588,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         if (s_debug_mask != payload[1] || (hz && s_debug_period != 1000000u/hz)) {
           memset(s_debug_elapsed, 0, sizeof(s_debug_elapsed));
         }
-        s_debug_mask = payload[1]; s_debug_age = 0u;
+        s_debug_mask = payload[1];
         s_debug_clock = (uint16_t)board_time_us();
         if (hz) s_debug_period = 1000000u/hz;
         reply[2] = s_debug_mask;
@@ -593,7 +599,8 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
     }
 
     case CAN_FD_CMD_SYNC:
-      s_last_report_us = board_time_us();
+      s_report_clock = (uint16_t)board_time_us();
+      s_report_elapsed = 0u;
       break;
 
     case CAN_FD_CMD_TAR_POS:
@@ -1036,13 +1043,14 @@ static void can_fd_custom_period_report(void)
 
 static bool can_fd_custom_init(uint16_t node_id)
 {
-  s_debug_mask = 0u; s_debug_age = 0u; s_debug_next = 0u;
+  s_debug_mask = 0u; s_debug_next = 0u;
   s_debug_clock = (uint16_t)board_time_us();
   memset(s_debug_elapsed, 0, sizeof(s_debug_elapsed));
 
   s_node_id = node_id;
   s_motor = motor_get_handler();
-  s_last_report_us = board_time_us();
+  s_report_clock = (uint16_t)board_time_us();
+      s_report_elapsed = 0u;
   s_tx_cnt = 0u;
   s_request_unicast = false;
   s_reply_head = s_reply_tail = s_reply_count = 0u;
@@ -1110,23 +1118,30 @@ static void can_fd_custom_on_rx(const comm_frame_t *frame)
 
 static void can_fd_custom_poll(void)
 {
-  uint32_t now;
+  uint32_t report_interval;
+  uint16_t now = (uint16_t)board_time_us();
+  uint16_t delta = (uint16_t)(now - s_report_clock);
+  s_report_clock = now;
+  /* Accumulate across the 65.536 ms hardware wrap. Saturate while TX is busy
+   * so status is sent once when available, never as a catch-up burst. */
+  if (s_report_elapsed < 1000000u) s_report_elapsed += delta;
 
   can_fd_iap_poll();
   can_fd_debug_clock();
   can_fd_custom_flush_reply();
   if (s_reply_count != 0u) return; /* replies before periodic telemetry */
 
-  if (s_report_interval_us == 0u)
+  /* Debug owns high-rate reporting; retain 5 Hz status for fault/enable supervision. */
+  report_interval = s_debug_mask ? 200000u : s_report_interval_us;
+  if (report_interval == 0u)
   {
     can_fd_debug_poll();
     return;
   }
 
-  now = board_time_us();
-  if ((now - s_last_report_us) >= s_report_interval_us)
+  if (s_report_elapsed >= report_interval)
   {
-    s_last_report_us = now;
+    s_report_elapsed = 0u;
     can_fd_custom_period_report();
   }
   can_fd_debug_poll();

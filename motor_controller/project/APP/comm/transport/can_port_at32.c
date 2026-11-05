@@ -5,6 +5,8 @@
 #include <string.h>
 
 #define CAN_PORT_RX_DMB() __DMB()
+/* One hardware FIFO worth of work per interrupt; leave PWM IRQ latency bounded. */
+#define CAN_PORT_RX_IRQ_BUDGET 6u
 
 static can_rxbuf_type s_rx_pool[COMM_RX_QUEUE_DEPTH_MAX];
 static uint8_t s_rx_depth = COMM_RX_QUEUE_DEPTH_DEFAULT;
@@ -87,27 +89,34 @@ static void can_port_at32_rx_irq_handler(void)
 {
   can_rxbuf_type *slot;
   can_rxbuf_type discard;
+  uint8_t count;
 
-  slot = can_port_rx_acquire_slot();
-  if (slot != NULL)
+  /* RIF is a sticky event, not a count of queued frames. Reading one frame and
+   * clearing RIF leaves the rest waiting for the next bus frame indefinitely. */
+  for (count = 0u; count < CAN_PORT_RX_IRQ_BUDGET; ++count)
   {
-    if (can_rxbuf_read(CAN1, slot) == SUCCESS)
+    if (can_rxbuf_status_get(CAN1) == CAN_RXBUF_STATUS_EMPTY)
+    {
+      break;
+    }
+    slot = can_port_rx_acquire_slot();
+    /* Even with a full software ring, consume/release the hardware frame. */
+    if (can_rxbuf_read(CAN1, slot != NULL ? slot : &discard) != SUCCESS)
+    {
+      break;
+    }
+    if (slot != NULL)
     {
       can_port_rx_commit_slot();
     }
-    return;
   }
 
-  /**
-   * 队列已满,读取到 discard 中,释放硬件,软件丢弃该帧
-   * can_rxbuf_read: 
-   *     - 把硬件 rbdat 中的数据拷贝出来
-   *     - 置位 RREL, 释放硬件 RX 槽位
-   * 硬件力已经有一帧在等待处理,若软件队列已满,则不会调用 can_rxbuf_read:
-   *     - 硬件 RX 缓冲不会被释放
-   *     - 后续帧无法接收, 溢出、丢帧更严重
-   */
-  (void)can_rxbuf_read(CAN1, &discard);
+  /* Arrivals during draining may exhaust the budget. Resume without requiring
+   * the host to send another command (including when hardware RIF is clear). */
+  if (can_rxbuf_status_get(CAN1) != CAN_RXBUF_STATUS_EMPTY)
+  {
+    NVIC_SetPendingIRQ(CAN1_RX_IRQn);
+  }
 }
 
 uint32_t can_port_at32_get_rx_drop_count(void)

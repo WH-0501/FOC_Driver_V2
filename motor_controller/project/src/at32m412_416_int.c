@@ -287,8 +287,8 @@ void CAN1_RX_IRQHandler(void)
   if(can_interrupt_flag_get(CAN1, CAN_RIF_FLAG) != RESET)
   {
     /* add user code begin CAN1_CAN_RIF_FLAG */
-    comm_can_rx_isr();
-    /* clear flag and receive buffer release */
+    /* Clear the observed event BEFORE draining; a new arrival during draining
+       must keep its interrupt pending. can_rxbuf_read releases each RX slot. */
     can_flag_clear(CAN1, CAN_RIF_FLAG);
     /* add user code end CAN1_CAN_RIF_FLAG */
   }
@@ -318,7 +318,8 @@ void CAN1_RX_IRQHandler(void)
   }
 
   /* add user code begin CAN1_RX_IRQ 1 */
-
+  /* Also services software-pended continuation after a bounded RX drain. */
+  comm_can_rx_isr();
   /* add user code end CAN1_RX_IRQ 1 */
 }
 

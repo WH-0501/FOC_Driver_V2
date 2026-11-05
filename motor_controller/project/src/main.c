@@ -201,7 +201,9 @@ int main(void)
     /* add user code begin 3 */
     comm_poll();
     mc_poll();
+#if 0
     VoFaDisUart();
+#endif
     /* add user code end 3 */
   }
 }
