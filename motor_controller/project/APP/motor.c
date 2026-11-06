@@ -1,3 +1,4 @@
+#include "fra.h"
 #include "motor.h"
 #include "control_mode.h"
 #include "encoder.h"
@@ -67,6 +68,8 @@ void motor_arm(motor_handle_t *m)
 
 void motor_disarm(motor_handle_t *m)
 {
+  /* 卸力会撤掉 PWM，扫频激励不再成立，按取消结束。 */
+  fra_abort(FRA_FLAG_CANCEL);
   if (motor_runtime(m) == NULL)
   {
     return;

@@ -1,3 +1,5 @@
+#include "fra.h"
+#include <math.h>
 #include "can_fd_custom.h"
 #include "comm.h"
 #include "can_fd_custom_codec.h"
@@ -29,7 +31,7 @@ static struct { uint16_t id; uint8_t cmd, len, data[COMM_FRAME_MAX_LEN - 2u]; }
     s_replies[REPLY_QUEUE_DEPTH];
 static uint8_t s_reply_head, s_reply_tail, s_reply_count;
 static uint32_t s_reply_drops;
-/* Diagnostic streaming is foreground only; a 3 s lease prevents orphan traffic. */
+/* Diagnostic streaming is foreground only; persistent until explicitly stopped. */
 static uint8_t s_debug_mask, s_debug_next;
 static uint16_t s_debug_clock;
 static uint32_t s_debug_elapsed[3], s_debug_period = 10000u;
@@ -196,6 +198,12 @@ static void can_fd_custom_apply_vel(motor_handle_t *m, int16_t vel_raw)
 static void can_fd_custom_apply_curr(motor_handle_t *m, int16_t curr_ma)
 {
   /// TODO: 根据上层传递的参数类型,当前为电流,直接赋值 iq,若为 扭矩值, 则赋值 torque_nm
+  /* 扫频占用电流指令期间，主机电流目标视为竞争写入。 */
+  if (fra_owned())
+  {
+    fra_abort(FRA_FLAG_CONFLICT);
+    return;
+  }
   m->ref.iq = (float)curr_ma / 1000.0f;
 }
 
@@ -419,12 +427,12 @@ static void can_fd_reply_speed_limits(uint8_t cmd, error_t error)
     {
       status |= 2u;
     }
-    if (s_motor->fsm == STATE_RUNNING && s_motor->ctrl_mode == CTRL_MODE_TORQUE && rt->current_speed_limited)
+    if (s_motor->fsm == STATE_RUNNING && (s_motor->ctrl_mode == CTRL_MODE_TORQUE || s_motor->ctrl_mode == CTRL_MODE_CST) && rt->current_speed_limited)
     {
       status |= 1u;
     }
     p[7] = status;
-    can_fd_write_i32_be(&p[16], (s_motor->fsm == STATE_RUNNING && s_motor->ctrl_mode == CTRL_MODE_TORQUE) ?
+    can_fd_write_i32_be(&p[16], (s_motor->fsm == STATE_RUNNING && (s_motor->ctrl_mode == CTRL_MODE_TORQUE || s_motor->ctrl_mode == CTRL_MODE_CST)) ?
                       can_fd_rad_to_urad(rt->current_iq_limited / 1000.0f) : 0);
   }
   p[6] = (uint8_t)s_motor->ctrl_mode;
@@ -478,46 +486,67 @@ static void can_fd_custom_reply_align(error_t result, uint8_t method)
   can_fd_custom_reply(CAN_FD_CMD_ALIGN_ELECTRIC_ANGLE, reply, CAN_FD_ALIGN_REPLY_LEN);
 }
 
+static uint16_t can_fd_debug_us_u16(uint32_t us)
+{
+  return (uint16_t)((us > 65535u) ? 65535u : us);
+}
+
 /* Snapshot under a short IRQ mask; serialization/transmission occurs outside it. */
 static bool can_fd_debug_send(unsigned loop)
 {
   pid_state_t pid;
   pid_param_t cfg;
-  float f[14];
-  uint8_t p[62] = {1u, 0u};
+  float f[9];
+  uint8_t p[CAN_FD_DEBUG_PAYLOAD_LEN] = {CAN_FD_DEBUG_PAYLOAD_VERSION, 0u};
   uint32_t irq, stamp, raw;
+  motor_runtime_t *rt;
   unsigned i;
   bool active;
   control_mode_t mode;
   if (s_motor == NULL) return false;
+
   irq = __get_PRIMASK();
   __disable_irq();
+
   mode = s_motor->ctrl_mode;
-  if (loop == 0u) { pid = s_motor->iq_pid; cfg = s_motor->config.pid.iq; }
-  else if (loop == 1u) { pid = s_motor->velocity_pid; cfg = s_motor->config.pid.velocity; }
+  rt = motor_runtime(s_motor);
+  
+  if (loop == 0u) { pid = s_motor->iq_pid; cfg = s_motor->config.pid.iq; } // 电流PID
+  else if (loop == 1u) { pid = s_motor->velocity_pid; cfg = s_motor->config.pid.velocity; } // 速度PID
+  else if (loop == 2u) { pid = s_motor->position_pid; cfg = s_motor->config.pid.position; } // 位置PID
   else { pid = s_motor->position_pid; cfg = s_motor->config.pid.position; }
+
   active = s_motor->fsm == STATE_RUNNING &&
-    (loop == 0u ? (mode == CTRL_MODE_TORQUE || mode == CTRL_MODE_SPEED || mode == CTRL_MODE_POSITION) :
+    (loop == 0u ? (mode == CTRL_MODE_TORQUE || mode == CTRL_MODE_CST || mode == CTRL_MODE_SPEED || mode == CTRL_MODE_POSITION) :
      loop == 1u ? (mode == CTRL_MODE_SPEED || mode == CTRL_MODE_POSITION) : mode == CTRL_MODE_POSITION);
-  /* Report the accepted upper-layer command, before current/speed limits.
-   * This does not change the reference actually used by the control loops.
-   * In cascaded modes these commands differ from outer-loop PID outputs. */
   f[0] = loop == 0u ? s_motor->ref.iq :
          loop == 1u ? s_motor->ref.speed_rad_s : s_motor->ref.position_rad;
   f[1] = pid.feedback;
   f[2] = s_motor->state.i_q; f[3] = s_motor->state.i_d;
   f[4] = pid.dt; f[5] = pid.last_integral; f[6] = pid.last_output;
-  f[7] = s_motor->state.vbus_filtered; f[8] = s_motor->state.shaft.velocity_rad_s;
-  f[9] = cfg.kp; f[10] = cfg.ki; f[11] = cfg.limit;
-  f[12] = cfg.i_limit; f[13] = cfg.ramp;
+  f[7] = s_motor->state.vbus_filtered;
+  f[8] = cfg.kp;
   stamp = pid.timestamp;
-  /* Bit 3 identifies the upper-layer command reference (legacy: pid.target). */
   p[1] = 8u | (active ? 1u : 0u) | (cfg.ramp > 0.0f ? 2u : 0u) |
     (s_motor->fsm == STATE_FAULT ? 4u : 0u);
-  __set_PRIMASK(irq);
+
+  if (rt != NULL)
+  {
+    can_fd_codec_write_u16_be(&p[42], can_fd_debug_us_u16(rt->foc_cur_loop_us));
+    can_fd_codec_write_u16_be(&p[44], can_fd_debug_us_u16(rt->foc_vel_loop_us));
+    can_fd_codec_write_u16_be(&p[46], can_fd_debug_us_u16(rt->foc_pos_loop_us));
+    can_fd_codec_write_u16_be(&p[48], can_fd_debug_us_u16(rt->foc_ctrl_loop_us));
+    can_fd_codec_write_u16_be(&p[50], can_fd_debug_us_u16(rt->foc_control_loop_us));
+    can_fd_codec_write_u16_be(&p[52], can_fd_debug_us_u16(rt->foc_sense_update_us));
+    can_fd_codec_write_u16_be(&p[54], can_fd_debug_us_u16(rt->foc_current_sense_us));
+    can_fd_codec_write_u16_be(&p[56], can_fd_debug_us_u16(rt->foc_encoder_update_us));
+  }
+
+  __set_PRIMASK(irq); // 恢复中断
+
   p[2] = (uint8_t)(stamp >> 24); p[3] = (uint8_t)(stamp >> 16);
   p[4] = (uint8_t)(stamp >> 8); p[5] = (uint8_t)stamp;
-  for (i = 0u; i < 14u; ++i) {
+  for (i = 0u; i < 9u; ++i) {
     memcpy(&raw, &f[i], 4u);
     p[6u+4u*i] = (uint8_t)(raw >> 24); p[7u+4u*i] = (uint8_t)(raw >> 16);
     p[8u+4u*i] = (uint8_t)(raw >> 8); p[9u+4u*i] = (uint8_t)raw;
@@ -554,6 +583,69 @@ static void can_fd_debug_poll(void)
   }
 }
 
+/* FRA 协议 v1：前台组帧，采集由电流环 ISR 独占。
+ * stage_us 顺序：采样、控制、注入、编码器、电流 PI、电压调制。 */
+static void can_fd_fra_float(uint8_t *p,float f){uint32_t v;memcpy(&v,&f,4);p[0]=(uint8_t)(v>>24);p[1]=(uint8_t)(v>>16);p[2]=(uint8_t)(v>>8);p[3]=(uint8_t)v;}
+static void can_fd_fra_status(uint8_t cmd,uint8_t error){
+  uint8_t p[54]={1,0};uint32_t irq=__get_PRIMASK();__disable_irq();
+  p[1]=error;p[2]=(uint8_t)fra_state();p[3]=(uint8_t)fra_method();
+  can_fd_codec_write_u16_be(p+4,fra_id());p[6]=(uint8_t)fra_count();p[7]=(uint8_t)fra_progress();
+  can_fd_write_i32_be(p+8,(int32_t)fra_fs());can_fd_write_i32_be(p+12,(int32_t)fra_samples());
+  can_fd_codec_write_u16_be(p+16,(uint16_t)fra_flags());can_fd_codec_write_u16_be(p+18,(uint16_t)fra_max_us());
+  can_fd_codec_write_u16_be(p+20,(uint16_t)fra_min_interval());can_fd_codec_write_u16_be(p+22,(uint16_t)fra_max_interval());
+  can_fd_codec_write_u16_be(p+24,(uint16_t)fra_last_interval());p[26]=(uint8_t)fra_timing_reason();p[27]=0xA5;
+  can_fd_write_i32_be(p+28,(int32_t)fra_failure_sample());
+  can_fd_codec_write_u16_be(p+32,(uint16_t)fra_stage_us(FRA_STAGE_SENSE));
+  can_fd_codec_write_u16_be(p+34,(uint16_t)fra_stage_us(FRA_STAGE_CONTROL));
+  can_fd_codec_write_u16_be(p+36,(uint16_t)fra_stage_us(FRA_STAGE_INJECT));
+  p[38]=0xA6;p[39]=5;
+  can_fd_codec_write_u16_be(p+40,(uint16_t)fra_stage_us(FRA_STAGE_ENCODER));
+  can_fd_codec_write_u16_be(p+42,(uint16_t)fra_stage_us(FRA_STAGE_CURRENT_PID));
+  can_fd_codec_write_u16_be(p+44,(uint16_t)fra_stage_us(FRA_STAGE_VOLTAGE));
+  can_fd_codec_write_u16_be(p+46,(uint16_t)fra_baseline_duration());
+  can_fd_codec_write_u16_be(p+48,(uint16_t)fra_baseline_interval());
+  can_fd_write_i32_be(p+50,(int32_t)fra_peak_cycles());
+  __set_PRIMASK(irq);can_fd_custom_reply(cmd,p,sizeof(p));
+}
+
+/**
+ * @brief FRA 命令处理
+ * 
+ * @param cmd 命令
+ * @param payload 命令参数
+ * @param len 命令参数长度
+ */
+static void can_fd_fra_command(uint8_t cmd,const uint8_t *payload,uint8_t len){
+  if (cmd == CAN_FD_CMD_FRA_START)
+  {
+    uint8_t e=0;
+    if(len<11 || payload[0]!=1)e=2;
+    else if(payload[1]==0){fra_abort(FRA_FLAG_CANCEL);s_motor->ref.iq=0;mc_disable();fra_release();}
+    else if(s_motor->fsm!=STATE_RUNNING || s_motor->ctrl_mode!=CTRL_MODE_CST || !motor_is_armed(s_motor) ||
+      s_motor->fault.latched || fabsf(s_motor->ref.iq)>.001f)e=1;
+    else {
+      float peak=can_fd_codec_read_u16_be(payload+9)/1000.0f;
+      if(!(s_motor->config.limits.iq_limit>0) || peak>s_motor->config.limits.iq_limit*.8f)e=2;
+      else e=(uint8_t)fra_start(payload[1],payload[8],can_fd_codec_read_u16_be(payload+4),
+        can_fd_codec_read_u16_be(payload+6),peak,FOC_CURRENT_LOOP_FS_HZ,can_fd_codec_read_u16_be(payload+2));
+    }
+    can_fd_fra_status(cmd,e);
+  }
+  else if (cmd == CAN_FD_CMD_FRA_QUERY)
+  {
+    can_fd_fra_status(cmd, 0);
+  }
+  else if (cmd == CAN_FD_CMD_FRA_RESULT)
+  {
+    fra_result_t r;uint8_t p[34]={1,0};unsigned index=len==3?payload[2]:255;
+    p[1]=(len!=3 || can_fd_codec_read_u16_be(payload)!=fra_id())?2:(uint8_t)fra_result(index,&r);
+    can_fd_codec_write_u16_be(p+2,fra_id());p[4]=(uint8_t)index;p[5]=(uint8_t)fra_state();can_fd_codec_write_u16_be(p+6,(uint16_t)fra_flags());
+    if(!p[1]){can_fd_fra_float(p+8,r.hz);can_fd_fra_float(p+12,r.input);can_fd_fra_float(p+16,r.output);
+      can_fd_fra_float(p+20,r.real);can_fd_fra_float(p+24,r.imag);can_fd_fra_float(p+28,r.coherence);can_fd_codec_write_u16_be(p+32,r.blocks);}
+    can_fd_custom_reply(cmd,p,sizeof(p));
+  }
+}
+
 static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, uint8_t payload_len)
 {
   motor_handle_t *m = s_motor;
@@ -575,6 +667,11 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
 
   switch (cmd)
   {
+    case CAN_FD_CMD_FRA_START:
+    case CAN_FD_CMD_FRA_QUERY:
+    case CAN_FD_CMD_FRA_RESULT:
+      can_fd_fra_command(cmd, payload, payload_len);
+      break;
     case CAN_FD_CMD_DEBUG_CONFIG:
     {
       uint8_t reply[5] = {1u, 0u, s_debug_mask, 0u, 0u};
@@ -1126,6 +1223,10 @@ static void can_fd_custom_poll(void)
    * so status is sent once when available, never as a catch-up burst. */
   if (s_report_elapsed < 1000000u) s_report_elapsed += delta;
 
+  /* 离开 CST 运行或进入升级时，扫频不能继续占用电机。 */
+  if (fra_owned() && (s_motor->fsm!=STATE_RUNNING || s_motor->ctrl_mode!=CTRL_MODE_CST || can_fd_iap_is_active())) fra_abort(FRA_FLAG_CANCEL);
+  /* 采集结束后清掉电流指令并交还扫频占用。 */
+  if (fra_owned() && fra_state()!=FRA_STATE_ACQUIRING) {s_motor->ref.iq=0;mc_disable();fra_release();}
   can_fd_iap_poll();
   can_fd_debug_clock();
   can_fd_custom_flush_reply();

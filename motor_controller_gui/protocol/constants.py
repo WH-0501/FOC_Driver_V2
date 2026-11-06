@@ -23,6 +23,9 @@ class CMD(IntEnum):
     DEBUG_CURRENT = 0xB9
     DEBUG_SPEED = 0xBA
     DEBUG_POSITION = 0xBB
+    FRA_START = 0xBC
+    FRA_QUERY = 0xBD
+    FRA_RESULT = 0xBE
     COMMAND_ACK = 0x7E
     SET_POS_PID = 0x42
     SET_VEL_PID = 0x43

@@ -10,14 +10,11 @@ static DWTCycleTime_t dwt_cycle_tim = {
 
 void dwt_init(void)
 {
-  if (CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk) {
-    return; // 如果 DWT 已经使能，则直接返回
-  }
-
-  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; // 使能 DWT
-  DWT->CYCCNT = 0; // 清零 DWT 计数器
-  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk; // 使能 DWT 计数器
-
+  /* Trace enable is not initialization of this application's conversion state.
+   * A bootloader/debugger may leave Trace on with CYCCNT stopped. Preserve
+   * the counter, always refresh conversion and enable counting. */
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
   dwt_cycle_tim.dwt_freq_MHz = SystemCoreClock / 1000000; // 转换为 MHz
   dwt_cycle_tim.dwt_freq_MHz_inv = 1.0f / (float)dwt_cycle_tim.dwt_freq_MHz;
 }
@@ -62,10 +59,8 @@ void dwt_blocking_delay_us(uint32_t us)
     return;
   }
 
-  // 确保 DWT 已经使能
-  if (!(CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk)) {
-    return;
-  }
+  if (!dwt_cycle_tim.dwt_freq_MHz || !(CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk) ||
+      !(DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk)) dwt_init();
 
   uint32_t start_ticks = dwt_get_ticks();
   uint32_t delay_ticks = (uint32_t)(us * dwt_cycle_tim.dwt_freq_MHz);

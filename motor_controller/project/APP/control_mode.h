@@ -12,6 +12,7 @@ static inline bool control_mode_is_implemented(control_mode_t mode)
   {
     case CTRL_MODE_IDLE:
     case CTRL_MODE_TORQUE:
+    case CTRL_MODE_CST:
     case CTRL_MODE_SPEED:
     case CTRL_MODE_POSITION:
     case CTRL_MODE_SPEED_OPEN_LOOP:

@@ -30,7 +30,18 @@ class DebugTests(unittest.TestCase):
         self.assertAlmostEqual(parse_debug(CMD.DEBUG_SPEED, data)['ki_effective'], .1508, places=6)
         self.assertFalse(parse_debug(CMD.DEBUG_POSITION, sample(0))['active'])
         self.assertIsNone(parse_debug(CMD.DEBUG_CURRENT, data[:-1]))
-        self.assertIsNone(parse_debug(CMD.DEBUG_CURRENT, bytes([2])+data[1:]))
+        self.assertIsNone(parse_debug(CMD.DEBUG_CURRENT, bytes([6]) + data[1:]))
+
+    def test_payload_v5_encoder_timing(self):
+        payload = bytearray(62)
+        payload[0] = 5
+        payload[1] = 1
+        struct.pack_into('>I', payload, 2, 999)
+        struct.pack_into('>9f', payload, 6, *(0.1,) * 9)
+        struct.pack_into('>8H', payload, 42, 0, 0, 0, 25, 50, 28, 4, 22)
+        row = parse_debug(CMD.DEBUG_CURRENT, bytes(payload))
+        self.assertEqual(row['current_sense_us'], 4)
+        self.assertEqual(row['encoder_update_us'], 22)
 
     def test_mode_confirmation_timeout_and_close(self):
         client = Mock()

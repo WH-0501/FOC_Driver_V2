@@ -8,6 +8,15 @@ def func(path):
  s=path.read_text(encoding='utf-8');a=s.index('static void can_fd_custom_poll(void)\n{'); b=s.index('\nstatic void can_fd_custom_bind_transport',a);return s[a:b]
 prefix='''#include <stdint.h>
 #include <stdio.h>
+#define STATE_RUNNING 7
+#define CTRL_MODE_CST 6
+static struct {int fsm,ctrl_mode;struct{float iq;}ref;} motor,*s_motor=&motor;
+static unsigned fra_owned(void){return 0;}
+static unsigned fra_state(void){return 0;}
+static void fra_abort(unsigned x){(void)x;}
+static void fra_release(void){}
+static int mc_disable(void){return 0;}
+static int can_fd_iap_is_active(void){return 0;}
 static uint32_t ticks, s_last_report_us, s_report_elapsed, s_report_interval_us=1000;
 static uint16_t s_report_clock;
 static unsigned s_debug_mask=1, s_reply_count, reports;

@@ -2,6 +2,8 @@ CAN-FD 仲裁段 1Mbps，数据段 5Mbps
 
 本文档 **CMD 表与字段语义以 V2.0.0 为准**（本仓库 `motor_controller` FOC 固件）。与旧 dex-con / 灵巧手等设备通信时需选用 **V1.0.0** 语义，见下文「协议版本」。
 
+**未列入下文主 CMD 表的 V2 扩展功能**（三环 PID 调试流、电流环 FRA 辨识、电角验证、限速查询、单播 `0x7E` 分发确认等）见 **[CAN-FD扩展协议.md](CAN-FD扩展协议.md)**。固件符号与 `can_fd_custom.h` 中 `CAN_FD_CMD_`* 一致；Python 见 `motor_controller_gui/protocol/constants.py`。
+
 # 协议格式
 
 | ID      | Count | Command | Data1~N | 协议填充 |
@@ -66,7 +68,7 @@ CAN-FD 仲裁段 1Mbps，数据段 5Mbps
 
 bit7=1 时为 IAP 子码表（与运动协议版本独立；IAP `0xFC` 另见本文 IAP 章节）。
 
-**V2.0.0 周期上报 error（与 V1 相同线格式：BIT7=0 保护 / BIT7=1 IAP；保护子码由 **`can_fd_codec_fault_to_error`** 按 fault 主因映射）**
+**V2.0.0 周期上报 error（与 V1 相同线格式：BIT7=0 保护 / BIT7=1 IAP；保护子码由** `can_fd_codec_fault_to_error` **按 fault 主因映射）**
 
 | 子码 (BIT6~0) | 含义 |
 | ------------- | ---- |
@@ -302,7 +304,9 @@ App 将整包写入暂存区 `0x08010400`（最多 61×1KB），**含 32B ASIX �
 | 0x8C | 拒绝（状态不允许） |
 | 0x8F | 丢帧（CNT 不连续或长度不足） |
 
-## 单播处理确认与指令延迟诊断（本次扩展）
+## 单播处理确认与指令延迟诊断
+
+本节 `0x7E` 的完整定义与使用约束见 **[CAN-FD扩展协议.md](CAN-FD扩展协议.md)#07e-单播分发确认**。
 
 - 普通命令（非 IAP，且非应答专用0x7E）以本机 Node-ID 单播时，命令分发返回后追加 `0x7E` 应答。DATA为2字节：原请求CNT、原请求CMD；应答帧自身CNT仍是从机发送计数。
 - `0x7E`只确认该请求已走完分发，不表示动作成功或电流已收敛。未知命令、参数/状态不允许的操作也不能凭此判断成功；操作结果仍读取原有专用应答。IAP保持其原握手协议。IAP会话中被忽略的普通命令不发此确认。

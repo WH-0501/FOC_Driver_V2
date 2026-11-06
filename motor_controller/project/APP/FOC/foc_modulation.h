@@ -58,7 +58,7 @@ APP_STATIC_INLINE int foc_modulate_voltage(float ud, float uq, float angle,
   foc_modulation_t next;
   float peak, norm, limit;
   float svm_a, svm_b, svm_c;
-  float center;
+  float center, inverse_bus;
 
   if (out == NULL || !foc_modulation_finite(ud) || !foc_modulation_finite(uq) ||
       !foc_modulation_finite(angle) || !foc_modulation_finite(vbus) ||
@@ -76,7 +76,10 @@ APP_STATIC_INLINE int foc_modulate_voltage(float ud, float uq, float angle,
     return 0;
   }
   next.voltage_scale = 1.0f;
-  if (peak > 0.0f)
+  /* Conservative inscribed square: sqrt(ud^2+uq^2) <= sqrt(2)*peak.
+   * 0.7071067 is rounded DOWN with margin. Inside this square no limiter
+   * is needed; retain overflow-safe normalization for all other vectors. */
+  if (peak > limit * 0.7071067f)
   {
     float nd = ud / peak;
     float nq = uq / peak;
@@ -97,9 +100,17 @@ APP_STATIC_INLINE int foc_modulate_voltage(float ud, float uq, float angle,
   center = 0.5f * duty_max;
   /* The vector limit guarantees the bounds analytically. CLAMP only absorbs
    * roundoff at the boundary, never acts as the modulation limiter. */
-  next.duty_a = CLAMP(center + svm_a / vbus, 0.0f, duty_max);
-  next.duty_b = CLAMP(center + svm_b / vbus, 0.0f, duty_max);
-  next.duty_c = CLAMP(center + svm_c / vbus, 0.0f, duty_max);
+  inverse_bus = 1.0f / vbus;
+  if (foc_modulation_finite(inverse_bus)) {
+    next.duty_a = CLAMP(center + svm_a * inverse_bus, 0.0f, duty_max);
+    next.duty_b = CLAMP(center + svm_b * inverse_bus, 0.0f, duty_max);
+    next.duty_c = CLAMP(center + svm_c * inverse_bus, 0.0f, duty_max);
+  } else {
+    /* Preserve behavior for extremely small positive finite bus voltages. */
+    next.duty_a = CLAMP(center + svm_a / vbus, 0.0f, duty_max);
+    next.duty_b = CLAMP(center + svm_b / vbus, 0.0f, duty_max);
+    next.duty_c = CLAMP(center + svm_c / vbus, 0.0f, duty_max);
+  }
   if (!foc_modulation_finite(next.duty_a) || !foc_modulation_finite(next.duty_b) ||
       !foc_modulation_finite(next.duty_c))
   {

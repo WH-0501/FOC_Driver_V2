@@ -62,12 +62,12 @@ typedef enum
 typedef enum
 {
   CTRL_MODE_IDLE = 0,       ///< 空闲
-  CTRL_MODE_TORQUE,      ///< 扭矩模式：给定 ref.torque_nm
+  CTRL_MODE_TORQUE,      ///< 转矩兼容模式（PT）：当前协议以 ref.iq [A] 给定，无轨迹规划
   CTRL_MODE_SPEED,       ///< 速度环：给定 ref.speed_rad_s
   CTRL_MODE_POSITION,     ///< 位置环：给定 ref.position_rad
   CTRL_MODE_CSP,
   CTRL_MODE_CSV,
-  CTRL_MODE_CST,
+  CTRL_MODE_CST, ///< 周期转矩：每个电流环周期采纳最新 ref.iq [A]，自定义协议无 SYNC
   CTRL_MODE_MIT,
   CTRL_MODE_HOMING,
   CTRL_MODE_TORQUE_OPEN_LOOP, ///< 电流环开环：给定 ref.id / ref.iq

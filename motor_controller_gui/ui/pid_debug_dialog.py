@@ -17,6 +17,12 @@ LABELS = {
     'vbus': '母线电压（滤波）(V)', 'shaft_speed': '轴速度 (rad/s)',
     'kp': 'Kp', 'ki_config': 'Ki配置值', 'ki_effective': '实际Ki（计算）',
     'limit': 'PID输出限幅', 'i_limit': '积分限幅', 'ramp': '输出斜坡',
+    'cur_loop_us': '电流环耗时 (µs)', 'vel_loop_us': '速度环耗时 (µs)',
+    'pos_loop_us': '位置环耗时 (µs)', 'ctrl_run_us': 'foc_control_run (µs)',
+    'control_loop_us': 'foc_control_loop (µs)',
+    'sense_update_us': 'foc_sense_update (µs)',
+    'current_sense_us': '相电流采样 (µs)',
+    'encoder_update_us': 'encoder_update (µs)',
     'device_tick_us': 'PID更新时刻 (设备us，可能回绕)', 'active': '环正在执行',
 }
 
@@ -286,9 +292,11 @@ class PidDebugDialog(QDialog):
             data = list(source[i])
             times = [x['receive_s'] for x in data]
             for key in LABELS:
+                if key not in row:
+                    continue
                 self.value_labels[i, key].setText(f'{row[key]:.6g}')
                 if self.curve_checks[i, key].isChecked():
-                    self.curves[i, key].setData(times, [x[key] for x in data])
+                    self.curves[i, key].setData(times, [x[key] for x in data if key in x])
         if not self.lock_view.isChecked():
             latest = max((buf[-1]['receive_s'] for buf in self.buffers if buf), default=0)
             width = self.window_seconds.value()
@@ -316,7 +324,7 @@ class PidDebugDialog(QDialog):
                 writer.writerow(['motor_id', self.motor_id, '电流A/电压V/角度rad/速度rad_s/dt秒；Ki配置值；loop=0电流1速度2位置'])
                 writer.writerow(keys)
                 for buf in (self._frozen if self._frozen is not None else self.buffers):
-                    writer.writerows([[row[k] for k in keys] for row in buf])
+                    writer.writerows([[row.get(k, '') for k in keys] for row in buf])
         except OSError as exc:
             QMessageBox.warning(self, '导出失败', str(exc))
 

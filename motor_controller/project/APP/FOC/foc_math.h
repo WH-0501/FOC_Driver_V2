@@ -23,7 +23,29 @@
 #define _2PI (6.28318530718f)
 #define _3PI_2 (4.71238898038f)
 
-/// TODO: sin/cos 查表或 CORDIC 加速（与平台无关，按帧率取舍）
+/* Joint single-precision sin/cos for the real-time transforms.
+ * Fold to [-pi/2,pi/2], then degree 13/12 Taylor polynomials.
+ * Truncation bounds: sin < 7e-10, cos < 7e-9 on that interval;
+ * float rounding/range reduction dominates (see numerical validation).
+ * Keep libm semantics for nonfinite/large external angles. */
+APP_STATIC_INLINE void foc_sincos(float theta, float *s, float *c)
+{
+  float x=theta, sign=1.0f, z;
+  if (!(x >= -_2PI && x <= _2PI)) {
+    *s=sinf(theta); *c=cosf(theta); return;
+  }
+  if(x>_PI)x-=_2PI;
+  else if(x<-_PI)x+=_2PI;
+  if(x>0.5f*_PI){x=_PI-x;sign=-1.0f;}
+  else if(x<-0.5f*_PI){x=-_PI-x;sign=-1.0f;}
+  z=x*x;
+  *s=x*(1.0f+z*(-1.0f/6.0f+z*(1.0f/120.0f+z*(-1.0f/5040.0f+
+     z*(1.0f/362880.0f+z*(-1.0f/39916800.0f+z*(1.0f/6227020800.0f)))))));
+  *c=sign*(1.0f+z*(-1.0f/2.0f+z*(1.0f/24.0f+z*(-1.0f/720.0f+
+     z*(1.0f/40320.0f+z*(-1.0f/3628800.0f+z*(1.0f/479001600.0f)))))));
+}
+
+
 #define ONE_DIV_2 (0.5f)
 #define SQRT_3 (1.732050807568877f)             /* √3 */
 #define SQRT_3_DIV_2 (0.866025403784438f)       /* √3/2 */
@@ -115,8 +137,8 @@ APP_STATIC_INLINE void inv_clarke_transform(float x_alpha, float x_beta, float *
  */
 APP_STATIC_INLINE void park_transform(float x_alpha, float x_beta, float theta, float *x_d, float *x_q)
 {
-  const float c = cosf(theta);
-  const float s = sinf(theta);
+  float c, s;
+  foc_sincos(theta, &s, &c);
   *x_d = x_alpha * c + x_beta * s;
   *x_q = -x_alpha * s + x_beta * c;
 }
@@ -133,8 +155,8 @@ APP_STATIC_INLINE void park_transform(float x_alpha, float x_beta, float theta, 
  */
 APP_STATIC_INLINE void inv_park_transform(float x_d, float x_q, float theta, float *x_alpha, float *x_beta)
 {
-  const float c = cosf(theta);
-  const float s = sinf(theta);
+  float c, s;
+  foc_sincos(theta, &s, &c);
   *x_alpha = x_d * c - x_q * s;
   *x_beta = x_d * s + x_q * c;
 }

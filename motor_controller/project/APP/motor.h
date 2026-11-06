@@ -37,7 +37,11 @@ typedef struct
   uint32_t foc_pos_loop_us;        ///< 位置环耗时 [us]（本周期未运行则为 0）
   uint32_t foc_vel_loop_us;        ///< 速度环耗时 [us]
   uint32_t foc_cur_loop_us;        ///< 电流环耗时 [us]
-  uint32_t foc_ctrl_loop_us;       ///< foc_control_run 总耗时 [us]
+  uint32_t foc_ctrl_loop_us;       ///< foc_control_run 耗时 [us]
+  uint32_t foc_control_loop_us;    ///< foc_control_loop 耗时 [us]
+  uint32_t foc_sense_update_us;    ///< foc_sense_update 全函数 [us]
+  uint32_t foc_current_sense_us;   ///< board_get_phase_current + current_sense_process_sample [us]
+  uint32_t foc_encoder_update_us;  ///< encoder_update [us]（含 KTH71 SPI 等）
 } motor_runtime_t;
 
 motor_handle_t *motor_get_handler(void);
