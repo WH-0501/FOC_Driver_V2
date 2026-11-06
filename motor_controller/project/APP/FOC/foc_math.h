@@ -22,6 +22,7 @@
 #define _PI (3.14159265359f)
 #define _2PI (6.28318530718f)
 #define _3PI_2 (4.71238898038f)
+#define _INV_2PI (0.15915494309189534f) ///< 1/2π
 
 /* Joint single-precision sin/cos for the real-time transforms.
  * Fold to [-pi/2,pi/2], then degree 13/12 Taylor polynomials.
@@ -59,12 +60,46 @@ APP_STATIC_INLINE void foc_sincos(float theta, float *s, float *c)
  * @brief 角度归一化到 [0, 2PI]
  * 
  * @param angle 角度
+ * @return float 归一化后的角度 . 0~4us
+ */
+// APP_STATIC_INLINE float angle_normalize(float angle)
+// {
+// 	float a = fmodf(angle, _2PI);
+// 	return ((a>=0) ? a : (a + _2PI));
+// }
+// APP_STATIC_INLINE float angle_normalize(float angle) // 0~2us
+// {
+//   float k = floorf(angle * _INV_2PI);
+//   return angle - _2PI * k;
+// }
+/**
+ * @brief 角度归一化到 [0, 2π) . 0~2us
+ * 
+ *  无 libm、固定时延、用整数取整.
+ * 
+ *  约束：
+ *      1. |angle| < 2^24 * 2π（约1677万圈）；超大角度不要使用
+ *      2. 禁止输入 ±Inf，会触发未定义行为
+ *      3. 浮点舍入导致和fmodf版本存在若干ULP差异，闭环可接受
+ * 
+ * @param angle 
  * @return float 归一化后的角度
  */
 APP_STATIC_INLINE float angle_normalize(float angle)
 {
-	float a = fmodf(angle, _2PI);
-	return ((a>=0) ? a : (a + _2PI));
+  float f = angle * _INV_2PI;
+
+  // 把正数向 -inf 取整，等价于 floorf，不调用libm
+  int32_t k;
+  if (f >= 0.0f)
+  {
+    k = (int32_t)f;
+  }
+  else
+  {
+    k = (int32_t)f - 1;
+  }
+  return angle - _2PI * (float)k;
 }
 
 /**
