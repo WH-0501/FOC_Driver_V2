@@ -1,0 +1,468 @@
+{
+  "checked_utc": "2026-11-04T12:44:33.763573+00:00",
+  "legacy_files": 203,
+  "legacy_unchanged": true,
+  "tests": "CTest 8/8 passed including exact host target events, lifecycle/freeze/export, invalid timestamp isolation and independent FFT clock regressions; deployed Demo smoke exit 0; firmware unchanged from status-clock fix",
+  "executable_sha256": "ca0bdaecd54c90fd52dcba7f2ca97bc0a641959bf3c6835cb40d54c7d4bd1935",
+  "channel_selector_update": {
+    "checked_utc": "2026-11-04T00:44:08.390537+00:00",
+    "change": "200U CAN0/CAN1 selector; single-channel models CAN0; API indexes from item data",
+    "validation": "Release build and demo_smoke passed",
+    "executable_sha256": "638d95e636ab3e8ad52cfaa787f76414ae96cc2337941b24ab7ff2205c66d104"
+  },
+  "motion_control_update": {
+    "checked_utc": "2026-11-04T01:07:02.855517+00:00",
+    "executable_sha256": "e0fcc0774516c1f703d404592b112fe01444b9964832f754e5d3b2dd96dc6116",
+    "change": "Scope motion setpoints, V1/V2 mode gates, live speed-limit readback and runtime tuning",
+    "validation": "motion_tests 7/7 including init/cleanup; core_tests, demo_smoke, extension_tests passed",
+    "hardware_validation": "Not performed; all motion tests used Demo"
+  },
+  "sidebar_layout_update": {
+    "checked_utc": "2026-11-04T01:32:48.774938+00:00",
+    "executable_sha256": "0c630bc1e909a13c7293e348dd405a1f4445ef6ef5db96fba7ba64ba08e11131",
+    "change": "Move motion controls into independently scrolling 380px sidebar; compact telemetry; collapsible help",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-sidebar",
+    "validation": "motion_tests 7/7 including init/cleanup; core_tests, demo_smoke, extension_tests passed",
+    "hardware_validation": "Not performed; all motion tests used Demo"
+  },
+  "pinned_status_and_polling_fix": {
+    "checked_utc": "2026-11-04T01:44:22.355544+00:00",
+    "executable_sha256": "7e2a1824dba626234c91f44d8b75805538b900c846e0c078309992df968cc377",
+    "change": "Pin bordered telemetry card above scrollable motion controls with separator; keep read button stable during polling and coalesce duplicate reads",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release",
+    "validation": "motion_tests 8/8 including init/cleanup; core_tests, demo_smoke, extension_tests passed; enabled-state changes stayed zero across multiple polling replies",
+    "hardware_validation": "Not performed; all motion tests used Demo"
+  },
+  "scope_performance_update": {
+    "checked_utc": "2026-11-04T02:03:23.480872+00:00",
+    "executable_sha256": "0c812172c232de4cea5cda8896dee5ab07fff65eabcde3195aa3f10c8217f4d7",
+    "change": "Indexed peak queries, cached raster rendering, 1M default / 10M maximum raw history, display-only pause, chunked asynchronous CSV export",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release",
+    "validation": "sampling_tests, motion_tests, core_tests, demo_smoke, extension_tests passed; 9-channel 1M-point 5s viewport mean 3.18412ms; 10M overview mean 11.15479ms",
+    "hardware_validation": "Not performed; all motion tests used Demo"
+  },
+  "manual_limits_update": {
+    "checked_utc": "2026-11-04T02:17:15.478232+00:00",
+    "executable_sha256": "96f3ab97b260af3d65f15cc1080c80c9c8bad9d2922def5fbfe2900ee16ed61b",
+    "change": "One initial B5 per connection; no polling/retries; manual B5/B6 only thereafter; timestamped cached readback",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-manual-limits",
+    "validation": "sampling_tests, motion_tests, core_tests, demo_smoke, extension_tests passed; idle/edit/node/mode transitions do not send; failed initial query does not retry after old 10s retry deadline; reconnect reads once",
+    "hardware_validation": "Not performed; all motion tests used Demo"
+  },
+  "operation_feedback_update": {
+    "checked_utc": "2026-11-04T02:45:06.945015+00:00",
+    "executable_sha256": "a9c477fbbe51d75e63ad600bd1a0ab3fa99f1383775558d2394ef9ca2b0bc0ba",
+    "change": "Post-transmit telemetry confirms enable/disable/mode; priority disable; persistent global operation errors; native receive available-count handling",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release",
+    "validation": "All seven CTest suites passed; delayed prior replies in V1/V2, ACK without state change, disable preemption, telemetry loss, invalid enable value, occupied device and cross-page error feedback verified",
+    "hardware_validation": "Not performed; all motion tests used Demo"
+  },
+  "can_latency_update": {
+    "checked_utc": "2026-11-04T03:08:19.436122+00:00",
+    "executable_sha256": "00636cf441d444a7228d7c72f8aa468c85d38e49edcd13135a976ed9a78fd404",
+    "change": "Quiet normal-operation UI; independent native RX; command timing logs; quarantine stale responses after timeout",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release",
+    "validation": "All eight CTest suites passed including native ABI and blocked RX with independent TX; stale prior B5 cannot confirm a new B5; successful operations keep notice hidden",
+    "hardware_validation": "No motor control sent. Read-only live CAN1 comparison: C++ single 00 B5 received old 70 B5 ACK; legacy Python single A5 B5 received prior 00 B5 ACK. One-command lag persists on both paths; exact driver/adapter/MCU source unresolved."
+  },
+  "target_display_update": {
+    "checked_utc": "2026-11-04T06:05:19.870451+00:00",
+    "executable_sha256": "fa6d9c2e208078fb68baa258212242c8f254d375900d6a52983f43c32b2f4140",
+    "channels": [
+      "target_position_rad",
+      "target_velocity_rpm",
+      "target_current_A"
+    ],
+    "source": "Host-submitted quantized references, not device-confirmed setpoints",
+    "benchmark": [
+      {
+        "mean_ms": 4.846094285714285,
+        "p95_ms": 5.2298,
+        "points": 120000,
+        "window_s": 5
+      },
+      {
+        "mean_ms": 9.810705714285712,
+        "p95_ms": 10.4066,
+        "points": 120000,
+        "window_s": 120
+      },
+      {
+        "mean_ms": 5.044248571428572,
+        "p95_ms": 5.7009,
+        "points": 1000000,
+        "window_s": 5
+      },
+      {
+        "mean_ms": 13.747608571428568,
+        "p95_ms": 14.2688,
+        "points": 1000000,
+        "window_s": 1000
+      }
+    ],
+    "hardware_commands_sent": false
+  },
+  "axis_step_analysis_update": {
+    "checked_utc": "2026-11-04T07:26:35.086913+00:00",
+    "executable_sha256": "d000d8a5a5e52190014fe1d448b17d16c920b93e6af699c3a7e4db08f7a735b3",
+    "channels": [
+      "target_position_rad",
+      "target_velocity_rpm",
+      "target_current_A"
+    ],
+    "source": "Numeric selectable Y axis; latest recorded target step; manual fallback; asynchronous analysis",
+    "benchmark": [
+      {
+        "mean_ms": 4.691560000000001,
+        "p95_ms": 5.0456,
+        "points": 120000,
+        "window_s": 5
+      },
+      {
+        "mean_ms": 9.348677142857142,
+        "p95_ms": 9.7972,
+        "points": 120000,
+        "window_s": 120
+      },
+      {
+        "mean_ms": 4.806077142857142,
+        "p95_ms": 5.2543,
+        "points": 1000000,
+        "window_s": 5
+      },
+      {
+        "mean_ms": 13.166282857142857,
+        "p95_ms": 13.7972,
+        "points": 1000000,
+        "window_s": 1000
+      }
+    ],
+    "hardware_commands_sent": false
+  },
+  "step_list_update": {
+    "checked_utc": "2026-11-04T07:43:38.540797+00:00",
+    "executable_sha256": "f41a10fb22f3b398b66daaa546f786c4ded1ce4262c9f08f5d9b54adbb1c4080",
+    "channels": [
+      "target_position_rad",
+      "target_velocity_rpm",
+      "target_current_A"
+    ],
+    "source": "All recorded target steps, isolated response windows, selectable list, raw and sustained crossings",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-step-list",
+    "hardware_commands_sent": false
+  },
+  "controls_update": {
+    "checked_utc": "2026-11-04T07:57:28.386205+00:00",
+    "executable_sha256": "12678bdcd7fb528eff2ae00a3e76efced54f2d192c1db03301f67b901f3d44f3",
+    "channels": [
+      "target_position_rad",
+      "target_velocity_rpm",
+      "target_current_A"
+    ],
+    "source": "Current-node fault reset, anchored Y-axis wheel zoom, clear history and invalidate old analysis",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-controls",
+    "hardware_commands_sent": false
+  },
+  "sync_y_update": {
+    "checked_utc": "2026-11-04T08:05:03.413908+00:00",
+    "executable_sha256": "eb2b0b17e300deb7420110f74ade5737df8d62a0551e7e812bc02ff5e91c2035",
+    "channels": [
+      "target_position_rad",
+      "target_velocity_rpm",
+      "target_current_A"
+    ],
+    "source": "Y wheel transforms all visible channel groups exactly once around the same screen anchor",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-sync-y",
+    "hardware_commands_sent": false
+  },
+  "pid_workspace_update": {
+    "checked_utc": "2026-11-04T08:58:01.040122+00:00",
+    "executable_sha256": "d58edb075e78ff51bf41ab1782cc592932f5e150d84801b46305a810bcc7858b",
+    "channels": [
+      "feedback",
+      "error",
+      "Iq",
+      "Id",
+      "dt",
+      "integral",
+      "output",
+      "vbus",
+      "shaft_speed",
+      "Kp",
+      "Ki_config",
+      "reference",
+      "output_limit",
+      "integral_limit",
+      "ramp",
+      "P_term",
+      "effective_Ki",
+      "active",
+      "device_tick_us",
+      "flags"
+    ],
+    "source": "Shared normal/PID scope; device references and timestamps; three isolated loop histories and full diagnostic fields",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-pid-workbench",
+    "hardware_commands_sent": false
+  },
+  "pid_pause_update": {
+    "checked_utc": "2026-11-04T09:12:33.751887+00:00",
+    "executable_sha256": "a11c46c5960655a6f8409d486c6a41d92346a09f4d32552336b8a92b20fb9559",
+    "channels": [
+      "feedback",
+      "error",
+      "Iq",
+      "Id",
+      "dt",
+      "integral",
+      "output",
+      "vbus",
+      "shaft_speed",
+      "Kp",
+      "Ki_config",
+      "reference",
+      "output_limit",
+      "integral_limit",
+      "ramp",
+      "P_term",
+      "effective_Ki",
+      "active",
+      "device_tick_us",
+      "flags"
+    ],
+    "source": "Shared normal/PID scope; device references and timestamps; three isolated loop histories and full diagnostic fields",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-pid-pause-fix",
+    "hardware_commands_sent": false
+  },
+  "pid_cursor_update": {
+    "checked_utc": "2026-11-04T09:21:33.424833+00:00",
+    "executable_sha256": "d7dff0e470d52865d50e377f8db3f2f2fe13629c68ce8162c3d07e4e498acf85",
+    "channels": [
+      "feedback",
+      "error",
+      "Iq",
+      "Id",
+      "dt",
+      "integral",
+      "output",
+      "vbus",
+      "shaft_speed",
+      "Kp",
+      "Ki_config",
+      "reference",
+      "output_limit",
+      "integral_limit",
+      "ramp",
+      "P_term",
+      "effective_Ki",
+      "active",
+      "device_tick_us",
+      "flags"
+    ],
+    "source": "Shared normal/PID scope; device references and timestamps; three isolated loop histories and full diagnostic fields",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-pid-cursors",
+    "hardware_commands_sent": false
+  },
+  "pid_clock_update": {
+    "checked_utc": "2026-11-04T09:34:03.820078+00:00",
+    "executable_sha256": "94d7978cf06a40f5259c0e340e84c7c3c59de65e550d9a83e444e19a0783a7ab",
+    "channels": [
+      "feedback",
+      "error",
+      "Iq",
+      "Id",
+      "dt",
+      "integral",
+      "output",
+      "vbus",
+      "shaft_speed",
+      "Kp",
+      "Ki_config",
+      "reference",
+      "output_limit",
+      "integral_limit",
+      "ramp",
+      "P_term",
+      "effective_Ki",
+      "active",
+      "device_tick_us",
+      "flags"
+    ],
+    "source": "Shared normal/PID scope; device references and timestamps; three isolated loop histories and full diagnostic fields",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-pid-clock-fix",
+    "hardware_commands_sent": false
+  },
+  "pid_command_reference_update": {
+    "checked_utc": "2026-11-04T09:48:59.415804+00:00",
+    "executable_sha256": "9bfde2935d5ed11e82a432a83b579b1fc051bec1a6f7502dc63d5912f6b29dc4",
+    "channels": [
+      "feedback",
+      "error",
+      "Iq",
+      "Id",
+      "dt",
+      "integral",
+      "output",
+      "vbus",
+      "shaft_speed",
+      "Kp",
+      "Ki_config",
+      "reference",
+      "output_limit",
+      "integral_limit",
+      "ramp",
+      "P_term",
+      "effective_Ki",
+      "active",
+      "device_tick_us",
+      "flags"
+    ],
+    "source": "Shared normal/PID scope; device references and timestamps; three isolated loop histories and full diagnostic fields",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-pid-command-ref",
+    "hardware_commands_sent": false
+  },
+  "pid_persistent_update": {
+    "checked_utc": "2026-11-04T10:55:23.477268+00:00",
+    "executable_sha256": "8eb764816b8c74956652a9dd67f842827896e22ddee63e5a925ad3696d8ccde4",
+    "channels": [
+      "feedback",
+      "error",
+      "Iq",
+      "Id",
+      "dt",
+      "integral",
+      "output",
+      "vbus",
+      "shaft_speed",
+      "Kp",
+      "Ki_config",
+      "reference",
+      "output_limit",
+      "integral_limit",
+      "ramp",
+      "P_term",
+      "effective_Ki",
+      "active",
+      "device_tick_us",
+      "flags"
+    ],
+    "source": "Shared normal/PID scope; device references and timestamps; three isolated loop histories and full diagnostic fields",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-pid-persistent",
+    "hardware_commands_sent": false
+  },
+  "pid_status_clock_update": {
+    "checked_utc": "2026-11-04T11:28:52.043768+00:00",
+    "executable_sha256": "8eb764816b8c74956652a9dd67f842827896e22ddee63e5a925ad3696d8ccde4",
+    "channels": [
+      "feedback",
+      "error",
+      "Iq",
+      "Id",
+      "dt",
+      "integral",
+      "output",
+      "vbus",
+      "shaft_speed",
+      "Kp",
+      "Ki_config",
+      "reference",
+      "output_limit",
+      "integral_limit",
+      "ramp",
+      "P_term",
+      "effective_Ki",
+      "active",
+      "device_tick_us",
+      "flags"
+    ],
+    "source": "Shared normal/PID scope; device references and timestamps; three isolated loop histories and full diagnostic fields",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-pid-status-fix",
+    "hardware_commands_sent": false
+  },
+  "action_log_update": {
+    "checked_utc": "2026-11-04T11:45:03.218463+00:00",
+    "executable_sha256": "a7cd788815efa53b5daa55d16366b9a05267793259d6c8907f6193fbbc7a74f9",
+    "channels": [
+      "feedback",
+      "error",
+      "Iq",
+      "Id",
+      "dt",
+      "integral",
+      "output",
+      "vbus",
+      "shaft_speed",
+      "Kp",
+      "Ki_config",
+      "reference",
+      "output_limit",
+      "integral_limit",
+      "ramp",
+      "P_term",
+      "effective_Ki",
+      "active",
+      "device_tick_us",
+      "flags"
+    ],
+    "source": "Shared normal/PID scope; device references and timestamps; three isolated loop histories and full diagnostic fields",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-action-log",
+    "hardware_commands_sent": false
+  },
+  "latency_trace_update": {
+    "checked_utc": "2026-11-04T12:18:37.394665+00:00",
+    "executable_sha256": "64e872d033098af7b95e73c4d661881a1f0932f42f38cc2268bce33012c6b5f8",
+    "channels": [
+      "feedback",
+      "error",
+      "Iq",
+      "Id",
+      "dt",
+      "integral",
+      "output",
+      "vbus",
+      "shaft_speed",
+      "Kp",
+      "Ki_config",
+      "reference",
+      "output_limit",
+      "integral_limit",
+      "ramp",
+      "P_term",
+      "effective_Ki",
+      "active",
+      "device_tick_us",
+      "flags"
+    ],
+    "source": "Shared normal/PID scope; device references and timestamps; three isolated loop histories and full diagnostic fields",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-latency-trace",
+    "hardware_commands_sent": false
+  },
+  "target_events_update": {
+    "checked_utc": "2026-11-04T12:44:33.763573+00:00",
+    "executable_sha256": "ca0bdaecd54c90fd52dcba7f2ca97bc0a641959bf3c6835cb40d54c7d4bd1935",
+    "channels": [
+      "feedback",
+      "error",
+      "Iq",
+      "Id",
+      "dt",
+      "integral",
+      "output",
+      "vbus",
+      "shaft_speed",
+      "Kp",
+      "Ki_config",
+      "reference",
+      "output_limit",
+      "integral_limit",
+      "ramp",
+      "P_term",
+      "effective_Ki",
+      "active",
+      "device_tick_us",
+      "flags"
+    ],
+    "source": "Shared normal/PID scope; device references and timestamps; three isolated loop histories and full diagnostic fields",
+    "release_directory": "D:\\workspaces\\code-registories\\FOC\\FOC_Driver_V2\\motor_controller_hmi\\release-target-events",
+    "hardware_commands_sent": false
+  }
+}

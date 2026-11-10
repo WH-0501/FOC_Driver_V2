@@ -35,6 +35,7 @@
 /* 角度原始值 -> 弧度，满量程对齐 2π（与 KTH71 定义为 uint16 满刻度时一致） */
 #define RAW_ANGLE_U16_TO_RAD            (_2PI * (1.0f / ENCODER_COUNTS_PER_REV)) // 13bit 有效分辨率
 #define DIFF_ANGLE_WRAP_THRESH_RAD      (0.8f * _2PI) // 超过此值视作跨一圈折返用于圈数校正
+#define RAW_ANGLE_TO_RAD (1.5259e-5) // 除以 65536.0f
 
 
 /* 电角度对齐时的电压参数 */
@@ -98,6 +99,43 @@
 #define FOC_CURRENT_MEAS_PERIOD (float)(1.0f / (float)FOC_CURRENT_LOOP_FS_HZ)
 #endif
 
+/*
+ * FOC 电流环 / AT32 PWM 热点优化（A/B 对比：调试时只改本节 0/1，然后全量重编）。
+ * board_at32.c 须在 #include "at32_foc_timing.h" 之前包含本头，AT32_PWM_* 才会生效。
+ * 仅包含 at32_foc_timing.h 的单测仍使用该头内的 #ifndef 默认值。
+ */
+#ifndef FOC_JOINT_ENCODER_DIRECTION
+#define FOC_JOINT_ENCODER_DIRECTION 0 /* 0 inherits motor direction, otherwise +1 or -1. */
+#endif
+#if FOC_JOINT_ENCODER_DIRECTION < -1 || FOC_JOINT_ENCODER_DIRECTION > 1
+#error Invalid FOC_JOINT_ENCODER_DIRECTION
+#endif
+#ifndef FOC_JOINT_ENCODER_ZERO_RAD
+#define FOC_JOINT_ENCODER_ZERO_RAD 0.0f
+#endif
+/* Control feedback and both outer PIDs run together on the first and every Nth tick. */
+#ifndef FW_FOC_OUTER_LOOP_DIV
+#define FW_FOC_OUTER_LOOP_DIV 5u
+#endif
+#if FW_FOC_OUTER_LOOP_DIV < 1 || FW_FOC_OUTER_LOOP_DIV > 255
+#error FW_FOC_OUTER_LOOP_DIV must be between 1 and 255
+#endif
+/* 1: normal running CST reports sense stages and the actual current/control call durations.
+ * Set to 0 to restore the nested current/encoder timing layout. */
+#ifndef FOC_PROFILE_CST_OUTER
+#define FOC_PROFILE_CST_OUTER 1
+#endif
+/* Park 正余弦算法：0 = 原 foc_sincos 多项式，1 = 512 点查表加角度补偿。 */
+#ifndef FOC_PARK_USE_SINCOS_LUT
+#define FOC_PARK_USE_SINCOS_LUT 0
+#endif
+#ifndef FOC_REUSE_PARK_SINCOS
+#define FOC_REUSE_PARK_SINCOS 1 /* Park 一次 sincos，逆 Park 复用 sin_elec/cos_elec */
+#endif
+#ifndef AT32_PWM_INLINE_STAGE_CCR
+#define AT32_PWM_INLINE_STAGE_CCR 1 /* pwm_stage_compare 内联写 c1/2/3dt */
+#endif
+
 #ifndef FOC_CURRENT_BANDWIDTH_HZ
 #define FOC_CURRENT_BANDWIDTH_HZ (800.0f)
 #endif
@@ -128,6 +166,7 @@
 
 /* 开环周期 */
 #define OPEN_LOOP_TS         FOC_CURRENT_MEAS_PERIOD
+#define FOC_CURRENT_PERIOD_S (1.0f / FOC_CURRENT_LOOP_FS_HZ) ///< 单位：秒
 
 /** 
  * @brief 母线电压采样率 [Hz]（慢路径，与电流环解耦）

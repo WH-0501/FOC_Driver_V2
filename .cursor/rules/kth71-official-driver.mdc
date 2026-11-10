@@ -1,0 +1,11 @@
+---
+description: KTH71 官方驱动不可擅自改 SPI/读角路径
+globs: motor_controller/project/APP/Driver/encoder/kth71xx.*
+alwaysApply: false
+---
+
+# KTH71 驱动（官方已验证）
+
+- `motor_controller/project/APP/Driver/encoder/kth71xx.c` / `kth71xx.h` 为厂商/项目已验证接口，**未经用户明确要求不得修改**（含读角热路径、`KTH71_SPI_TransmitReceive`、半双工时序等）。
+- 磁编 SPI SCK **上限 11.25 MHz**（`SPI_MCLK_DIV_16`），不得提高。
+- FOC 环耗时、降频读角、PLL、DMA 等优化应放在 **`encoder.c` / `foc_sense.c` / 外设配置** 等层，通过公开 API（如 `KTH71_ReadAngle`）调用，不要内联或重写 KTH71 底层 SPI。

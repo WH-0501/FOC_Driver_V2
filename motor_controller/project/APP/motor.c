@@ -1,4 +1,3 @@
-#include "fra.h"
 #include "motor.h"
 #include "control_mode.h"
 #include "encoder.h"
@@ -68,8 +67,6 @@ void motor_arm(motor_handle_t *m)
 
 void motor_disarm(motor_handle_t *m)
 {
-  /* 卸力会撤掉 PWM，扫频激励不再成立，按取消结束。 */
-  fra_abort(FRA_FLAG_CANCEL);
   if (motor_runtime(m) == NULL)
   {
     return;
@@ -156,7 +153,7 @@ void motor_enter_dc_cal_hw(motor_handle_t *m)
   motor_driver_prepare_dc_offset_cal(&s_motor_driver);
 }
 
-error_t motor_apply_pwm(motor_handle_t *m, const motor_actuation_t *actuation)
+error_t motor_apply_pwm(motor_handle_t *m, const motor_actuation_t *actuation, float max_duty)
 {
   if ((motor_runtime(m) == NULL) || (actuation == NULL))
   {
@@ -168,22 +165,10 @@ error_t motor_apply_pwm(motor_handle_t *m, const motor_actuation_t *actuation)
     return ERR_FAIL;
   }
 
-  if (!motor_driver_is_armed(&s_motor_driver))
-  {
-    return ERR_FAIL;
-  }
-
   if (actuation->pwm_enable == 0u)
   {
     return ERR_FAIL;
   }
 
-  if (actuation->duty_a < 0.0f || actuation->duty_a > 1.0f ||
-      actuation->duty_b < 0.0f || actuation->duty_b > 1.0f ||
-      actuation->duty_c < 0.0f || actuation->duty_c > 1.0f)
-  {
-    return ERR_FAIL;
-  }
-
-  return motor_driver_set_pwm(&s_motor_driver, actuation);
+  return motor_driver_set_pwm(&s_motor_driver, actuation, max_duty);
 }

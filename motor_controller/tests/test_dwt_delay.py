@@ -22,6 +22,10 @@ tests='''
 int main(void){uint32_t before;
  debug.DEMCR=CoreDebug_DEMCR_TRCENA_Msk;counter.CTRL=0;counter.CYCCNT=1234;
  dwt_init();CHECK(dwt_cycle_tim.dwt_freq_MHz==180u);CHECK(counter.CTRL&1u);CHECK(counter.CYCCNT==1234);
+ CHECK(dwt_elapsed_us(1234u,1234u)==0u);
+ CHECK(dwt_elapsed_us(0xF0000000u,0xF0000000u+179u)==0u);
+ CHECK(dwt_elapsed_us(0xF0000000u,0xF0000000u+180u)==1u);
+ CHECK(dwt_elapsed_us(0xFFFFFF00u,0x1B20u)==40u);
  before=counter.CYCCNT;dwt_blocking_delay_ms(5);CHECK(counter.CYCCNT-before>=900000u);
  counter.CYCCNT=0xFFFFFF00u;before=counter.CYCCNT;dwt_blocking_delay_ms(5);CHECK((uint32_t)(counter.CYCCNT-before)>=900000u);
  before=counter.CYCCNT;dwt_init();CHECK(counter.CYCCNT==before);

@@ -195,7 +195,7 @@ typedef struct
 /**
  * 机械位置/速度观测量（shaft / joint 共用，均为控制坐标系）。
  *
- * encoder_observer_update 内部用 raw counts 解包 turn，发布时统一施加 direction：
+ * encoder_update 内部用 raw counts 解包 turn，发布时统一施加 direction：
  * - angle_rad      = normalize(raw_angle * direction)
  * - position_rad   = direction * (turn*2π + raw_angle - zero_rad)，zero 为传感器系
  * - velocity_rad_s = Δangle/dt+LPF（默认）或 PLL 速度估计（FOC_ENCODER_USE_PLL=1）
@@ -231,14 +231,14 @@ typedef struct
   float i_alpha; ///< α 轴电流 [A]
   float i_beta;  ///< β 轴电流 [A]
   float i_mod;   ///< 模电流 [A] iα 和 iβ 的合成电流
-  float i_bus;   ///< 母线电流 [A]
+  float i_bus;   ///< 本拍 |Idq| [A]（foc_sense 写入；i_mod LPF 同拍采样）
 
   float theta_elec_rad;     ///< 电角 [rad]：normalize(shaft.angle_rad * pole_pairs - offset)，Park/逆 Park 用
   encoder_sample_t shaft;   ///< 电机轴端观测量（控制系）
   encoder_sample_t joint;   ///< 关节端观测量；单编时由 shaft 经 gear_ratio 推算（控制系）
 
-  float sin_elec;       ///< sin(θ_e)，可与 θ 同步更新减少三角运算
-  float cos_elec;       ///< cos(θ_e)
+  float sin_elec;       ///< sin(θ_e)；FOC_REUSE_PARK_SINCOS 时由 foc_sense Park 写入
+  float cos_elec;       ///< cos(θ_e)；与 theta_elec_rad 同拍，供逆 Park 复用
 
   motor_phase_current_t phase_current;  ///< 三相电流采样与标定结果
   temperature_t board_temp;             ///< 板载/驱动端温度采样

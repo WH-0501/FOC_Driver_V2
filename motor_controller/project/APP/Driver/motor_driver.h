@@ -19,4 +19,4 @@ void motor_driver_shutdown(motor_driver_t *drv);
 bool motor_driver_is_armed(const motor_driver_t *drv);
 
 void motor_driver_prepare_dc_offset_cal(motor_driver_t *drv);
-error_t motor_driver_set_pwm(motor_driver_t *drv, const motor_actuation_t *actuation);
+error_t motor_driver_set_pwm(motor_driver_t *drv, const motor_actuation_t *actuation, float max_duty);

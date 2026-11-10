@@ -27,6 +27,14 @@ int main(void) {
   assert(cfg.pid.velocity.ki>0 && cfg.pid.velocity.i_limit>0);
   assert(fabsf(cfg.pid.velocity.i_limit-cfg.limits.iq_limit*DEF_I_LIMIT_FACTOR)<1e-6f);
   assert(cfg.pid.position.i_limit>0 && cfg.pid.id.i_limit>0 && cfg.pid.iq.i_limit>0);
+  for (uint8_t mode=0u; mode<=2u; ++mode) {
+    float period=FOC_CURRENT_PERIOD_S*(mode==2u ? 1u : FW_FOC_OUTER_LOOP_DIV);
+    assert(foc_pid_init(&state,mode)==ERR_NONE);
+    assert(fabsf(state.dt-period)<1e-9f);
+    uint32_t stamp=state.timestamp;
+    assert(foc_pid_calc(&state,&cfg.pid.velocity,1,0,&out)==ERR_NONE);
+    assert(state.timestamp-stamp==(uint32_t)(period*1e6f+.5f));
+  }
   assert(foc_pid_init(&state,1)==ERR_NONE);
   for(i=0;i<100;++i) {
     now_us+=1000;
@@ -34,7 +42,7 @@ int main(void) {
     assert(state.last_integral>previous);
     previous=state.last_integral;
   }
-  assert(fabsf(state.last_integral-cfg.pid.velocity.ki*.1f)<1e-6f);
+  assert(fabsf(state.last_integral-cfg.pid.velocity.ki*(100*state.dt))<1e-6f);
   assert(out>cfg.pid.velocity.kp);
   /* A zero error retains the learned holding-current contribution. */
   now_us+=1000; assert(foc_pid_calc(&state,&cfg.pid.velocity,1,1,&out)==ERR_NONE);

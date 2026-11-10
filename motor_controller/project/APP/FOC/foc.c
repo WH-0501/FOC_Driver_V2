@@ -1,5 +1,5 @@
 #include "foc.h"
-#include "fra.h"
+#include "common.h"
 #include "foc_modulation.h"
 #include "board.h"
 #include "foc_calibration.h"
@@ -11,29 +11,9 @@
 #include "motor.h"
 #include "../config/motor_config.h"
 #include "dwt_profile_delay.h"
-#include "common.h"
 #include "control_mode.h"
 #include "math_compat.h"
 #include <string.h>
-
-/**
- * @brief 计算时间差
- * 
- * @param t0_us: 开始时间
- * @return uint32_t: 时间差[us]
- */
-static uint32_t foc_dwt_elapsed_us(uint32_t t0_us)
-{
-  return (uint32_t)(dwt_get_ticks_us() - t0_us);
-}
-
-static void foc_store_control_loop_us(motor_runtime_t *rt, uint32_t t0_us)
-{
-  if (rt != NULL)
-  {
-    rt->foc_control_loop_us = foc_dwt_elapsed_us(t0_us);
-  }
-}
 
 static void foc_pid_apply_param(pid_state_t *pid, uint8_t mode)
 {
@@ -74,46 +54,24 @@ static void foc_init_filters(motor_handle_t *m)
   lpf1_init(&m->v_q_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
 }
 
-void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
+/* Both the closed-loop and explicit-angle callers supply the trig pair they need. */
+#if defined(__CC_ARM)
+__attribute__((noinline)) /* Keep the SRAM scatter entry even when there is only one caller. */
+#endif
+static void foc_apply_voltage(motor_handle_t *m, float uq, float ud, float sin_el, float cos_el)
 {
   foc_modulation_t modulation;
-  float vbus;
-  float duty_max;
-
-  if (m == NULL)
-  {
-    return;
-  }
-
-  duty_max = pwm_hw_max_duty();
-  if (!(duty_max > 0.0f && duty_max <= 1.0f))
-  {
-    motor_fault_raise(m, FAULT_CURRENT_SENSOR);
-    motor_disarm(m);
-    return;
-  }
-
-  vbus = m->state.vbus_filtered;
-  if (vbus <= 0.0f)
+  float duty_max = pwm_hw_max_duty();
+  float vbus = m->state.vbus_filtered;
+  if (!(vbus > 0.0f))
   {
     vbus = m->config.limits.vbus_nominal;
+    if (!(vbus > 0.0f)) vbus = BUS_VOLTAGE;
   }
-  if (vbus <= 0.0f)
+  if (!foc_modulate_voltage_sincos(ud, uq, sin_el, cos_el, vbus, duty_max, &modulation))
   {
-    vbus = BUS_VOLTAGE;
-  }
-
-  if (!foc_modulate_voltage(Ud, Uq, angle_el, vbus, duty_max, &modulation))
-  {
-    motor_fault_raise(m, FAULT_PARAM);
-    motor_disarm(m);
-    return;
-  }
-
-  /* 调制器缩小了电压矢量，说明母线电压已经饱和，扫频结果不再线性。 */
-  if (fra_owned() && (modulation.voltage_scale < 0.9999f))
-  {
-    fra_abort(FRA_FLAG_LIMIT);
+    fault_t fault = duty_max > 0.0f && duty_max <= 1.0f ? FAULT_PARAM : FAULT_CURRENT_SENSOR;
+    motor_fault_raise(m, fault);
     motor_disarm(m);
     return;
   }
@@ -126,58 +84,38 @@ void foc_voltage(motor_handle_t *m, float Uq, float Ud, float angle_el)
   m->out.duty_a = modulation.duty_a;
   m->out.duty_b = modulation.duty_b;
   m->out.duty_c = modulation.duty_c;
-  (void)motor_apply_pwm(m, &m->out);
+  (void)motor_apply_pwm(m, &m->out, duty_max);
 }
 
-static void foc_current(motor_handle_t *m, float id, float iq, float angle_el, float phase_vel)
+/* Open-loop and calibration commands own their angle, including at startup. */
+void foc_voltage(motor_handle_t *m, float uq, float ud, float angle_el)
 {
-  motor_runtime_t *rt = motor_runtime(m);
-  float v_d_ctrl = 0.0f;
-  float v_q_ctrl = 0.0f;
-  /* 本拍 PID 之前的 q 轴电压，用来判断斜率限制有没有改写输出。 */
-  float vq_before_pid = m->iq_pid.last_output;
-  /* 本拍入口处扫频是否仍在采集。分段耗时只在采集期间记录。 */
-  bool fra_acquiring = (fra_state() == FRA_STATE_ACQUIRING);
-  /* 电流 PI 分段的起始时间戳，单位 us，按 16 位回绕相减。 */
-  uint16_t stage_t0_us = fra_acquiring ? (uint16_t)board_time_us() : 0u;
-  uint32_t t0_us = dwt_get_ticks_us();
+  float sin_el, cos_el;
+  if (m == NULL) return;
 
-  (void)phase_vel;
+  if (foc_modulation_finite(angle_el)) foc_sincos(angle_el, &sin_el, &cos_el);
+  else sin_el = cos_el = angle_el; /* Reject before a nonfinite angle reaches libm. */
+  foc_apply_voltage(m, uq, ud, sin_el, cos_el);
+}
 
-  (void)foc_pid_calc(&m->id_pid, &m->config.pid.id, id, m->state.i_d, &v_d_ctrl);
-  (void)foc_pid_calc(&m->iq_pid, &m->config.pid.iq, iq, m->state.i_q, &v_q_ctrl);
+static void foc_current(motor_handle_t *m, motor_runtime_t *rt, float iq)
+{
+  uint32_t start_ticks = rt != NULL ? dwt_get_ticks() : 0u;
+  float vd = 0.0f, vq = 0.0f;
 
-  if (fra_acquiring)
-  {
-    fra_stage(FRA_STAGE_CURRENT_PID,
-              (uint16_t)((uint16_t)board_time_us() - stage_t0_us));
-  }
-  /* 本拍 Vq 变化达到斜率上限的 99.9%，斜坡限制正在起作用。 */
-  if (fra_owned() && (m->config.pid.iq.ramp > 0.0f) && (m->iq_pid.dt > 0.0f) &&
-      (fabsf(v_q_ctrl - vq_before_pid) >= m->config.pid.iq.ramp * m->iq_pid.dt * 0.999f))
-  {
-    fra_abort(FRA_FLAG_LIMIT);
-  }
+  (void)foc_pid_calc(&m->id_pid, &m->config.pid.id, 0.0f, m->state.i_d, &vd);
+  (void)foc_pid_calc(&m->iq_pid, &m->config.pid.iq, iq, m->state.i_q, &vq);
 
-  m->state.v_d = v_d_ctrl;
-  m->state.v_q = v_q_ctrl;
-  if (fra_acquiring)
-  {
-    stage_t0_us = (uint16_t)board_time_us();
-  }
-  foc_voltage(m, v_q_ctrl, v_d_ctrl, angle_el);
-  if (fra_acquiring)
-  {
-    fra_stage(FRA_STAGE_VOLTAGE,
-              (uint16_t)((uint16_t)board_time_us() - stage_t0_us));
-  }
+  m->state.v_d = vd;
+  m->state.v_q = vq;
 
-  m->state.i_bus = sqrtf(SQ(m->state.i_d) + SQ(m->state.i_q));
+#if FOC_REUSE_PARK_SINCOS
+  foc_apply_voltage(m, vq, vd, m->state.sin_elec, m->state.cos_elec);
+#else
+  foc_voltage(m, vq, vd, m->state.theta_elec_rad);
+#endif
 
-  if (rt != NULL)
-  {
-    rt->foc_cur_loop_us = foc_dwt_elapsed_us(t0_us);
-  }
+  if (rt != NULL) rt->foc_cur_loop_us = dwt_elapsed_us(start_ticks, dwt_get_ticks());
 }
 
 static void foc_speed_open_control(motor_handle_t *m, float target_speed)
@@ -227,45 +165,44 @@ static void foc_speed_open_control(motor_handle_t *m, float target_speed)
   }
 
   foc_voltage(m, rt->open_loop_uq, 0.0f, rt->open_loop_elec_angle_rad);
-  // foc_current(m, 0.0f, rt->open_loop_iq, rt->open_loop_elec_angle_rad, 0.0f);
 }
 
-static void foc_speed_closed_control(motor_handle_t *m, float target_speed)
+static void foc_update_speed_pid(motor_handle_t *m, float target_speed)
 {
   motor_runtime_t *rt = motor_runtime(m);
   float iq_cmd = 0.0f;
-  uint32_t t0_us;
+  uint32_t start_ticks;
 
   if (m == NULL)
   {
     return;
   }
 
-  t0_us = dwt_get_ticks_us();
-  (void)foc_pid_calc(&m->velocity_pid,
-                     &m->config.pid.velocity,
-                     target_speed,
-                     m->state.joint.velocity_rad_s,
-                     &iq_cmd);
+  start_ticks = dwt_get_ticks();
+  if (foc_pid_calc(&m->velocity_pid,
+                   &m->config.pid.velocity,
+                   target_speed,
+                   m->state.joint.velocity_rad_s,
+                   &iq_cmd) != ERR_NONE)
+  {
+    m->velocity_pid.last_output = 0.0f;
+  }
   if (rt != NULL)
   {
-    rt->foc_vel_loop_us = foc_dwt_elapsed_us(t0_us);
+    rt->foc_vel_loop_us = dwt_elapsed_us(start_ticks, dwt_get_ticks());
   }
-
-  foc_current(m, 0.0f, iq_cmd, m->state.theta_elec_rad, 0.0f);
 }
 
-
-static void foc_position_closed_control(motor_handle_t *m, float target_pos)
+static float foc_position_speed_ref(motor_handle_t *m, float target_pos)
 {
   motor_runtime_t *rt = motor_runtime(m);
   float speed_cmd = 0.0f;
-  uint32_t t0_us;
+  uint32_t start_ticks;
   if (m == NULL)
   {
-    return;
+    return 0.0f;
   }
-  t0_us = dwt_get_ticks_us();
+  start_ticks = dwt_get_ticks();
   (void)foc_pid_calc(&m->position_pid,
                      &m->config.pid.position,
                      target_pos,
@@ -273,7 +210,7 @@ static void foc_position_closed_control(motor_handle_t *m, float target_pos)
                      &speed_cmd);
   if (rt != NULL)
   {
-    rt->foc_pos_loop_us = foc_dwt_elapsed_us(t0_us);
+    rt->foc_pos_loop_us = dwt_elapsed_us(start_ticks, dwt_get_ticks());
   }
   if (m->config.motion.max_speed_rad_s > 0.0f)
   {
@@ -282,7 +219,7 @@ static void foc_position_closed_control(motor_handle_t *m, float target_pos)
                       m->config.motion.max_speed_rad_s);
   }
 
-  foc_speed_closed_control(m, speed_cmd);
+  return speed_cmd;
 }
 
 static void foc_reject_control_mode(motor_handle_t *m)
@@ -299,24 +236,16 @@ static void foc_reject_control_mode(motor_handle_t *m)
   }
 }
 
-static void foc_control_run(motor_handle_t *m)
+static void foc_control_run(motor_handle_t *m, motor_runtime_t *rt, bool outer_tick)
 {
-  motor_runtime_t *rt = motor_runtime(m);
-  uint32_t t_ctrl_us;
 
-  if (m == NULL)
-  {
-    return;
-  }
-
-  t_ctrl_us = dwt_get_ticks_us();
   if (rt != NULL)
   {
     rt->current_iq_limited = 0.0f;
     rt->current_speed_limited = false;
-    rt->foc_pos_loop_us = 0.0f;
-    rt->foc_vel_loop_us = 0.0f;
-    rt->foc_cur_loop_us = 0.0f;
+    rt->foc_pos_loop_us = 0u;
+    rt->foc_vel_loop_us = 0u;
+    rt->foc_cur_loop_us = 0u;
   }
 
   switch (m->ctrl_mode)
@@ -327,18 +256,7 @@ static void foc_control_run(motor_handle_t *m)
     case CTRL_MODE_TORQUE:
     {
       float iq_limit = m->config.limits.iq_limit;
-      float iq_ref;
-
-      if (fra_owned())
-      {
-        /* 扫频占用 Iq：用本拍激励替换主机电流指令，并记下注入耗时。 */
-        uint16_t inject_t0_us = (uint16_t)board_time_us();
-
-        m->ref.iq = fra_step(m->state.i_q);
-        fra_stage(FRA_STAGE_INJECT,
-                  (uint16_t)((uint16_t)board_time_us() - inject_t0_us));
-      }
-      iq_ref = m->ref.iq;
+      float iq_ref = m->ref.iq;
 
       if (iq_limit > 0.0f)
       {
@@ -352,26 +270,19 @@ static void foc_control_run(motor_handle_t *m)
         iq_ref = limited;
         rt->current_iq_limited = iq_ref;
       }
-      /* 电流上限或速度软限位改写了激励幅值。 */
-      if (fra_owned() && (iq_ref != m->ref.iq))
-      {
-        fra_abort(FRA_FLAG_LIMIT);
-        iq_ref = 0.0f;
-        m->ref.iq = 0.0f;
-      }
-      foc_current(m, 0.0f, iq_ref, m->state.theta_elec_rad, 0.0f);
-      /* q 轴电压指令顶到 PID 输出上限。 */
-      if (fra_owned() && (fabsf(m->iq_pid.last_output) >= m->config.pid.iq.limit * 0.999f))
-      {
-        fra_abort(FRA_FLAG_LIMIT);
-      }
+      foc_current(m, rt, iq_ref);
       break;
     }
     case CTRL_MODE_SPEED:
-      foc_speed_closed_control(m, m->ref.speed_rad_s);
-      break;
     case CTRL_MODE_POSITION:
-      foc_position_closed_control(m, m->ref.position_rad);
+      if (outer_tick)
+      {
+        float target_speed = m->ctrl_mode == CTRL_MODE_POSITION
+                           ? foc_position_speed_ref(m, m->ref.position_rad)
+                           : m->ref.speed_rad_s;
+        foc_update_speed_pid(m, target_speed);
+      }
+      foc_current(m, rt, m->velocity_pid.last_output);
       break;
     case CTRL_MODE_SPEED_OPEN_LOOP:
       foc_speed_open_control(m, m->ref.speed_rad_s);
@@ -381,10 +292,6 @@ static void foc_control_run(motor_handle_t *m)
       break;
   }
 
-  if (rt != NULL)
-  {
-    rt->foc_ctrl_loop_us = foc_dwt_elapsed_us(t_ctrl_us);
-  }
 }
 
 void foc_init(motor_handle_t *m, const motor_config_t *config)
@@ -455,122 +362,84 @@ __attribute__((weak)) void foc_control_loop(motor_handle_t *m)
 void foc_control_loop(motor_handle_t *m)
 #endif
 {
-  /* 扫频前最近一次正常 CST 周期的入口、耗时和间隔，用作对比基线。 */
-  static uint16_t s_cst_prev_entry_us;
-  static uint16_t s_cst_duration_us;
-  static uint16_t s_cst_interval_us;
-  static bool s_cst_baseline_valid;
-  /* 上一拍扫频采集的入口时间，用来测量电流环间隔。 */
-  static uint16_t s_fra_prev_entry_us;
-  /* 本拍入口处是否正在采集。中途状态变化也按这一拍的采样结果记时。 */
-  bool fra_acquiring = (fra_state() == FRA_STATE_ACQUIRING);
-  bool sample_cst_baseline = !fra_acquiring && (m != NULL) &&
-                              (m->fsm == STATE_RUNNING) &&
-                              (m->ctrl_mode == CTRL_MODE_CST);
-  uint16_t cst_entry_us = 0u;
-  uint16_t fra_entry_us = 0u;
-  uint16_t stage_t0_us = 0u;
-  uint32_t fra_cycle_ticks = 0u;
-  uint32_t t_loop_us;
-  motor_runtime_t *rt = motor_runtime(m);
-
-  if (sample_cst_baseline)
-  {
-    cst_entry_us = (uint16_t)board_time_us();
-    s_cst_interval_us = s_cst_baseline_valid
-                            ? (uint16_t)(cst_entry_us - s_cst_prev_entry_us)
-                            : 0u;
-    s_cst_prev_entry_us = cst_entry_us;
-  }
-  else
-  {
-    /* 采集第一拍还没有样本时，提交扫频前那次 CST 的耗时和间隔。 */
-    if (fra_acquiring && (fra_samples() == 0u) && s_cst_baseline_valid)
-    {
-      fra_baseline(s_cst_duration_us, s_cst_interval_us);
-    }
-    s_cst_baseline_valid = false;
-  }
-  if (fra_acquiring)
-  {
-    uint16_t interval_us;
-
-    fra_cycle_ticks = dwt_get_ticks();
-    fra_entry_us = (uint16_t)board_time_us();
-    interval_us = (uint16_t)(fra_entry_us - s_fra_prev_entry_us);
-    /* 第一拍没有上一拍入口，从已有样本的下一拍开始检查间隔。 */
-    if (fra_samples() > 0u)
-    {
-      fra_interval(interval_us);
-    }
-    s_fra_prev_entry_us = fra_entry_us;
-  }
+  uint32_t loop_start_ticks = dwt_get_ticks();
+  uint32_t sense_start_ticks = 0u, sense_end_ticks = 0u;
+  foc_sense_marks_t marks;
+  
   if (m == NULL)
   {
     return;
   }
+  motor_runtime_t *rt = motor_runtime(m);
 
-  t_loop_us = dwt_get_ticks_us();
+  bool profile_cst = FOC_PROFILE_CST_OUTER && rt != NULL &&
+                     m->fsm == STATE_RUNNING && m->ctrl_mode == CTRL_MODE_CST;
 
   /* Reject before sensor I/O/FSM can arm hardware or retain an old vector. */
   if (m->fsm == STATE_RUNNING && !control_mode_needs_pwm(m->ctrl_mode))
   {
     foc_reject_control_mode(m);
-    foc_store_control_loop_us(rt, t_loop_us);
     return;
   }
-  // foc_sense_poll_vbus(m);
-  if (fra_acquiring)
+  /* All outer work uses the same phase. Start immediately when entering RUNNING. */
+  bool outer_tick = rt == NULL || rt->outer_loop_skip == 0u ||
+                    (m->fsm == STATE_RUNNING && rt->fsm_enter_pending);
+  if (rt != NULL)
   {
-    stage_t0_us = (uint16_t)board_time_us();
+    rt->outer_loop_skip = outer_tick ? FW_FOC_OUTER_LOOP_DIV - 1u : rt->outer_loop_skip - 1u;
   }
-  foc_sense_update(m);
-  if (fra_acquiring)
+
+  if (profile_cst)
   {
-    fra_stage(FRA_STAGE_SENSE,
-              (uint16_t)((uint16_t)board_time_us() - stage_t0_us));
+    rt->cst_shaft_spi_ticks = 0u;
+    rt->profile_cst_outer = true;
+    sense_start_ticks = dwt_get_ticks();
   }
-  
-  /* Independent of mode, user speed commands, runtime config and gear ratio. */
+
+  foc_sense_update_timed(m, profile_cst ? &marks : NULL, outer_tick);
+  if (profile_cst) sense_end_ticks = dwt_get_ticks();
+
+  /* 电机轴速度保护(非关节轴速度保护) */
   if (motor_fault_check_shaft_speed(m)) {
     foc_on_fault_latched(m);
-    foc_store_control_loop_us(rt, t_loop_us);
+    if (profile_cst)
+    {
+      rt->foc_ctrl_loop_us = rt->foc_cur_loop_us = 0u;
+      goto publish_timing;
+    }
     return;
   }
+
   foc_fsm_loop(m);
   if (m->fsm == STATE_RUNNING)
   {
-    if (fra_acquiring)
+    uint32_t ctrl_start_ticks = dwt_get_ticks();
+    foc_control_run(m, rt, outer_tick);
+    if (rt != NULL)
     {
-      stage_t0_us = (uint16_t)board_time_us();
-    }
-    foc_control_run(m);
-    if (fra_acquiring)
-    {
-      fra_stage(FRA_STAGE_CONTROL,
-                (uint16_t)((uint16_t)board_time_us() - stage_t0_us));
+      rt->foc_ctrl_loop_us = dwt_elapsed_us(ctrl_start_ticks, dwt_get_ticks());
     }
   }
-  if (sample_cst_baseline)
+  else if (profile_cst)
   {
-    s_cst_duration_us = (uint16_t)((uint16_t)board_time_us() - cst_entry_us);
-    s_cst_baseline_valid = true;
+    rt->foc_ctrl_loop_us = rt->foc_cur_loop_us = 0u;
   }
-  if (fra_acquiring)
-  {
-    uint16_t loop_us = (uint16_t)((uint16_t)board_time_us() - fra_entry_us);
 
-    /* 先按本拍耗时刷新周期计数峰值，fra_timing 随后才更新最大耗时。 */
-    fra_cycle_measure(dwt_get_ticks() - fra_cycle_ticks, loop_us);
-    fra_timing(loop_us);
-  }
-  /* 采集已结束：清掉激励、卸力，并把扫频占用交还。 */
-  if (fra_owned() && (fra_state() != FRA_STATE_ACQUIRING))
+publish_timing:
+  if (rt != NULL)
   {
-    m->ref.iq = 0.0f;
-    motor_disarm(m);
-    foc_fsm_next_state(m, STATE_IDLE);
-    fra_release();
+    uint32_t loop_end_ticks = dwt_get_ticks();
+    rt->foc_control_loop_us = dwt_elapsed_us(loop_start_ticks, loop_end_ticks);
+    if (profile_cst)
+    {
+      /* Subtract the shaft SPI interval before converting the position stage to us. */
+      uint32_t position_ticks = marks.position_end - marks.current_end; // 即 encoder_update(m, outer_tick) 耗时
+      rt->foc_sense_update_us = dwt_elapsed_us(sense_start_ticks, sense_end_ticks);
+      rt->foc_current_sense_us = dwt_elapsed_us(sense_start_ticks, marks.current_end);
+      rt->foc_encoder_update_us = dwt_ticks_to_us(rt->cst_shaft_spi_ticks);
+      rt->foc_pos_loop_us = dwt_ticks_to_us(position_ticks - rt->cst_shaft_spi_ticks); // 位置更新耗时, 即 encoder_update(m, outer_tick) 耗时减去电机轴 SPI 耗时
+      rt->foc_vel_loop_us = dwt_elapsed_us(marks.position_end, marks.encoder_end); // 速度更新耗时(根据位置差算速度)
+      rt->profile_cst_outer = false;
+    }
   }
-  foc_store_control_loop_us(rt, t_loop_us);
 }

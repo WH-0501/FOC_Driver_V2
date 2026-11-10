@@ -48,6 +48,16 @@ uint32_t dwt_get_ticks(void)
   return DWT->CYCCNT;
 }
 
+uint32_t dwt_ticks_to_us(uint32_t elapsed_ticks)
+{
+  return dwt_cycle_tim.dwt_freq_MHz ? elapsed_ticks / dwt_cycle_tim.dwt_freq_MHz : 0u;
+}
+
+uint32_t dwt_elapsed_us(uint32_t start_ticks, uint32_t end_ticks)
+{
+  return dwt_ticks_to_us(end_ticks - start_ticks);
+}
+
 uint32_t dwt_get_ticks_us(void)
 {
   return (uint32_t)(dwt_get_ticks() * dwt_cycle_tim.dwt_freq_MHz_inv);

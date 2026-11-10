@@ -38,11 +38,22 @@ static void natural_update(void)
 void tmr_output_channel_buffer_enable(tmr_type *timer, tmr_channel_select_type channel, confirm_state state)
 {
   assert(timer == &timer_ram);
+  /* Direct CCR writes made while preload is disabled are already active when
+   * the channel switches back to buffered operation. */
   switch (channel)
   {
-    case TMR_SELECT_CHANNEL_1: timer->cm1_output_bit.c1oben = state; break;
-    case TMR_SELECT_CHANNEL_2: timer->cm1_output_bit.c2oben = state; break;
-    case TMR_SELECT_CHANNEL_3: timer->cm2_output_bit.c3oben = state; break;
+    case TMR_SELECT_CHANNEL_1:
+      if (state && !timer->cm1_output_bit.c1oben) active_compare[0] = timer->c1dt;
+      timer->cm1_output_bit.c1oben = state;
+      break;
+    case TMR_SELECT_CHANNEL_2:
+      if (state && !timer->cm1_output_bit.c2oben) active_compare[1] = timer->c2dt;
+      timer->cm1_output_bit.c2oben = state;
+      break;
+    case TMR_SELECT_CHANNEL_3:
+      if (state && !timer->cm2_output_bit.c3oben) active_compare[2] = timer->c3dt;
+      timer->cm2_output_bit.c3oben = state;
+      break;
     default: assert(0);
   }
 }
@@ -86,10 +97,13 @@ int main(void)
   max_duty = pwm_hw_max_duty();
   assert(max_duty == AT32_FOC_CURRENT_MAX_DUTY);
   assert(pwm_compare_top == timer_ram.pr); /* lazy initialization */
+  assert(set_pwm_with_limit(&pwm, 1.0f) == ERR_PARAM);
+  assert(set_pwm_with_limit(&pwm, NAN) == ERR_PARAM);
   pwm.duty_a = max_duty;
   pwm.duty_b = max_duty * .5f;
   pwm.duty_c = 0;
   assert(set_pwm(&pwm) == ERR_NONE);
+  assert(set_pwm_with_limit(&pwm, max_duty) == ERR_NONE);
   assert(timer_ram.c3dt <= AT32_FOC_CURRENT_MAX_CCR);
   assert(timer_ram.c3dt == (uint32_t)(max_duty * AT32_FOC_TIMER_ARR));
   assert(timer_ram.c2dt == (uint32_t)(max_duty * .5f * AT32_FOC_TIMER_ARR));

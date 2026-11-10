@@ -227,6 +227,11 @@ typedef struct _lead_lag_compensator_t {
  */
 bool lpf1_init(lpf1_t *lpf, float fc, float fs);
 bool lpf1_reset(lpf1_t *lpf, float initial_value);
+/* One-pole update with an already computed coefficient (fixed or variable sample time). */
+APP_STATIC_INLINE float lpf1_blend(float alpha, float input, float previous)
+{
+    return alpha * input + (1.0f - alpha) * previous;
+}
 /**
  * @brief 的一步更新：y=α·x+(1−α)·y_prev，返回当前输出 y
  */

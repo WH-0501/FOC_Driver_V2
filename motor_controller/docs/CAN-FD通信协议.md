@@ -2,7 +2,7 @@ CAN-FD 仲裁段 1Mbps，数据段 5Mbps
 
 本文档 **CMD 表与字段语义以 V2.0.0 为准**（本仓库 `motor_controller` FOC 固件）。与旧 dex-con / 灵巧手等设备通信时需选用 **V1.0.0** 语义，见下文「协议版本」。
 
-**未列入下文主 CMD 表的 V2 扩展功能**（三环 PID 调试流、电流环 FRA 辨识、电角验证、限速查询、单播 `0x7E` 分发确认等）见 **[CAN-FD扩展协议.md](CAN-FD扩展协议.md)**。固件符号与 `can_fd_custom.h` 中 `CAN_FD_CMD_`* 一致；Python 见 `motor_controller_gui/protocol/constants.py`。
+**未列入下文主 CMD 表的 V2 扩展功能**（三环 PID 调试流、电角验证、限速查询、单播 `0x7E` 分发确认等）见 **[CAN-FD扩展协议.md](CAN-FD扩展协议.md)**。固件符号与 `can_fd_custom.h` 中 `CAN_FD_CMD_`* 一致；Python 见 `motor_controller_gui/protocol/constants.py`。
 
 # 协议格式
 

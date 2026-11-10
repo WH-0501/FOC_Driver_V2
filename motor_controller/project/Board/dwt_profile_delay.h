@@ -58,6 +58,12 @@ float dwt_profile_get_elapsed_us(uint32_t slot);
  */
 uint32_t dwt_get_ticks(void);
 
+/** 原始周期差换算为整微秒（向下取整）。 */
+uint32_t dwt_ticks_to_us(uint32_t elapsed_ticks);
+
+/** 两次 CYCCNT 采样间的整微秒数，向下取整。区间须短于 2^32 周期，允许跨零。 */
+uint32_t dwt_elapsed_us(uint32_t start_ticks, uint32_t end_ticks);
+
 /**
  * @brief 获取 DWT 计数器值，单位 us
  * 

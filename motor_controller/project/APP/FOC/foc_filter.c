@@ -57,8 +57,7 @@ float lpf1_update(lpf1_t *lpf, float input)
 {
     if (lpf != NULL)
     {
-        float y =
-            lpf->alpha * input + (1.0f - lpf->alpha) * lpf->prev;
+        float y = lpf1_blend(lpf->alpha, input, lpf->prev);
         lpf->prev = y;
         return y;
     }

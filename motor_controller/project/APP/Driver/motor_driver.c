@@ -138,7 +138,7 @@ void motor_driver_prepare_dc_offset_cal(motor_driver_t *drv)
   drv->armed = false;
 }
 
-error_t motor_driver_set_pwm(motor_driver_t *drv, const motor_actuation_t *actuation)
+error_t motor_driver_set_pwm(motor_driver_t *drv, const motor_actuation_t *actuation, float max_duty)
 {
   if ((drv == NULL) || !drv->armed)
   {
@@ -150,5 +150,5 @@ error_t motor_driver_set_pwm(motor_driver_t *drv, const motor_actuation_t *actua
     return ERR_FAIL;
   }
 
-  return set_pwm((motor_actuation_t *)actuation);
+  return set_pwm(actuation, max_duty);
 }

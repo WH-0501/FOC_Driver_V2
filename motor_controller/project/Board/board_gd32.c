@@ -138,9 +138,9 @@ error_t pwm_hw_lowside_brake_on(void)
   return ERR_NONE;
 }
 
-error_t set_pwm(motor_actuation_t *actuation)
+error_t set_pwm(const motor_actuation_t *actuation, float max_duty)
 {
-  (void)actuation;
+  if (max_duty != 1.0f || !pwm_duties_in_range(actuation, max_duty)) return ERR_FAIL;
   return ERR_NONE;
 }
 

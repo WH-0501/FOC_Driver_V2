@@ -1,0 +1,30 @@
+; *************************************************************
+; *** AT32M416: SRAM execution for encoder update and voltage modulation ***
+; *************************************************************
+
+LR_IROM1 0x08001000 0x00020000  {    ; load region size_region
+  ER_IROM1 0x08001000 0x00020000  {  ; load address = execution address
+   *.o (RESET, +First)
+   *(InRoot$$Sections)
+   .ANY (+RO)
+   .ANY (+XO)
+  }
+  RW_IRAM1 0x20000000 0x00003830  {  ; RW data
+   .ANY (+RW +ZI)
+  }
+  ; Preserve the original data, heap and stack. Both code regions are copied
+  ; from the flash load image by the ARM C startup.
+  ER_VOLTAGE 0x20003A00 0x00000600 {
+    foc.o (i.foc_apply_voltage)
+    foc.o (i.foc_modulate_voltage_sincos)
+  }
+  ER_ENCODER 0x20003830 0x000001d0 {
+    encoder.o (i.encoder_update)
+  }
+  ; Encoder state may grow with a second PLL. Use the free SRAM above
+  ; the hot code, without reducing stack/heap or moving either code region.
+  RW_ENCODER_STATE +0 ALIGN 8 0x00000140 {
+    encoder.o (.bss)
+  }
+  ScatterAssert(ImageLimit(RW_ENCODER_STATE) <= 0x20004000)
+}

@@ -1,4 +1,3 @@
-#include "fra.h"
 #include <math.h>
 #include "can_fd_custom.h"
 #include "comm.h"
@@ -198,12 +197,6 @@ static void can_fd_custom_apply_vel(motor_handle_t *m, int16_t vel_raw)
 static void can_fd_custom_apply_curr(motor_handle_t *m, int16_t curr_ma)
 {
   /// TODO: 根据上层传递的参数类型,当前为电流,直接赋值 iq,若为 扭矩值, 则赋值 torque_nm
-  /* 扫频占用电流指令期间，主机电流目标视为竞争写入。 */
-  if (fra_owned())
-  {
-    fra_abort(FRA_FLAG_CONFLICT);
-    return;
-  }
   m->ref.iq = (float)curr_ma / 1000.0f;
 }
 
@@ -583,69 +576,6 @@ static void can_fd_debug_poll(void)
   }
 }
 
-/* FRA 协议 v1：前台组帧，采集由电流环 ISR 独占。
- * stage_us 顺序：采样、控制、注入、编码器、电流 PI、电压调制。 */
-static void can_fd_fra_float(uint8_t *p,float f){uint32_t v;memcpy(&v,&f,4);p[0]=(uint8_t)(v>>24);p[1]=(uint8_t)(v>>16);p[2]=(uint8_t)(v>>8);p[3]=(uint8_t)v;}
-static void can_fd_fra_status(uint8_t cmd,uint8_t error){
-  uint8_t p[54]={1,0};uint32_t irq=__get_PRIMASK();__disable_irq();
-  p[1]=error;p[2]=(uint8_t)fra_state();p[3]=(uint8_t)fra_method();
-  can_fd_codec_write_u16_be(p+4,fra_id());p[6]=(uint8_t)fra_count();p[7]=(uint8_t)fra_progress();
-  can_fd_write_i32_be(p+8,(int32_t)fra_fs());can_fd_write_i32_be(p+12,(int32_t)fra_samples());
-  can_fd_codec_write_u16_be(p+16,(uint16_t)fra_flags());can_fd_codec_write_u16_be(p+18,(uint16_t)fra_max_us());
-  can_fd_codec_write_u16_be(p+20,(uint16_t)fra_min_interval());can_fd_codec_write_u16_be(p+22,(uint16_t)fra_max_interval());
-  can_fd_codec_write_u16_be(p+24,(uint16_t)fra_last_interval());p[26]=(uint8_t)fra_timing_reason();p[27]=0xA5;
-  can_fd_write_i32_be(p+28,(int32_t)fra_failure_sample());
-  can_fd_codec_write_u16_be(p+32,(uint16_t)fra_stage_us(FRA_STAGE_SENSE));
-  can_fd_codec_write_u16_be(p+34,(uint16_t)fra_stage_us(FRA_STAGE_CONTROL));
-  can_fd_codec_write_u16_be(p+36,(uint16_t)fra_stage_us(FRA_STAGE_INJECT));
-  p[38]=0xA6;p[39]=5;
-  can_fd_codec_write_u16_be(p+40,(uint16_t)fra_stage_us(FRA_STAGE_ENCODER));
-  can_fd_codec_write_u16_be(p+42,(uint16_t)fra_stage_us(FRA_STAGE_CURRENT_PID));
-  can_fd_codec_write_u16_be(p+44,(uint16_t)fra_stage_us(FRA_STAGE_VOLTAGE));
-  can_fd_codec_write_u16_be(p+46,(uint16_t)fra_baseline_duration());
-  can_fd_codec_write_u16_be(p+48,(uint16_t)fra_baseline_interval());
-  can_fd_write_i32_be(p+50,(int32_t)fra_peak_cycles());
-  __set_PRIMASK(irq);can_fd_custom_reply(cmd,p,sizeof(p));
-}
-
-/**
- * @brief FRA 命令处理
- * 
- * @param cmd 命令
- * @param payload 命令参数
- * @param len 命令参数长度
- */
-static void can_fd_fra_command(uint8_t cmd,const uint8_t *payload,uint8_t len){
-  if (cmd == CAN_FD_CMD_FRA_START)
-  {
-    uint8_t e=0;
-    if(len<11 || payload[0]!=1)e=2;
-    else if(payload[1]==0){fra_abort(FRA_FLAG_CANCEL);s_motor->ref.iq=0;mc_disable();fra_release();}
-    else if(s_motor->fsm!=STATE_RUNNING || s_motor->ctrl_mode!=CTRL_MODE_CST || !motor_is_armed(s_motor) ||
-      s_motor->fault.latched || fabsf(s_motor->ref.iq)>.001f)e=1;
-    else {
-      float peak=can_fd_codec_read_u16_be(payload+9)/1000.0f;
-      if(!(s_motor->config.limits.iq_limit>0) || peak>s_motor->config.limits.iq_limit*.8f)e=2;
-      else e=(uint8_t)fra_start(payload[1],payload[8],can_fd_codec_read_u16_be(payload+4),
-        can_fd_codec_read_u16_be(payload+6),peak,FOC_CURRENT_LOOP_FS_HZ,can_fd_codec_read_u16_be(payload+2));
-    }
-    can_fd_fra_status(cmd,e);
-  }
-  else if (cmd == CAN_FD_CMD_FRA_QUERY)
-  {
-    can_fd_fra_status(cmd, 0);
-  }
-  else if (cmd == CAN_FD_CMD_FRA_RESULT)
-  {
-    fra_result_t r;uint8_t p[34]={1,0};unsigned index=len==3?payload[2]:255;
-    p[1]=(len!=3 || can_fd_codec_read_u16_be(payload)!=fra_id())?2:(uint8_t)fra_result(index,&r);
-    can_fd_codec_write_u16_be(p+2,fra_id());p[4]=(uint8_t)index;p[5]=(uint8_t)fra_state();can_fd_codec_write_u16_be(p+6,(uint16_t)fra_flags());
-    if(!p[1]){can_fd_fra_float(p+8,r.hz);can_fd_fra_float(p+12,r.input);can_fd_fra_float(p+16,r.output);
-      can_fd_fra_float(p+20,r.real);can_fd_fra_float(p+24,r.imag);can_fd_fra_float(p+28,r.coherence);can_fd_codec_write_u16_be(p+32,r.blocks);}
-    can_fd_custom_reply(cmd,p,sizeof(p));
-  }
-}
-
 static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, uint8_t payload_len)
 {
   motor_handle_t *m = s_motor;
@@ -667,11 +597,6 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
 
   switch (cmd)
   {
-    case CAN_FD_CMD_FRA_START:
-    case CAN_FD_CMD_FRA_QUERY:
-    case CAN_FD_CMD_FRA_RESULT:
-      can_fd_fra_command(cmd, payload, payload_len);
-      break;
     case CAN_FD_CMD_DEBUG_CONFIG:
     {
       uint8_t reply[5] = {1u, 0u, s_debug_mask, 0u, 0u};
@@ -1223,10 +1148,6 @@ static void can_fd_custom_poll(void)
    * so status is sent once when available, never as a catch-up burst. */
   if (s_report_elapsed < 1000000u) s_report_elapsed += delta;
 
-  /* 离开 CST 运行或进入升级时，扫频不能继续占用电机。 */
-  if (fra_owned() && (s_motor->fsm!=STATE_RUNNING || s_motor->ctrl_mode!=CTRL_MODE_CST || can_fd_iap_is_active())) fra_abort(FRA_FLAG_CANCEL);
-  /* 采集结束后清掉电流指令并交还扫频占用。 */
-  if (fra_owned() && fra_state()!=FRA_STATE_ACQUIRING) {s_motor->ref.iq=0;mc_disable();fra_release();}
   can_fd_iap_poll();
   can_fd_debug_clock();
   can_fd_custom_flush_reply();

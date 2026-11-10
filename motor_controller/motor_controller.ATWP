@@ -105,8 +105,8 @@
             <ParametersSub name="TransmissionMode" value="SPI_TRANSMIT_HALF_DUPLEX_TX"/>
             <ParametersSub name="Mode" value="SPI_MODE_MASTER"/>
             <ParametersSub name="FirstBit" value="SPI_FIRST_BIT_MSB"/>
-            <ParametersSub name="ClkDivision" value="SPI_MCLK_DIV_32"/>
-            <ParametersSub name="ClockFrequency" value="5625000"/>
+            <ParametersSub name="ClkDivision" value="SPI_MCLK_DIV_16"/>
+            <ParametersSub name="ClockFrequency" value="11250000"/>
             <ParametersSub name="CLKPolarity" value="SPI_CLOCK_POLARITY_HIGH"/>
             <ParametersSub name="CLKPhase" value="SPI_CLOCK_PHASE_2EDGE"/>
         </Parameters>

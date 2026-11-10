@@ -73,7 +73,17 @@ error_t pwm_hw_stop(void);
 error_t pwm_hw_lowside_brake_on(void);
 error_t pwm_hw_lowside_brake_off(void);
 
-error_t set_pwm(motor_actuation_t *actuation);
+/* max_duty is the result of pwm_hw_max_duty() from this update. */
+error_t set_pwm(const motor_actuation_t *actuation, float max_duty);
+
+/* Ordered comparisons also reject NaN before conversion to timer counts. */
+static inline bool pwm_duties_in_range(const motor_actuation_t *actuation, float max_duty)
+{
+  return actuation != NULL &&
+         actuation->duty_a >= 0.0f && actuation->duty_a <= max_duty &&
+         actuation->duty_b >= 0.0f && actuation->duty_b <= max_duty &&
+         actuation->duty_c >= 0.0f && actuation->duty_c <= max_duty;
+}
 
 typedef struct
 {

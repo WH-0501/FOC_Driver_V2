@@ -91,7 +91,11 @@ static void foc_fsm_on_run(motor_handle_t *m, fsm_state_t state)
         }
         break;
       }
-      motor_sync_arm_with_mode(m);
+      /* A running, armed motor already passed the mode and fault checks above. */
+      if (!motor_is_armed(m))
+      {
+        motor_sync_arm_with_mode(m);
+      }
       break;
     case STATE_FAULT:
       break;

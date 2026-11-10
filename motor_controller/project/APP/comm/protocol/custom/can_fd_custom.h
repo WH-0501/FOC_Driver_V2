@@ -66,9 +66,6 @@ typedef enum
   CAN_FD_CMD_DEBUG_CURRENT = 0xB9,    ///< 调试推送：电流环快照
   CAN_FD_CMD_DEBUG_SPEED = 0xBA,      ///< 调试推送：速度环快照
   CAN_FD_CMD_DEBUG_POSITION = 0xBB,   ///< 调试推送：位置环快照
-  CAN_FD_CMD_FRA_START = 0xBC,        ///< 电流环 FRA 启动/停止
-  CAN_FD_CMD_FRA_QUERY = 0xBD,        ///< 电流环 FRA 状态查询
-  CAN_FD_CMD_FRA_RESULT = 0xBE,       ///< 电流环 FRA 频点结果
   CAN_FD_CMD_SET_REPORT_RATE = 0x7F,  ///< 设置周期上报频率
   CAN_FD_CMD_COMMAND_ACK = 0x7E,      ///< 单播分发完成确认（非 IAP）
 

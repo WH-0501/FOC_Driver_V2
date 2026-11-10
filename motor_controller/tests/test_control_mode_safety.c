@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "control_mode.h"
-#include "fra.h"
 #include "motor.h"
 #include "foc_fsm.h"
 #include "foc_fault.h"
@@ -10,15 +9,6 @@
 
 static motor_handle_t motor;
 static motor_runtime_t runtime;
-static motor_handle_t *s_motor=&motor;
-static uint8_t fra_reply[64];
-static uint32_t __get_PRIMASK(void){return 0;}
-static void __disable_irq(void){}
-static void __set_PRIMASK(uint32_t v){(void)v;}
-static uint16_t can_fd_codec_read_u16_be(const uint8_t *p){return (uint16_t)((p[0]<<8)|p[1]);}
-static void can_fd_codec_write_u16_be(uint8_t *p,uint16_t v){p[0]=(uint8_t)(v>>8);p[1]=(uint8_t)v;}
-static void can_fd_write_i32_be(uint8_t *p,int32_t v){p[0]=(uint8_t)(v>>24);p[1]=(uint8_t)(v>>16);p[2]=(uint8_t)(v>>8);p[3]=(uint8_t)v;}
-
 static unsigned armed,disarms,clears,sensed,executed;
 static float applied_iq;
 static unsigned reply_result,reply_len;
@@ -36,19 +26,50 @@ void motor_sync_arm_with_mode(motor_handle_t *m) { armed=control_mode_needs_pwm(
 int motor_fault_is_latched(const motor_handle_t *m) { return m->fault.latched!=0; }
 void motor_fault_raise(motor_handle_t *m,fault_t bits) { m->fault.latched|=bits; }
 error_t foc_pid_clear(pid_state_t *p) { ++clears;p->last_integral=0;return ERR_NONE; }
-static uint32_t board_time_us(void){static uint32_t t;static unsigned phase;uint32_t now=t;t+=(phase++&1)?40:10;return now;}
-uint32_t dwt_get_ticks_us(void) { return 100; }
-static uint32_t foc_dwt_elapsed_us(uint32_t t) { (void)t;return 1; }
-void foc_sense_update(motor_handle_t *m) { (void)m;++sensed; }
-void foc_current(motor_handle_t *m,float d,float q,float a,float w) { (void)m;(void)d;applied_iq=q;(void)a;(void)w;executed=m->ctrl_mode; }
-static void foc_speed_closed_control(motor_handle_t *m,float v) { (void)m;(void)v;executed=CTRL_MODE_SPEED; }
-static void foc_position_closed_control(motor_handle_t *m,float p) { (void)m;(void)p;executed=CTRL_MODE_POSITION; }
+#include "foc_sense.h"
+static uint32_t test_ticks;
+static bool sensed_outer;
+static unsigned position_calls, speed_calls, current_calls;
+uint32_t dwt_get_ticks(void) { test_ticks += 180u; return test_ticks; }
+uint32_t dwt_ticks_to_us(uint32_t ticks) { return ticks / 180u; }
+uint32_t dwt_elapsed_us(uint32_t start_ticks, uint32_t end_ticks) { return (end_ticks - start_ticks) / 180u; }
+void foc_sense_update(motor_handle_t *m) {
+  (void)m; ++sensed; test_ticks += 360u;
+  if (runtime.profile_cst_outer) runtime.cst_shaft_spi_ticks = 360u;
+}
+void foc_sense_update_timed(motor_handle_t *m, foc_sense_marks_t *marks, bool outer_tick) {
+  sensed_outer=outer_tick;
+  if (!marks) { foc_sense_update(m); return; }
+  ++sensed;
+  test_ticks += 2u * 180u;
+  marks->current_end = test_ticks;
+  runtime.cst_shaft_spi_ticks = 5u * 180u;
+  test_ticks += 9u * 180u;
+  marks->position_end = test_ticks;
+  test_ticks += 3u * 180u;
+  marks->encoder_end = test_ticks;
+  test_ticks += 180u;
+  test_ticks += 2u * 180u;
+}
+static void check_sense_fields(void) {
+  assert(runtime.foc_sense_update_us == 18u && runtime.foc_current_sense_us == 2u);
+  assert(runtime.foc_encoder_update_us == 5u && runtime.foc_vel_loop_us == 3u);
+  assert(runtime.foc_pos_loop_us == 4u);
+}
+void foc_current(motor_handle_t *m,motor_runtime_t *rt,float q) { ++current_calls;applied_iq=q;executed=m->ctrl_mode; test_ticks += 720u; rt->foc_cur_loop_us=4u;
+}
+static error_t foc_pid_calc(pid_state_t *pid,const pid_param_t *param,float target,float feedback,float *out) {
+  (void)param; assert(sensed_outer);
+  if (pid==&motor.position_pid) ++position_calls;
+  else { assert(pid==&motor.velocity_pid); ++speed_calls; }
+  *out=pid->last_output=target-feedback;
+  return ERR_NONE;
+}
 static void foc_speed_open_control(motor_handle_t *m,float v) { (void)m;(void)v;executed=CTRL_MODE_SPEED_OPEN_LOOP; }
 error_t mc_disable(void) { motor_disarm(&motor);foc_fsm_next_state(&motor,STATE_IDLE);return ERR_NONE; }
-static void can_fd_custom_reply(unsigned cmd,const uint8_t *payload,unsigned len) { (void)cmd;reply_result=payload[0];reply_len=len;memcpy(fra_reply,payload,len); }
+static void can_fd_custom_reply(unsigned cmd,const uint8_t *payload,unsigned len) { (void)cmd;reply_result=payload[0];reply_len=len; }
 #define CAN_FD_CMD_CONTROL_MODE 0x41
 #define CAN_FD_CMD_ENABLE 0x40
-#define CAN_FD_CMD_FRA_START 0xBC
 /* Exact API/dispatch/loop functions and protocol case extracted by the runner. */
 #include "c06_impl.inc"
 static void reset(void) {
@@ -57,9 +78,31 @@ static void reset(void) {
   motor.current_offset_cal_done=true;motor.ctrl_mode=CTRL_MODE_SPEED;motor.fsm=STATE_IDLE;
   armed=disarms=clears=sensed=executed=0;reply_result=999;reply_len=0;
 }
+static void check_outer_ticks(control_mode_t mode) {
+  reset(); motor.ctrl_mode=mode; assert(mc_enable()==ERR_NONE);
+  runtime.outer_loop_skip=FW_FOC_OUTER_LOOP_DIV-1u; /* simulate idle phase before enable */
+  position_calls=speed_calls=current_calls=0;
+  float held=0;
+  for (unsigned i=0;i<=2u*FW_FOC_OUTER_LOOP_DIV;++i) {
+    motor.ref.speed_rad_s=motor.ref.position_rad=1.0f+i;
+    motor.state.joint.position_rad=0.25f;
+    motor.state.joint.velocity_rad_s=0.5f;
+    bool due=i%FW_FOC_OUTER_LOOP_DIV==0u;
+    if (due) held=1.0f+i-0.5f-(mode==CTRL_MODE_POSITION ? 0.25f : 0.0f);
+    foc_control_loop(&motor);
+    assert(sensed_outer==due && applied_iq==held && current_calls==i+1u);
+    assert(speed_calls==i/FW_FOC_OUTER_LOOP_DIV+1u);
+    assert(position_calls==(mode==CTRL_MODE_POSITION ? speed_calls : 0u));
+  }
+  assert(mc_disable()==ERR_NONE && mc_enable()==ERR_NONE);
+  motor.ref.speed_rad_s=motor.ref.position_rad=-4.0f;
+  foc_control_loop(&motor);
+  assert(sensed_outer && applied_iq<0);
+}
 static bool expected(int mode) { return mode==CTRL_MODE_IDLE || mode==CTRL_MODE_TORQUE || mode==CTRL_MODE_CST || mode==CTRL_MODE_SPEED || mode==CTRL_MODE_POSITION || mode==CTRL_MODE_SPEED_OPEN_LOOP; }
 int main(void) {
   int mode; uint8_t wire;
+  check_outer_ticks(CTRL_MODE_SPEED); check_outer_ticks(CTRL_MODE_POSITION);
   for(mode=-2;mode<=255;++mode) {
     reset();
     assert(control_mode_is_supported((control_mode_t)mode)==expected(mode));
@@ -114,6 +157,11 @@ int main(void) {
       motor.state.shaft.velocity_rad_s=sign*MAX_VELOCITY_RAD_S;
       foc_control_loop(&motor);
       assert(!armed && !executed && motor.fsm==STATE_FAULT);
+      if (mode == CTRL_MODE_CST && FOC_PROFILE_CST_OUTER)
+      {
+        assert(!runtime.profile_cst_outer && runtime.foc_control_loop_us == 20u && runtime.foc_ctrl_loop_us == 0u && runtime.foc_cur_loop_us == 0u);
+        check_sense_fields();
+      }
       assert(motor.fault.latched & FAULT_OVER_SPEED);
       assert(mc_enable()==ERR_FAULT_LATCHED);
     }
@@ -138,9 +186,26 @@ int main(void) {
   /* CST: latest target, held between updates; identical limits, no outer PID. */
   reset();motor.ctrl_mode=CTRL_MODE_CST;motor.fsm=STATE_RUNNING;armed=1;
   runtime.current_soft_speed_rad_s=100.0f;motor.config.limits.iq_limit=1.0f;
-  motor.ref.iq=.2f;foc_control_loop(&motor);
+  test_ticks = 0xFFFFFF00u; /* The stage sequence crosses the DWT wrap. */
+  can_fd_custom_apply_curr(&motor,200);foc_control_loop(&motor);
   assert(executed==CTRL_MODE_CST && applied_iq==.2f);
-  motor.ref.iq=-.3f;foc_control_loop(&motor);assert(applied_iq==-.3f);
+  assert(!runtime.profile_cst_outer);
+  if (FOC_PROFILE_CST_OUTER)
+  {
+    check_sense_fields();
+    assert(runtime.foc_control_loop_us == 26u && runtime.foc_ctrl_loop_us == 5u && runtime.foc_cur_loop_us == 4u);
+    motor.state.shaft.velocity_rad_s=MAX_VELOCITY_RAD_S;
+    foc_control_loop(&motor);
+    assert(motor.fsm == STATE_FAULT);
+    check_sense_fields();
+    reset(); motor.ctrl_mode=CTRL_MODE_CST; motor.fsm=STATE_RUNNING; armed=1;
+    runtime.current_soft_speed_rad_s=100.0f; motor.config.limits.iq_limit=1.0f;
+  }
+  else
+  {
+    assert(runtime.foc_ctrl_loop_us == 5u && runtime.foc_control_loop_us == 9u);
+  }
+  can_fd_custom_apply_curr(&motor,-300);foc_control_loop(&motor);assert(applied_iq==-.3f);
   foc_control_loop(&motor);assert(applied_iq==-.3f);
   motor.ref.iq=2.0f;motor.state.shaft.velocity_rad_s=95.0f;foc_control_loop(&motor);
   assert(fabsf(applied_iq-.5f)<.0001f && runtime.current_speed_limited && motor.ref.iq==2.0f);
@@ -148,16 +213,6 @@ int main(void) {
   assert(mc_set_ctrl_mode(CTRL_MODE_TORQUE)==ERR_STATE);
   assert(mc_disable()==ERR_NONE && !armed);
   assert(mc_set_ctrl_mode(CTRL_MODE_TORQUE)==ERR_NONE);
-  { uint8_t start[14]={1,1,0,42,0,20,7,208,16,0,100,0,0,0};
-    reset();can_fd_fra_command(CAN_FD_CMD_FRA_START,start,sizeof(start));assert(fra_reply[1]!=0);
-    motor.ctrl_mode=CTRL_MODE_CST;motor.fsm=STATE_RUNNING;armed=1;motor.config.limits.iq_limit=1;motor.config.pid.iq.limit=10;
-    can_fd_fra_command(CAN_FD_CMD_FRA_START,start,sizeof(start));assert(fra_reply[1]==0 && fra_state()==1 && fra_id()==42);
-    foc_control_loop(&motor);assert(fra_samples()==1);
-    can_fd_custom_apply_curr(&motor,200);assert(fra_state()==3 && (fra_flags()&8));
-    foc_control_loop(&motor);assert(!armed && !fra_owned() && motor.ref.iq==0);
-    start[1]=0;can_fd_fra_command(CAN_FD_CMD_FRA_START,start,sizeof(start));assert(!armed);
-  }
-  puts("PASS FRA protocol: padded start, state guard, ISR injection, competing target cancellation and stop");
   puts("PASS CST: latest/hold/reverse, current clamp, soft limit, braking, preserved reference and mode switch guard");
   puts("PASS speed limits: bidirectional hard cutoff, all modes, latch, soft taper, braking and disabled soft");
   puts("PASS C06: exhaustive mode admission/enable/dispatch, active/calibration/fault guards, PID reset, stale-output shutdown and CAN status");

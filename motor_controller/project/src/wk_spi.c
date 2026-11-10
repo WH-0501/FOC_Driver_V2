@@ -76,7 +76,7 @@ void wk_spi2_init(void)
   spi_init_struct.master_slave_mode = SPI_MODE_MASTER;
   spi_init_struct.frame_bit_num = SPI_FRAME_8BIT;
   spi_init_struct.first_bit_transmission = SPI_FIRST_BIT_MSB;
-  spi_init_struct.mclk_freq_division = SPI_MCLK_DIV_32;
+  spi_init_struct.mclk_freq_division = SPI_MCLK_DIV_16; /* APB1 180MHz/16=11.25MHz，KTH71 上限 */
   spi_init_struct.clock_polarity = SPI_CLOCK_POLARITY_HIGH;
   spi_init_struct.clock_phase = SPI_CLOCK_PHASE_2EDGE;
   spi_init_struct.cs_mode_selection = SPI_CS_SOFTWARE_MODE;

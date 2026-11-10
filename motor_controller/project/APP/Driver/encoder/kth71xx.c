@@ -125,17 +125,25 @@ static inline void spi_3wire_send_byte(unsigned char data)
   * @retval If the CRC check succeeds, return 1. 
             If the CRC check fails, return 0.
   */
-unsigned char KTH71_ReadAngle(unsigned short *pAngle)
+unsigned char KTH71_ReadAngleCS(kth71_cs_t cs, uint16_t *pAngle)
 {
     unsigned char crcflag = 0;
     unsigned char dataSend = KTH71_READ_ANGLE;
     unsigned char dataBack[3];
+
+    if (cs != KTH71_CS_0 || pAngle == NULL) return 0u;
 
     KTH71_SPI_TransmitReceive(&dataSend, dataBack, 1, 3);
     crcflag = KTH71_IsCRCOK(dataBack, 3);
     *pAngle = (dataBack[0] << 8) | dataBack[1];
     return crcflag;
 }
+
+unsigned char KTH71_ReadAngle(unsigned short *pAngle)
+{
+    return KTH71_ReadAngleCS(KTH71_CS_0, pAngle);
+}
+
 
 /**
   * @brief  Reads the register value via the address parameter and returns the CRC check result.
@@ -177,25 +185,25 @@ unsigned char KTH71_WriteReg(unsigned char addr, unsigned char data)
   */
 void KTH71_UnlockReg(void)
 {
-    unsigned char dataSend[4] = {0x20, 0x24, 0x01, 0x01};
-	unsigned char i;
+  unsigned char dataSend[4] = {0x20, 0x24, 0x01, 0x01};
+  unsigned char i;
 
-    kth71_bus_lock();
+  kth71_bus_lock();
 #if !SPI_SOFT_CTRL
-    spi_enable(SPI2,FALSE);
-    spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_TX);
-    spi_enable(SPI2,TRUE);
+  spi_enable(SPI2,FALSE);
+  spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_TX);
+  spi_enable(SPI2,TRUE);
 #endif
     
 	CSN_CLR;
 
 	for(i=0;i<4;i++)
 	{
-        spi_3wire_send_byte(dataSend[i]);	
-	}	
+    spi_3wire_send_byte(dataSend[i]);	
+  }
 
-	CSN_SET;
-    kth71_bus_unlock();
+  CSN_SET;
+  kth71_bus_unlock();
 }
 
 /**
@@ -491,4 +499,12 @@ int8_t KTH71_GetCalibrationStatus(uint8_t *status)
 
   *status = (uint8_t)((reg_val >> KTH71_ANLC_STATUS_SHIFT) & KTH71_ANLC_STATUS_MASK);
   return 0;
+}
+
+void KTH71_InitCS(kth71_cs_t cs)
+{
+    static unsigned char initialized;
+    if (cs != KTH71_CS_0 || initialized) return;
+    KTH71_Init();
+    initialized = 1u;
 }

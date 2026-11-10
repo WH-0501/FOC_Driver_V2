@@ -23,6 +23,7 @@ typedef struct
   float open_loop_omega;           ///< 开环速度参考 [rad/s]（与 ref.speed_rad_s 同系）
   float open_loop_elec_angle_rad;  ///< 开环合成电角 [rad]（逆 Park 用，须与 theta_elec_rad 同步）
 
+  uint8_t outer_loop_skip;      ///< 外环跳过计数，用于控制外环周期
   uint8_t fsm_enter_pending;    ///< FSM 进入等待标志
   bool electrical_align_done;   ///< 电气对齐完成标志
   float align_theta_before_rad; ///< 对齐前电角（调试用）
@@ -34,6 +35,9 @@ typedef struct
   bool align_ok;                ///< 对齐+极性校验是否通过
   bool align_engaged;           ///< 转子是否吸合到位
 
+  /* Normal running CST diagnostic: current_sense = ADC; encoder_update = shaft SPI;
+   * pos_loop = positions/publication excluding SPI; vel_loop = speed service;
+   * ctrl_loop = foc_control_run; cur_loop = foc_current. Units: whole us. */
   uint32_t foc_pos_loop_us;        ///< 位置环耗时 [us]（本周期未运行则为 0）
   uint32_t foc_vel_loop_us;        ///< 速度环耗时 [us]
   uint32_t foc_cur_loop_us;        ///< 电流环耗时 [us]
@@ -41,7 +45,10 @@ typedef struct
   uint32_t foc_control_loop_us;    ///< foc_control_loop 耗时 [us]
   uint32_t foc_sense_update_us;    ///< foc_sense_update 全函数 [us]
   uint32_t foc_current_sense_us;   ///< board_get_phase_current + current_sense_process_sample [us]
-  uint32_t foc_encoder_update_us;  ///< encoder_update [us]（含 KTH71 SPI 等）
+  uint32_t foc_encoder_update_us;  ///< encoder_update 整段 [us]（含 KTH71 SPI + 观测 + publish）
+  /* Set only while the ISR itself is timing the outer CST stages. */
+  bool profile_cst_outer;
+  uint32_t cst_shaft_spi_ticks;    ///< 电机轴 SPI 耗时 [ticks]
 } motor_runtime_t;
 
 motor_handle_t *motor_get_handler(void);
@@ -56,6 +63,6 @@ void motor_shutdown(motor_handle_t *m);
 bool motor_is_armed(const motor_handle_t *m);
 void motor_sync_arm_with_mode(motor_handle_t *m);
 void motor_enter_dc_cal_hw(motor_handle_t *m);
-error_t motor_apply_pwm(motor_handle_t *m, const motor_actuation_t *actuation);
+error_t motor_apply_pwm(motor_handle_t *m, const motor_actuation_t *actuation, float max_duty);
 
 #endif /* __MOTOR_H__ */

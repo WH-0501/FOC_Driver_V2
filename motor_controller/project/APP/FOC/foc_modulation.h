@@ -14,7 +14,9 @@
 
 #include <float.h>
 #include <stddef.h>
-#include "foc_math.h"
+#include <stdint.h>
+#include <string.h>
+#include "common.h"
 
 /**
  * @brief 调制结构体
@@ -37,12 +39,22 @@ typedef struct
   float voltage_scale;
 } foc_modulation_t;
 
-/* C99 math libraries differ between ARMCC and GCC; ordered finite bounds
- * also reject NaN and infinities without relying on a platform isfinite macro.
- * Build the control code without unsafe/finite-only math assumptions. */
-APP_STATIC_INLINE int foc_modulation_finite(float value)
+/* Binary32: a single exponent test rejects both NaN and infinity. */
+#if defined(__CC_ARM)
+static __forceinline
+#else
+APP_STATIC_INLINE
+#endif
+int foc_modulation_finite(float value)
 {
+#if FLT_RADIX == 2 && FLT_MANT_DIG == 24 && FLT_MAX_EXP == 128 && \
+    (defined(__CC_ARM) || defined(_MSC_VER) || (defined(__SIZEOF_FLOAT__) && __SIZEOF_FLOAT__ == 4))
+  uint32_t bits;
+  memcpy(&bits, &value, sizeof(bits));
+  return (bits & UINT32_C(0x7f800000)) != UINT32_C(0x7f800000);
+#else
   return value >= -FLT_MAX && value <= FLT_MAX;
+#endif
 }
 
 /* Reserve a common low-side zero-vector window, preserving line voltages.
@@ -51,62 +63,66 @@ APP_STATIC_INLINE int foc_modulation_finite(float value)
  * clipping the three phases would change their differential voltages.
  * Returns 0 on invalid input. The output object is only committed on success.
  */
-APP_STATIC_INLINE int foc_modulate_voltage(float ud, float uq, float angle,
-                                          float vbus, float duty_max,
-                                          foc_modulation_t *out)
+APP_STATIC_INLINE int foc_modulate_voltage_sincos(float ud, float uq, float sin_el, float cos_el,
+                                                  float vbus, float duty_max, foc_modulation_t *out)
 {
   foc_modulation_t next;
-  float peak, norm, limit;
+  float limit;
   float svm_a, svm_b, svm_c;
   float center, inverse_bus;
 
   if (out == NULL || !foc_modulation_finite(ud) || !foc_modulation_finite(uq) ||
-      !foc_modulation_finite(angle) || !foc_modulation_finite(vbus) ||
-      !(vbus > 0.0f) || !(duty_max > 0.0f && duty_max <= 1.0f))
+      !foc_modulation_finite(sin_el) || !foc_modulation_finite(cos_el) ||
+      !foc_modulation_finite(vbus) || !(vbus > 0.0f) || !(duty_max > 0.0f && duty_max <= 1.0f))
   {
     return 0;
   }
 
-  /* Normalize first to avoid squaring large input voltages. */
-  peak = FMAX(fabsf(ud), fabsf(uq));
-  /* 限幅圆从 vbus * sqrt(3) 改为 vbus * duty_max * sqrt(3)，与硬件最大 CCR 一致 */
   limit = vbus * (duty_max * ONE_DIV_SQRT_3);
-  if (!(limit > 0.0f))
-  {
-    return 0;
-  }
+  if (!(limit > 0.0f)) return 0;
+
+  float squared = ud * ud + uq * uq;
+  float limit_squared = limit * limit;
   next.voltage_scale = 1.0f;
-  /* Conservative inscribed square: sqrt(ud^2+uq^2) <= sqrt(2)*peak.
-   * 0.7071067 is rounded DOWN with margin. Inside this square no limiter
-   * is needed; retain overflow-safe normalization for all other vectors. */
-  if (peak > limit * 0.7071067f)
+  if (squared <= FLT_MAX && limit_squared >= FLT_MIN)
   {
-    float nd = ud / peak;
-    float nq = uq / peak;
-    norm = sqrtf(nd * nd + nq * nq);
-    if (peak > limit / norm)
+    if (squared > limit_squared)
     {
-      float magnitude = limit / norm;
-      next.voltage_scale = (limit / peak) / norm;
-      ud = nd * magnitude;
-      uq = nq * magnitude;
+      next.voltage_scale = limit / sqrtf(squared);
+      ud *= next.voltage_scale;
+      uq *= next.voltage_scale;
+    }
+  }
+  else
+  {
+    /* Scaling first avoids overflow for huge commands and underflow for tiny limits. */
+    float peak = FMAX(fabsf(ud), fabsf(uq));
+    if (peak > 0.0f)
+    {
+      float nd = ud / peak, nq = uq / peak;
+      float magnitude = limit / sqrtf(nd * nd + nq * nq);
+      if (peak > magnitude)
+      {
+        next.voltage_scale = magnitude / peak;
+        ud = nd * magnitude;
+        uq = nq * magnitude;
+      }
     }
   }
 
-  inv_park_transform(ud, uq, angle, &next.u_alpha, &next.u_beta);
+  inv_park_transform_sc(ud, uq, sin_el, cos_el, &next.u_alpha, &next.u_beta);
   inv_clarke_transform(next.u_alpha, next.u_beta, &next.u_a, &next.u_b, &next.u_c);
   svm(next.u_a, next.u_b, next.u_c, &svm_a, &svm_b, &svm_c);
-  /* 零矢量中心从 0.5 改为 duty_max/2，保证 ADC 触发时刻三相下管仍有足够共同导通窗口 */
   center = 0.5f * duty_max;
-  /* The vector limit guarantees the bounds analytically. CLAMP only absorbs
-   * roundoff at the boundary, never acts as the modulation limiter. */
   inverse_bus = 1.0f / vbus;
-  if (foc_modulation_finite(inverse_bus)) {
+  if (foc_modulation_finite(inverse_bus))
+  {
     next.duty_a = CLAMP(center + svm_a * inverse_bus, 0.0f, duty_max);
     next.duty_b = CLAMP(center + svm_b * inverse_bus, 0.0f, duty_max);
     next.duty_c = CLAMP(center + svm_c * inverse_bus, 0.0f, duty_max);
-  } else {
-    /* Preserve behavior for extremely small positive finite bus voltages. */
+  }
+  else
+  {
     next.duty_a = CLAMP(center + svm_a / vbus, 0.0f, duty_max);
     next.duty_b = CLAMP(center + svm_b / vbus, 0.0f, duty_max);
     next.duty_c = CLAMP(center + svm_c / vbus, 0.0f, duty_max);
@@ -118,6 +134,15 @@ APP_STATIC_INLINE int foc_modulate_voltage(float ud, float uq, float angle,
   }
   *out = next;
   return 1;
+}
+
+APP_STATIC_INLINE int foc_modulate_voltage(float ud, float uq, float angle,
+                                          float vbus, float duty_max, foc_modulation_t *out)
+{
+  float sin_el, cos_el;
+  if (!foc_modulation_finite(angle)) return 0;
+  foc_sincos(angle, &sin_el, &cos_el);
+  return foc_modulate_voltage_sincos(ud, uq, sin_el, cos_el, vbus, duty_max, out);
 }
 
 #endif

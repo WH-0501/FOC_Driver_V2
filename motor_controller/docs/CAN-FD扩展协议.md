@@ -1,12 +1,11 @@
 # CAN-FD 扩展协议（V2 FOC 固件）
 
-本文档描述 **[CAN-FD通信协议.md](CAN-FD通信协议.md)** 主 CMD 表中**未单独展开**的功能码：单播分发确认、三环调试流、电流环 FRA 辨识、电角实时验证、软/硬限速等。
+本文档描述 **[CAN-FD通信协议.md](CAN-FD通信协议.md)** 主 CMD 表中**未单独展开**的功能码：单播分发确认、三环调试流、电角实时验证、软/硬限速等。
 
 - 帧格式、版本差异、周期遥测 `0x00`、`0x7F`、IAP、PID 读写 `0x42`~`0x49` 等仍以主文档为准。
 - 固件枚举：`project/APP/comm/protocol/custom/can_fd_custom.h`（`CAN_FD_CMD_*`）。
 - Python 常量：`motor_controller_gui/protocol/constants.py`（`CMD`）。
 - 三环调试上位机流程与示波器语义：**[三环调试.md](三环调试.md)**。
-- FRA 使用场景、算法与 GUI 操作：**`motor_controller_hmi/docs/DEVICE_FRA.md`**。
 
 ## 约定
 
@@ -35,9 +34,6 @@
 | `0xB9` | `CAN_FD_CMD_DEBUG_CURRENT` | 设备→主机 | 推送 | 62 |
 | `0xBA` | `CAN_FD_CMD_DEBUG_SPEED` | 设备→主机 | 推送 | 62 |
 | `0xBB` | `CAN_FD_CMD_DEBUG_POSITION` | 设备→主机 | 推送 | 62 |
-| `0xBC` | `CAN_FD_CMD_FRA_START` | 双向 | 请求-应答 | 请求 11 / 应答 54 |
-| `0xBD` | `CAN_FD_CMD_FRA_QUERY` | 双向 | 请求-应答 | 请求 0 / 应答 54 |
-| `0xBE` | `CAN_FD_CMD_FRA_RESULT` | 双向 | 请求-应答 | 请求 3 / 应答 34 |
 
 ---
 
@@ -179,112 +175,6 @@
 
 ---
 
-## 0xBC FRA 启动/停止（`CAN_FD_CMD_FRA_START`）
-
-### 请求 DATA（11 B）
-
-| 偏移 | 长 | 字段 | 类型 | 说明 |
-| --- | --- | --- | --- | --- |
-| 0 | 1 | `version` | u8 | **1** |
-| 1 | 1 | `method` | u8 | **0** 停止；**1** 多正弦；**2** 逐频正弦 |
-| 2 | 2 | `run_id` | u16 BE | 会话号，由主机分配；结果读取须一致 |
-| 4 | 2 | `low_hz` | u16 BE | 频段下限 **Hz** |
-| 6 | 2 | `high_hz` | u16 BE | 频段上限 **Hz** |
-| 8 | 1 | `count` | u8 | 频点数 **3~16** |
-| 9 | 2 | `peak_mA` | u16 BE | 激励峰值上限 **mA**（固件 `/1000` 得 A；须 ≤ **0.8×Iq 限幅**） |
-
-**启动条件**（不满足则应答 `error=1`）：CST、已使能、无锁存故障、|Iq 给定|≤**0.001 A** 等。  
-**停止**（`method=0`）：中止 FRA、Iq 清零、失能。
-
-### 应答 DATA（54 B，CMD=`0xBC`）
-
-与 **`0xBD` 状态帧相同**；首字节后 **`error`** 为启动结果：**0** 成功；**1** 忙/状态不允许；**2** 参数错误。见下一节完整 map。
-
----
-
-## 0xBD FRA 状态查询（`CAN_FD_CMD_FRA_QUERY`）
-
-### 请求 DATA
-
-**0 B**（空）。
-
-### 应答 DATA（54 B，CMD=`0xBD` 或 `0xBC`）
-
-| 偏移 | 长 | 字段 | 类型 | 说明 |
-| --- | --- | --- | --- | --- |
-| 0 | 1 | `version` | u8 | **1** |
-| 1 | 1 | `error` | u8 | 查询固定 **0**；`0xBC` 应答时为启动/停止结果 |
-| 2 | 1 | `state` | u8 | **0** 空闲；**1** 采集中；**2** 完成；**3** 中止 |
-| 3 | 1 | `method` | u8 | 当前方法（0/1/2） |
-| 4 | 2 | `run_id` | u16 BE | 当前会话号 |
-| 6 | 1 | `count` | u8 | 配置的频点数 |
-| 7 | 1 | `progress` | u8 | 已完成频点进度 |
-| 8 | 4 | `fs` | u32 BE | 电流环采样率 **Hz**（如 20000） |
-| 12 | 4 | `acquired_samples` | u32 BE | 已采集样本计数 |
-| 16 | 2 | `flags` | u16 BE | 见下 |
-| 18 | 2 | `max_isr_us` | u16 BE | 测得电流环主体最大耗时 **µs** |
-| 20 | 2 | `min_interval_us` | u16 BE | 相邻电流环间隔最小 **µs** |
-| 22 | 2 | `max_interval_us` | u16 BE | 相邻电流环间隔最大 **µs** |
-| 24 | 2 | `last_interval_us` | u16 BE | 最近一次间隔 **µs** |
-| 26 | 1 | `timing_reason` | u8 | **0** 无；**1** 周期间隔越界；**2** 单次执行超时 |
-| 27 | 1 | `ext_marker` | u8 | 扩展标记 **0xA5** |
-| 28 | 4 | `failure_sample` | u32 BE | 首次时序失败时的样本序号 |
-| 32 | 2 | `stage_sense_us` | u16 BE | 分段耗时峰值：采样 |
-| 34 | 2 | `stage_control_us` | u16 BE | 控制总路径 |
-| 36 | 2 | `stage_inject_us` | u16 BE | FRA 注入/相关 |
-| 38 | 1 | `timing_magic` | u8 | **0xA6** |
-| 39 | 1 | `timing_revision` | u8 | 分段布局版本，当前 **5** |
-| 40 | 2 | `stage_encoder_us` | u16 BE | 编码器 |
-| 42 | 2 | `stage_current_pid_us` | u16 BE | 电流 PI |
-| 44 | 2 | `stage_voltage_us` | u16 BE | 逆 Park / PWM |
-| 46 | 2 | `baseline_duration_us` | u16 BE | 扫频前 CST 基准单次耗时 |
-| 48 | 2 | `baseline_interval_us` | u16 BE | 扫频前 CST 基准间隔 |
-| 50 | 4 | `peak_cycles` | u32 BE | 峰值耗时对应 DWT 周期计数 |
-
-**`flags`（u16）**
-
-| 值 | 宏 | 含义 |
-| --- | --- | --- |
-| bit0 (1) | `FRA_FLAG_CANCEL` | 取消 / 运行条件消失 |
-| bit1 (2) | `FRA_FLAG_LIMIT` | 限幅介入，线性激励破坏 |
-| bit2 (4) | `FRA_FLAG_TIMING` | 时序/执行时间异常 |
-| bit3 (8) | `FRA_FLAG_CONFLICT` | 扫频期间收到竞争电流给定 |
-
-`0xBD` **不续租**；仅读状态。
-
----
-
-## 0xBE FRA 频点结果（`CAN_FD_CMD_FRA_RESULT`）
-
-### 请求 DATA（3 B）
-
-| 偏移 | 长 | 字段 | 类型 | 说明 |
-| --- | --- | --- | --- | --- |
-| 0 | 2 | `run_id` | u16 BE | 须与当前 `fra_id()` 一致 |
-| 2 | 1 | `index` | u8 | 频点下标 **0 .. count−1** |
-
-### 应答 DATA（34 B，CMD=`0xBE`）
-
-| 偏移 | 长 | 字段 | 类型 | 说明 |
-| --- | --- | --- | --- | --- |
-| 0 | 1 | `version` | u8 | **1** |
-| 1 | 1 | `error` | u8 | **0** 成功；**1** 状态/会话/下标无效；**2** 能量过低 |
-| 2 | 2 | `run_id` | u16 BE | 当前会话 |
-| 4 | 1 | `index` | u8 | 本应答频点下标 |
-| 5 | 1 | `state` | u8 | 同 FRA state |
-| 6 | 2 | `flags` | u16 BE | 同 FRA flags |
-| 8 | 4 | `hz` | f32 BE | 实际频点 **Hz** |
-| 12 | 4 | `input_amplitude` | f32 BE | 输入有效值 |
-| 16 | 4 | `output_amplitude` | f32 BE | 反馈有效值 |
-| 20 | 4 | `h1_real` | f32 BE | H1 实部 |
-| 24 | 4 | `h1_imag` | f32 BE | H1 虚部 |
-| 28 | 4 | `coherence` | f32 BE | 相干系数 γ² |
-| 32 | 2 | `averages` | u16 BE | 参与平均的块数 |
-
-仅 **`state=2`（完成）** 且 `error=0` 时 H1 字段有效。
-
----
-
 ## 0xB5 / 0xB6 限速（单播）
 
 广播 **不处理**。应答结构相同，CMD 与请求一致。
@@ -375,4 +265,3 @@
 
 - 专用应答经 **16 槽队列** 排队；PTB 忙时在 `comm_poll` 重试，**优先于**周期遥测。
 - 调试开启时，每轮 `comm_poll` **最多 1 帧** `0xB9`~`0xBB`（round-robin）。
-- FRA 完成/中止后：Iq 清零、失能、`fra_release()`；竞争 **`0x03`** 等电流给定触发 **`FRA_FLAG_CONFLICT`**。

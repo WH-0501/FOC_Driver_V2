@@ -5,6 +5,7 @@
  * 本文件负责电流环 IRQ、PWM 运行时控制、UART 与预驱 GPIO 绑定。
  */
 #include "board.h"
+#include "common.h" /* FOC_RT 优化宏须在 at32_foc_timing.h 之前 */
 #include "at32_foc_timing.h"
 #include "at32m412_416_wk_config.h"
 #include "at32m412_416_adc.h"
@@ -208,31 +209,20 @@ error_t current_hw_deinit(void)
  *         结束后：2590 − 2409 = 181 tick ≈ 2.011 μs
  *   因此，maxCCR = 1908 是安全的。
  * 
- * @return 最大占空比
+ * @return 最大占空比/调制比
  */
 float pwm_hw_max_duty(void)
 {
-  uint16_t actual_top = pwm_get_compare_top();
-  /* Refuse a regenerated/mismatched timer setup instead of using stale limits.
-   * Clock, ADC divider and sampling-time changes must update the shared contract. */
+  /* A usable sampling window requires this exact timer/trigger configuration. */
   if (SystemCoreClock != AT32_FOC_TIMER_CLOCK_HZ ||
-      actual_top != AT32_FOC_TIMER_ARR ||
+      PWM_TIM_HANDLE->pr != AT32_FOC_TIMER_ARR ||
       PWM_TIM_HANDLE->div != AT32_FOC_TIMER_DIV_REG ||
       PWM_TIM_HANDLE->c4dt != AT32_FOC_ADC_TRIGGER_CCR)
   {
     return 0.0f;
   }
-  /* Keep the PWM conversion based on the actual timer period. A zero cache
-   * can be initialized lazily; a stale nonzero cache must never be used. */
-  if (pwm_compare_top == 0U)
-  {
-    pwm_compare_top = actual_top;
-  }
-  if (pwm_compare_top != actual_top)
-  {
-    return 0.0f;
-  }
-  return (float)AT32_FOC_CURRENT_MAX_CCR / (float)pwm_compare_top;
+  if (pwm_compare_top == 0U) pwm_compare_top = AT32_FOC_TIMER_ARR;
+  return pwm_compare_top == AT32_FOC_TIMER_ARR ? AT32_FOC_CURRENT_MAX_DUTY : 0.0f;
 }
 
 /* Stage a complete voltage vector without a hardware transfer between writes.
@@ -245,9 +235,16 @@ static void pwm_stage_compare(uint32_t u, uint32_t v, uint32_t w)
   __disable_irq();
   previous_ovfen = PWM_TIM_HANDLE->ctrl1_bit.ovfen;
   PWM_TIM_HANDLE->ctrl1_bit.ovfen = TRUE;
+#if AT32_PWM_INLINE_STAGE_CCR
+  /* U/V/W = CH3/CH2/CH1 (see PWM_TIME_*_CHANNEL); avoid driver switch/call in IRQ. */
+  PWM_TIM_HANDLE->c3dt = u;
+  PWM_TIM_HANDLE->c2dt = v;
+  PWM_TIM_HANDLE->c1dt = w;
+#else
   tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_U_CHANNEL, u);
   tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, v);
   tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, w);
+#endif
   PWM_TIM_HANDLE->ctrl1_bit.ovfen = previous_ovfen;
   if (irq_state == 0U) { __enable_irq(); }
 }
@@ -317,25 +314,18 @@ error_t pwm_hw_lowside_brake_on(void)
   return ERR_NONE;
 }
 
-error_t set_pwm(motor_actuation_t *actuation)
+error_t set_pwm(const motor_actuation_t *actuation, float max_duty)
 {
-  float max_duty = pwm_hw_max_duty();
-
-  /* Ordered comparisons reject NaN; bounded range rejects infinity. Never
-   * silently clip individual phases, because that changes the voltage vector. */
-  if (actuation == NULL || !(max_duty > 0.0f) ||
-      !(actuation->duty_a >= 0.0f && actuation->duty_a <= max_duty) ||
-      !(actuation->duty_b >= 0.0f && actuation->duty_b <= max_duty) ||
-      !(actuation->duty_c >= 0.0f && actuation->duty_c <= max_duty))
+  if (max_duty != AT32_FOC_CURRENT_MAX_DUTY || !pwm_duties_in_range(actuation, max_duty))
   {
     (void)pwm_hw_stop();
     return ERR_PARAM;
   }
 
   pwm_stage_compare(
-      (uint32_t)(actuation->duty_a * (float)pwm_compare_top),
-      (uint32_t)(actuation->duty_b * (float)pwm_compare_top),
-      (uint32_t)(actuation->duty_c * (float)pwm_compare_top));
+      (uint32_t)(actuation->duty_a * (float)AT32_FOC_TIMER_ARR),
+      (uint32_t)(actuation->duty_b * (float)AT32_FOC_TIMER_ARR),
+      (uint32_t)(actuation->duty_c * (float)AT32_FOC_TIMER_ARR));
   return ERR_NONE;
 }
 
@@ -350,10 +340,10 @@ void board_get_phase_current(motor_handle_t *m)
 
   s = &m->state;
   /* Keep this mapping aligned with wk_adc2_init: currents first, temperature last. */
-  s->phase_current.adc_raw[0] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_1);
-  s->phase_current.adc_raw[1] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_2);
-  s->phase_current.adc_raw[2] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_3);
-  s->motor_temp.adc_raw = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_4);
+  s->phase_current.adc_raw[0] = (uint16_t)ADC2->pdt1;
+  s->phase_current.adc_raw[1] = (uint16_t)ADC2->pdt2;
+  s->phase_current.adc_raw[2] = (uint16_t)ADC2->pdt3;
+  s->motor_temp.adc_raw = (uint16_t)ADC2->pdt4;
 }
 
 void board_get_vbus_and_temp(motor_handle_t *m)

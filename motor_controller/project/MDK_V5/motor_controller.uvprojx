@@ -314,7 +314,7 @@
           <Cads>
             <interw>1</interw>
             <Optim>3</Optim>
-            <oTime>0</oTime>
+            <oTime>1</oTime>
             <SplitLS>0</SplitLS>
             <OneElfS>1</OneElfS>
             <Strict>0</Strict>
@@ -361,7 +361,7 @@
             </VariousControls>
           </Aads>
           <LDads>
-            <umfTarg>1</umfTarg>
+            <umfTarg>0</umfTarg>
             <Ropi>0</Ropi>
             <Rwpi>0</Rwpi>
             <noStLib>0</noStLib>
@@ -370,7 +370,7 @@
             <TextAddressRange>0x08001000</TextAddressRange>
             <DataAddressRange>0x20000000</DataAddressRange>
             <pXoBase></pXoBase>
-            <ScatterFile>.\objects\motor_controller.sct</ScatterFile>
+            <ScatterFile>.\cst-profile.sct</ScatterFile>
             <IncludeLibs></IncludeLibs>
             <IncludeLibsPath></IncludeLibsPath>
             <Misc></Misc>
@@ -567,11 +567,6 @@
               <FileName>foc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\FOC\foc.c</FilePath>
-            </File>
-            <File>
-              <FileName>fra.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\APP\FOC\fra.c</FilePath>
             </File>
             <File>
               <FileName>foc_calibration.c</FileName>

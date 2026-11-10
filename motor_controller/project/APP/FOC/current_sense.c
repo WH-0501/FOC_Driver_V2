@@ -98,13 +98,13 @@ static void current_sense_apply_raw_to_physical(motor_handle_t *m)
   state->phase_current.kcl_residual = state->phase_current.ampere[0]
                                   + state->phase_current.ampere[1]
                                   + state->phase_current.ampere[2];
-  float current_avg = state->phase_current.kcl_residual / 3.0f;
+  float current_avg = state->phase_current.kcl_residual * ONE_DIV_3; // 即 / 3.0f, 避免除法运算
   state->phase_current.ampere[0] -= current_avg;
   state->phase_current.ampere[1] -= current_avg;
   state->phase_current.ampere[2] -= current_avg;
 
   state->motor_temp.value =
-      (float)state->motor_temp.adc_raw * CURRENT_SENSE_ADC_VREF_V / CURRENT_SENSE_ADC_FULL_SCALE;
+      (float)state->motor_temp.adc_raw * TEMPERATURE_SENSE_ADC_GAIN;
 }
 
 static void current_sense_run_offset_cal_blocking(motor_handle_t *m)

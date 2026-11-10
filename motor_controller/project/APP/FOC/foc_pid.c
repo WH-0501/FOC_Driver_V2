@@ -21,7 +21,7 @@ error_t foc_pid_init(pid_state_t *pid, uint8_t mode)
   pid->last_feedback = 0.0f;
   pid->target = 0.0f;
   pid->feedback = 0.0f;
-  pid->dt = PID_DT_MAX; // 默认控制周期 0.5ms. 即 20KHz 
+  pid->dt = (mode == 2u) ? FOC_CURRENT_PERIOD_S : FW_FOC_OUTER_LOOP_DIV * FOC_CURRENT_PERIOD_S;
   pid->timestamp = dwt_get_ticks_us();
   return ERR_NONE;
 }
@@ -51,17 +51,8 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
     pid->last_integral = 0.0f;
   }
 
-  // 1. 计算 dt. 当前时间戳 - 上一次时间戳
-  uint32_t current_timestamp = dwt_get_ticks_us();
-  if (pid->timestamp == 0) {
-    pid->timestamp = current_timestamp;
-    return ERR_NONE;
-  }
-  pid->dt = (current_timestamp - pid->timestamp) * 1e-6f; // us to s
-  if (pid->dt <= 0.0f || pid->dt > PID_DT_THRESHOLD) {
-    pid->dt = PID_DT_MAX;
-  }
-  pid->timestamp = current_timestamp;
+  /* The PID advances only when its loop executes. Timestamp units are microseconds. */
+  pid->timestamp += (uint32_t)(pid->dt * 1.0e6f + 0.5f);
 
   // 2. 计算误差
   float error = target - feedback;

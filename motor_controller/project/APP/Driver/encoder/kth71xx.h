@@ -6,6 +6,12 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+
+/* 逻辑片选编号，实际 SPI 和引脚由KTH71 驱动映射。 */
+typedef enum {
+  KTH71_CS_0,
+  KTH71_CS_1
+} kth71_cs_t;
 	
 #define KTH71_READ_ANGLE                        0x00
 #define KTH71_READ_REG                          0x11
@@ -35,6 +41,9 @@ extern "C" {
 #define KTH71_ANLC_STATUS_FAILED                2u ///< 自校准失败
 #define KTH71_ANLC_STATUS_DONE                  3u ///< 自校准完成
 
+/* 当前硬件接 CS0；CS1 留待双轴板确定接线。 */
+void KTH71_InitCS(kth71_cs_t cs);
+unsigned char KTH71_ReadAngleCS(kth71_cs_t cs, uint16_t *angle);
 unsigned char KTH71_ReadAngle(unsigned short* pAngle);
 void KTH71_WriteRegToMTP(void);
 void KTH71_Init(void);
