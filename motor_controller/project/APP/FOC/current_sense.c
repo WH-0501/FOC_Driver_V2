@@ -60,53 +60,6 @@ static void current_sense_offset_cal_step(motor_handle_t *m)
   }
 }
 
-static void current_sense_apply_raw_to_physical(motor_handle_t *m)
-{
-  uint32_t i;
-  const float kv = CURRENT_SENSE_ADC_VOLTS_PER_LSB;
-  const float gain = CURRENT_SENSE_SO_AMPS_PER_VOLT * CURRENT_SENSE_PHASE_POLARITY;
-  motor_state_t *state;
-
-  if (m == NULL)
-  {
-    return;
-  }
-
-  state = &m->state;
-
-  for (i = 0U; i < 3U; i++)
-  {
-    float v_pin = 0.0f;
-    if (!m->current_offset_cal_done)
-    {
-      v_pin = (float)state->phase_current.adc_raw[i] * kv;
-      state->phase_current.ampere[i] = (v_pin - CURRENT_SENSE_SO_BIAS_V) * gain;
-    }
-    else
-    {
-      v_pin = (float)((uint16_t)state->phase_current.adc_raw[i] - (uint16_t)state->phase_current.adc_offset[i]) * kv;
-      state->phase_current.ampere[i] = v_pin * gain;
-    }
-  }
-
-  /**
-   * 三电阻采样时,基于基尔霍夫定律.使用均值滤波,抑制随机噪声和尖峰脉冲.current_avg
-   * 
-   * 原理: 假设测量误差服从正态分布,那么三相电流的均值就可被视为该时刻的共模误差,
-   *       通过减去均值,能够在满足KCL约束的前提下,可以消除共模误差,提高电流测量的精度.
-   */
-  state->phase_current.kcl_residual = state->phase_current.ampere[0]
-                                  + state->phase_current.ampere[1]
-                                  + state->phase_current.ampere[2];
-  float current_avg = state->phase_current.kcl_residual * ONE_DIV_3; // 即 / 3.0f, 避免除法运算
-  state->phase_current.ampere[0] -= current_avg;
-  state->phase_current.ampere[1] -= current_avg;
-  state->phase_current.ampere[2] -= current_avg;
-
-  state->motor_temp.value =
-      (float)state->motor_temp.adc_raw * TEMPERATURE_SENSE_ADC_GAIN;
-}
-
 static void current_sense_run_offset_cal_blocking(motor_handle_t *m)
 {
   motor_runtime_t *rt;
@@ -195,6 +148,49 @@ void current_sense_init(motor_handle_t *m)
 
 void current_sense_process_sample(motor_handle_t *m)
 {
-  current_sense_apply_raw_to_physical(m);
-  /* Offset accumulation is owned exclusively by the fresh-event startup path. */
+  uint32_t i;
+  const float kv = CURRENT_SENSE_ADC_VOLTS_PER_LSB;
+  const float gain = CURRENT_SENSE_SO_AMPS_PER_VOLT * CURRENT_SENSE_PHASE_POLARITY;
+  motor_state_t *state;
+
+  if (m == NULL)
+  {
+    return;
+  }
+
+  /* Zero-offset accumulation runs only on the startup fresh-event calibration path. */
+  state = &m->state;
+
+  for (i = 0U; i < 3U; i++)
+  {
+    float v_pin = 0.0f;
+    if (!m->current_offset_cal_done)
+    {
+      v_pin = (float)state->phase_current.adc_raw[i] * kv;
+      state->phase_current.ampere[i] = (v_pin - CURRENT_SENSE_SO_BIAS_V) * gain;
+    }
+    else
+    {
+      v_pin = (float)((uint16_t)state->phase_current.adc_raw[i] - (uint16_t)state->phase_current.adc_offset[i]) * kv;
+      state->phase_current.ampere[i] = v_pin * gain;
+    }
+  }
+#if 0
+  /**
+   * 三电阻采样时,基于基尔霍夫定律.使用均值滤波,抑制随机噪声和尖峰脉冲.current_avg
+   *
+   * 原理: 假设测量误差服从正态分布,那么三相电流的均值就可被视为该时刻的共模误差,
+   *       通过减去均值,能够在满足KCL约束的前提下,可以消除共模误差,提高电流测量的精度.
+   */
+  state->phase_current.kcl_residual = state->phase_current.ampere[0]
+                                  + state->phase_current.ampere[1]
+                                  + state->phase_current.ampere[2];
+  float current_avg = state->phase_current.kcl_residual * ONE_DIV_3; // 即 / 3.0f, 避免除法运算
+  state->phase_current.ampere[0] -= current_avg;
+  state->phase_current.ampere[1] -= current_avg;
+  state->phase_current.ampere[2] -= current_avg;
+#endif
+
+  state->motor_temp.value =
+      (float)state->motor_temp.adc_raw * TEMPERATURE_SENSE_ADC_GAIN;
 }

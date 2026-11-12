@@ -42,6 +42,7 @@
 
 /** 初始化并完成阻塞零漂校准（SimpleFOC current_sense.init 语义）。 */
 void current_sense_init(motor_handle_t *m);
+/** 运行期：ADC raw → 相电流（含 KCL 共模扣除）与电机温度；不累加零偏。 */
 void current_sense_process_sample(motor_handle_t *m);
 
 #endif /* __CURRENT_SENSE_H__ */

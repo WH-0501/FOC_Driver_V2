@@ -230,11 +230,11 @@ float pwm_hw_max_duty(void)
  * while the counter and fixed CH4 ADC trigger continue running. */
 static void pwm_stage_compare(uint32_t u, uint32_t v, uint32_t w)
 {
-  uint32_t irq_state = __get_PRIMASK();
-  uint32_t previous_ovfen;
-  __disable_irq();
-  previous_ovfen = PWM_TIM_HANDLE->ctrl1_bit.ovfen;
-  PWM_TIM_HANDLE->ctrl1_bit.ovfen = TRUE;
+  // uint32_t irq_state = __get_PRIMASK();
+  // uint32_t previous_ovfen;
+  // __disable_irq();
+  // previous_ovfen = PWM_TIM_HANDLE->ctrl1_bit.ovfen;
+  // PWM_TIM_HANDLE->ctrl1_bit.ovfen = TRUE;
 #if AT32_PWM_INLINE_STAGE_CCR
   /* U/V/W = CH3/CH2/CH1 (see PWM_TIME_*_CHANNEL); avoid driver switch/call in IRQ. */
   PWM_TIM_HANDLE->c3dt = u;
@@ -245,8 +245,8 @@ static void pwm_stage_compare(uint32_t u, uint32_t v, uint32_t w)
   tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, v);
   tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, w);
 #endif
-  PWM_TIM_HANDLE->ctrl1_bit.ovfen = previous_ovfen;
-  if (irq_state == 0U) { __enable_irq(); }
+  // PWM_TIM_HANDLE->ctrl1_bit.ovfen = previous_ovfen;
+  // if (irq_state == 0U) { __enable_irq(); }
 }
 
 /* All phase channels must be disabled here. Clear active AND pending values
@@ -340,10 +340,13 @@ void board_get_phase_current(motor_handle_t *m)
 
   s = &m->state;
   /* Keep this mapping aligned with wk_adc2_init: currents first, temperature last. */
-  s->phase_current.adc_raw[0] = (uint16_t)ADC2->pdt1;
-  s->phase_current.adc_raw[1] = (uint16_t)ADC2->pdt2;
-  s->phase_current.adc_raw[2] = (uint16_t)ADC2->pdt3;
-  s->motor_temp.adc_raw = (uint16_t)ADC2->pdt4;
+  // s->phase_current.adc_raw[0] = (uint16_t)ADC2->pdt1;
+  // s->phase_current.adc_raw[1] = (uint16_t)ADC2->pdt2;
+  // s->phase_current.adc_raw[2] = (uint16_t)ADC2->pdt3;
+  // s->motor_temp.adc_raw = (uint16_t)ADC2->pdt4;
+  s->phase_current.adc_raw[0] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_1);
+  s->phase_current.adc_raw[1] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_2);
+  s->phase_current.adc_raw[2] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_3);
 }
 
 void board_get_vbus_and_temp(motor_handle_t *m)
@@ -366,6 +369,9 @@ void board_get_vbus_and_temp(motor_handle_t *m)
 
   // adc_flag_clear(ADC1, ADC_OCCE_FLAG);
   adc_ordinary_software_trigger_enable(ADC1, TRUE);
+
+  // 从board_get_phase_current中迁出,降低电流环耗时
+  s->motor_temp.adc_raw = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_4);
 }
 
 void board_current_loop_irq_handler(void *adc_handle)

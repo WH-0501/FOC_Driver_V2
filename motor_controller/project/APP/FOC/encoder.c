@@ -143,10 +143,10 @@ static void update_axis_position(motor_handle_t *m, encoder_role_t role, uint32_
 #else
   /* Keep the shaft's wrap threshold. Joint samples can move farther between outer ticks.使用 counts 效率比 angle 更高 */
   const int32_t turn_threshold = role == ENCODER_ROLE_JOINT && u->valid ?
-                                 ENCODER_COUNTS_PER_REV / 2 : (int32_t)(0.8f * ENCODER_COUNTS_PER_REV);
+                    (int32_t)(ENCODER_COUNTS_PER_REV * 0.5f) : (int32_t)(0.8f * ENCODER_COUNTS_PER_REV);
   if (diff > turn_threshold) --v->turn_count;
   else if (diff < -turn_threshold) ++v->turn_count;
-  // 多圈机械角 = 累计整圈数 * 2π + 单圈机械角 - 偏移角
+  // 多圈机械角 = dir * (累计整圈数 * 2π + 单圈机械角 - 偏移角)
   v->position_rad = dir * ((float)v->turn_count * _2PI + angle - zero);
   v->angle_rad = dir < 0 && counts != 0 ? _2PI - angle : angle;
 #endif

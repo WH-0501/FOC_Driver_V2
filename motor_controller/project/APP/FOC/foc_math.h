@@ -19,6 +19,7 @@
 #include "compiler_port.h"
 #include "math_compat.h"
 
+#define _PI_2 (1.57079632679f)
 #define _PI (3.14159265359f)
 #define _2PI (6.28318530718f)
 #define _3PI_2 (4.71238898038f)
@@ -39,26 +40,57 @@ APP_STATIC_INLINE float foc_fabs(float angle)
   return (angle >= 0.0000001f) ? angle : -angle;
 }
 
+/**
+ * @brief 角度(rad)归一化到 [0, 2π)
+ * 
+ * @param angle 
+ * @return APP_STATIC_INLINE 
+ */
+APP_STATIC_INLINE float foc_wrapAngle(float angle)
+{
+  while (angle >= _2PI) {
+    angle -= _2PI;
+  }
+  while (angle < 0.0f)
+  {
+    angle += _2PI;
+  }
+  return angle;
+}
+
 /* Joint single-precision sin/cos for the real-time transforms.
  * Fold to [-pi/2,pi/2], then degree 13/12 Taylor polynomials.
  * Truncation bounds: sin < 7e-10, cos < 7e-9 on that interval;
  * float rounding/range reduction dominates (see numerical validation).
  * Keep libm semantics for nonfinite/large external angles. */
- APP_STATIC_INLINE void foc_sincos(float theta, float *s, float *c)
- {
-   float x=theta, sign=1.0f, z;
-   if (!(x >= -_2PI && x <= _2PI)) {
-     *s=sinf(theta); *c=cosf(theta); return;
-   }
-   if(x>_PI)x-=_2PI;
-   else if(x<-_PI)x+=_2PI;
-   if(x>0.5f*_PI){x=_PI-x;sign=-1.0f;}
-   else if(x<-0.5f*_PI){x=-_PI-x;sign=-1.0f;}
-   z=x*x;
-   *s=x*(1.0f+z*(-1.0f/6.0f+z*(1.0f/120.0f+z*(-1.0f/5040.0f+
-      z*(1.0f/362880.0f+z*(-1.0f/39916800.0f+z*(1.0f/6227020800.0f)))))));
-   *c=sign*(1.0f+z*(-1.0f/2.0f+z*(1.0f/24.0f+z*(-1.0f/720.0f+
-      z*(1.0f/40320.0f+z*(-1.0f/3628800.0f+z*(1.0f/479001600.0f)))))));
+APP_STATIC_INLINE void foc_sincos(float theta, float *s, float *c)
+{
+  theta = foc_wrapAngle(theta);
+  float sign = 1.0f;
+
+  if (theta > _PI)
+  {
+    theta -= _PI;
+    sign = -1.0f;
+  }
+  theta -= _PI_2;
+  float temp = theta * theta;
+  *s = (sign * (0.999999967F + (-0.499999269F + (0.041664091F + (-0.001385742F + 0.000023238F * temp) * temp) * temp) * temp));
+  *c = (sign * (-0.9999974871F + (0.1666516805F + (-0.0083095164F + 0.0001844721F * temp) * temp) * temp) * theta);
+
+  // float x=theta, sign=1.0f, z;
+  // if (!(x >= -_2PI && x <= _2PI)) {
+  //   *s=sinf(theta); *c=cosf(theta); return;
+  // }
+  // if(x>_PI)x-=_2PI;
+  // else if(x<-_PI)x+=_2PI;
+  // if(x>0.5f*_PI){x=_PI-x;sign=-1.0f;}
+  // else if(x<-0.5f*_PI){x=-_PI-x;sign=-1.0f;}
+  // z=x*x;
+  // *s=x*(1.0f+z*(-1.0f/6.0f+z*(1.0f/120.0f+z*(-1.0f/5040.0f+
+  //   z*(1.0f/362880.0f+z*(-1.0f/39916800.0f+z*(1.0f/6227020800.0f)))))));
+  // *c=sign*(1.0f+z*(-1.0f/2.0f+z*(1.0f/24.0f+z*(-1.0f/720.0f+
+  //   z*(1.0f/40320.0f+z*(-1.0f/3628800.0f+z*(1.0f/479001600.0f)))))));
  }
  
 
