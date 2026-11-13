@@ -29,7 +29,7 @@ def check(work):
         exe = work / f'encoder_{board}_{divisor}_{pll}.exe'
         cmd = ['cl','/nologo','/O2','/TC','/std:c11','/utf-8',f'/DFW_FOC_OUTER_LOOP_DIV={divisor}', f'/DFOC_ENCODER_USE_PLL={pll}',
                '/I'+str(work),'/I'+str(tests/'c06_support'),'/I'+str(app),'/I'+str(app/'FOC'),
-               '/I'+str(app/'Driver'),'/I'+str(app.parent/'Board'),str(tests/'test_cst_encoder.c'),str(boards[board]),str(app/'FOC/foc_filter.c'),str(app/'FOC/foc_sense.c'),'/Fe:'+str(exe)]
+               '/I'+str(app/'Driver'),'/I'+str(app/'config'),'/I'+str(app.parent/'Board'),str(tests/'test_cst_encoder.c'),str(boards[board]),str(app/'FOC/foc_filter.c'),str(app/'FOC/foc_sense.c'),'/Fe:'+str(exe)]
         batch = work / 'build.cmd'
         batch.write_text('@echo off\ncall "'+str(vcvars)+'" >nul\nif errorlevel 1 exit /b 1\n'
                          +subprocess.list2cmdline(cmd)+'\nexit /b %errorlevel%\n')

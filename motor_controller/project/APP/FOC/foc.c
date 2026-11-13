@@ -14,15 +14,7 @@
 #include "control_mode.h"
 #include "math_compat.h"
 #include <string.h>
-
-static void foc_pid_apply_param(pid_state_t *pid, uint8_t mode)
-{
-  if (pid == NULL)
-  {
-    return;
-  }
-  foc_pid_init(pid, mode);
-}
+#include <float.h>
 
 static void foc_validate_config(motor_handle_t *m)
 {
@@ -61,7 +53,7 @@ __attribute__((noinline)) /* Keep the SRAM scatter entry even when there is only
 static void foc_apply_voltage(motor_handle_t *m, float uq, float ud, float sin_el, float cos_el)
 {
   foc_modulation_t modulation;
-  float duty_max = pwm_hw_max_duty();
+  float duty_max = AT32_FOC_CURRENT_MAX_DUTY;
   float vbus = m->state.vbus_filtered;
   if (!(vbus > 0.0f))
   {
@@ -101,10 +93,37 @@ void foc_voltage(motor_handle_t *m, float uq, float ud, float angle_el)
 static void foc_current(motor_handle_t *m, motor_runtime_t *rt, float iq)
 {
   uint32_t start_ticks = rt != NULL ? dwt_get_ticks() : 0u;
-  float vd = 0.0f, vq = 0.0f;
+  float vd = 0.0f;
+  float vq = 0.0f;
+  const pid_param_t *id_cfg = &m->config.pid.id;
+  const pid_param_t *iq_cfg = &m->config.pid.iq;
 
-  (void)foc_pid_calc(&m->id_pid, &m->config.pid.id, 0.0f, m->state.i_d, &vd);
-  (void)foc_pid_calc(&m->iq_pid, &m->config.pid.iq, iq, m->state.i_q, &vq);
+#if FOC_CUR_LOOP_FAST
+  if (id_cfg->ki == 0.0f && id_cfg->kd == 0.0f && id_cfg->ramp == 0.0f)
+  {
+    vd = -id_cfg->kp * m->state.i_d;
+    m->id_pid.timestamp += (uint32_t)(m->id_pid.dt * 1.0e6f + 0.5f);
+    m->id_pid.target = 0.0f;
+    m->id_pid.feedback = m->state.i_d;
+    m->id_pid.last_error = -m->state.i_d;
+    m->id_pid.last_output = vd;
+  }
+  else
+  {
+    (void)foc_pid_calc(&m->id_pid, id_cfg, 0.0f, m->state.i_d, &vd);
+  }
+  if (iq_cfg->kd == 0.0f && iq_cfg->ramp == 0.0f && iq_cfg->limit > FLT_EPSILON)
+  {
+    (void)foc_pid_calc_iq_current(&m->iq_pid, iq_cfg, iq, m->state.i_q, &vq);
+  }
+  else
+  {
+    (void)foc_pid_calc(&m->iq_pid, iq_cfg, iq, m->state.i_q, &vq);
+  }
+#else
+  (void)foc_pid_calc(&m->id_pid, id_cfg, 0.0f, m->state.i_d, &vd);
+  (void)foc_pid_calc(&m->iq_pid, iq_cfg, iq, m->state.i_q, &vq);
+#endif
 
   m->state.v_d = vd;
   m->state.v_q = vq;
@@ -115,7 +134,7 @@ static void foc_current(motor_handle_t *m, motor_runtime_t *rt, float iq)
   foc_voltage(m, vq, vd, m->state.theta_elec_rad);
 #endif
 
-  if (rt != NULL) rt->foc_cur_loop_us = dwt_elapsed_us(start_ticks, dwt_get_ticks());
+  if (rt != NULL) rt->foc_cur_loop_us = FOC_PROFILE_CST_OUTER ? dwt_elapsed_us(start_ticks, dwt_get_ticks()) : 0u;
 }
 
 static void foc_speed_open_control(motor_handle_t *m, float target_speed)
@@ -236,7 +255,7 @@ static void foc_reject_control_mode(motor_handle_t *m)
   }
 }
 
-static void foc_control_run(motor_handle_t *m, motor_runtime_t *rt, bool outer_tick)
+static void foc_control_run(motor_handle_t *m, motor_runtime_t *rt, bool outer_loop_skip)
 {
 
   if (rt != NULL)
@@ -275,7 +294,7 @@ static void foc_control_run(motor_handle_t *m, motor_runtime_t *rt, bool outer_t
     }
     case CTRL_MODE_SPEED:
     case CTRL_MODE_POSITION:
-      if (outer_tick)
+      if (outer_loop_skip)
       {
         float target_speed = m->ctrl_mode == CTRL_MODE_POSITION
                            ? foc_position_speed_ref(m, m->ref.position_rad)
@@ -329,10 +348,10 @@ void foc_init(motor_handle_t *m, const motor_config_t *config)
 
   foc_validate_config(m);
 
-  foc_pid_apply_param(&m->id_pid, 2u);
-  foc_pid_apply_param(&m->iq_pid, 2u);
-  foc_pid_apply_param(&m->velocity_pid, 1u);
-  foc_pid_apply_param(&m->position_pid, 0u);
+  (void)foc_pid_init(&m->id_pid, FOC_PID_LOOP_CURRENT);
+  (void)foc_pid_init(&m->iq_pid, FOC_PID_LOOP_CURRENT);
+  (void)foc_pid_init(&m->velocity_pid, FOC_PID_LOOP_VELOCITY);
+  (void)foc_pid_init(&m->position_pid, FOC_PID_LOOP_POSITION);
   foc_init_filters(m);
 
   if (m->config.limits.vbus_nominal > 0.0f)
@@ -365,15 +384,16 @@ void foc_control_loop(motor_handle_t *m)
   uint32_t loop_start_ticks = dwt_get_ticks();
   uint32_t sense_start_ticks = 0u, sense_end_ticks = 0u;
   foc_sense_marks_t marks;
-  
+
   if (m == NULL)
   {
     return;
   }
   motor_runtime_t *rt = motor_runtime(m);
 
-  bool profile_cst = FOC_PROFILE_CST_OUTER && rt != NULL &&
-                     m->fsm == STATE_RUNNING && m->ctrl_mode == CTRL_MODE_CST;
+  bool running_cst = rt != NULL && m->fsm == STATE_RUNNING && m->ctrl_mode == CTRL_MODE_CST;
+  bool profile_cst = FOC_PROFILE_CST_OUTER == 1 && running_cst;
+  uint32_t ctrl_ticks = 0u;
 
   /* Reject before sensor I/O/FSM can arm hardware or retain an old vector. */
   if (m->fsm == STATE_RUNNING && !control_mode_needs_pwm(m->ctrl_mode))
@@ -381,12 +401,16 @@ void foc_control_loop(motor_handle_t *m)
     foc_reject_control_mode(m);
     return;
   }
-  /* All outer work uses the same phase. Start immediately when entering RUNNING. */
-  bool outer_tick = rt == NULL || rt->outer_loop_skip == 0u ||
+
+  /**
+   * All outer work uses the same phase. Start immediately when entering RUNNING. 
+   * 外环间隔：FW_FOC_OUTER_LOOP_DIV，outer_loop_skip == 0u 表示外环拍
+   */
+  bool outer_loop_skip = rt == NULL || rt->outer_loop_skip == 0u ||
                     (m->fsm == STATE_RUNNING && rt->fsm_enter_pending);
   if (rt != NULL)
   {
-    rt->outer_loop_skip = outer_tick ? FW_FOC_OUTER_LOOP_DIV - 1u : rt->outer_loop_skip - 1u;
+    rt->outer_loop_skip = outer_loop_skip ? FW_FOC_OUTER_LOOP_DIV - 1u : rt->outer_loop_skip - 1u;
   }
 
   if (profile_cst)
@@ -396,13 +420,13 @@ void foc_control_loop(motor_handle_t *m)
     sense_start_ticks = dwt_get_ticks();
   }
 
-  foc_sense_update_timed(m, profile_cst ? &marks : NULL, outer_tick);
+  uint32_t sense_ticks = foc_sense_update_timed(m, profile_cst ? &marks : NULL, outer_loop_skip);
   if (profile_cst) sense_end_ticks = dwt_get_ticks();
 
   /* 电机轴速度保护(非关节轴速度保护) */
   if (motor_fault_check_shaft_speed(m)) {
     foc_on_fault_latched(m);
-    if (profile_cst)
+    if (running_cst)
     {
       rt->foc_ctrl_loop_us = rt->foc_cur_loop_us = 0u;
       goto publish_timing;
@@ -413,14 +437,15 @@ void foc_control_loop(motor_handle_t *m)
   foc_fsm_loop(m);
   if (m->fsm == STATE_RUNNING)
   {
-    uint32_t ctrl_start_ticks = dwt_get_ticks();
-    foc_control_run(m, rt, outer_tick);
-    if (rt != NULL)
+    uint32_t ctrl_start_ticks = profile_cst ? dwt_get_ticks() : 0u;
+    foc_control_run(m, rt, outer_loop_skip);
+    if (rt != NULL && profile_cst)
     {
-      rt->foc_ctrl_loop_us = dwt_elapsed_us(ctrl_start_ticks, dwt_get_ticks());
+      ctrl_ticks = dwt_get_ticks() - ctrl_start_ticks;
+      rt->foc_ctrl_loop_us = dwt_ticks_to_us(ctrl_ticks);
     }
   }
-  else if (profile_cst)
+  else if (running_cst)
   {
     rt->foc_ctrl_loop_us = rt->foc_cur_loop_us = 0u;
   }
@@ -429,7 +454,8 @@ publish_timing:
   if (rt != NULL)
   {
     uint32_t loop_end_ticks = dwt_get_ticks();
-    rt->foc_control_loop_us = dwt_elapsed_us(loop_start_ticks, loop_end_ticks);
+    uint32_t loop_ticks = loop_end_ticks - loop_start_ticks;
+    rt->foc_control_loop_us = dwt_ticks_to_us(loop_ticks);
     if (profile_cst)
     {
       /* Subtract the shaft SPI interval before converting the position stage to us. */
@@ -440,6 +466,12 @@ publish_timing:
       rt->foc_pos_loop_us = dwt_ticks_to_us(position_ticks - rt->cst_shaft_spi_ticks); // 位置更新耗时, 即 encoder_update(m, outer_tick) 耗时减去电机轴 SPI 耗时
       rt->foc_vel_loop_us = dwt_elapsed_us(marks.position_end, marks.encoder_end); // 速度更新耗时(根据位置差算速度)
       rt->profile_cst_outer = false;
+    }
+    else if (running_cst)
+    {
+      /* Reuse the idle CST outer PID channels in the same debug sample. */
+      rt->foc_pos_loop_us = FOC_PROFILE_CST_OUTER ? 1u : 0u;
+      rt->foc_vel_loop_us = FOC_PROFILE_CST_OUTER ? dwt_ticks_to_us(loop_ticks - sense_ticks - ctrl_ticks) : 0u;
     }
   }
 }

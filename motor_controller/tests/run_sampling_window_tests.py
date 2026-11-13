@@ -63,9 +63,11 @@ timer = (project / 'src/wk_tmr.c').read_text(encoding='utf-8')
 assert 'adc_common_struct.div = ADC_HCLK_DIV_6;' in adc
 sequence = re.findall(r'adc_preempt_channel_set\(ADC2, ADC_CHANNEL_(\d+), (\d+), ADC_SAMPLETIME_13_5\)', adc)
 assert sequence == [('7', '1'), ('8', '2'), ('10', '3'), ('5', '4')], sequence
-for phase, channel in enumerate([1, 2, 3]):
-    assert f's->phase_current.adc_raw[{phase}] = (uint16_t)ADC2->pdt{channel};' in board
-assert 's->motor_temp.adc_raw = (uint16_t)ADC2->pdt4;' in board
+for phase in range(3):
+    assert f's->phase_current.adc_raw[{phase}] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_{phase + 1});' in board
+assert 'board_get_vbus_and_temp' in board and 'ADC_PREEMPT_CHANNEL_4' in board
+assert 'motor_temp.adc_raw = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_4)' in board
+assert 'FOC_TEMP_ADC_TO_CELSIUS' in board
 assert 'tmr_base_init(TMR1, AT32_FOC_TIMER_ARR, AT32_FOC_TIMER_DIV_REG);' in timer
 assert 'TMR_SELECT_CHANNEL_4, (uint16_t)AT32_FOC_ADC_TRIGGER_CCR' in timer
 print('PASS: impossible timing rejected; ADC rank/readback and timer contract aligned')

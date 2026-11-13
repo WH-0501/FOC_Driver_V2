@@ -50,32 +50,33 @@ void foc_sense_update(motor_handle_t *m)
  * 
  * @param m 电机句柄
  * @param marks 传感器标记
- * @param outer_tick 外环跳过标志
+ * @param outer_loop_skip 外环跳过标志
  */
-void foc_sense_update_timed(motor_handle_t *m, foc_sense_marks_t *marks, bool outer_tick)
+uint32_t foc_sense_update_timed(motor_handle_t *m, foc_sense_marks_t *marks, bool outer_loop_skip)
 {
   float id = 0.0f;
   float iq = 0.0f;
 
   if (m == NULL)
   {
-    return;
+    return 0u;
   }
 
   motor_runtime_t *rt = motor_runtime(m);
-  bool measure_sense = rt != NULL && !rt->profile_cst_outer;
+  bool measure_sense = rt != NULL && rt->profile_cst_outer; // !rt->profile_cst_outer;
   uint32_t sense_start_ticks = measure_sense ? dwt_get_ticks() : 0u;
   board_get_phase_current(m);
   current_sense_process_sample(m);
   uint32_t current_end_ticks = (measure_sense || marks != NULL) ? dwt_get_ticks() : 0u;
 
-  if (marks != NULL) marks->current_end = current_end_ticks;
+  bool measure_details = FOC_PROFILE_CST_OUTER == 1 && marks != NULL;
+  if (measure_details) marks->current_end = current_end_ticks;
 
-  encoder_update(m, outer_tick);
-  if (marks != NULL) marks->position_end = dwt_get_ticks();
-  if (outer_tick) (void)encoder_estimate_velocity(m);
+  encoder_update(m, outer_loop_skip);
+  if (measure_details) marks->position_end = dwt_get_ticks();
+  if (outer_loop_skip) (void)encoder_estimate_velocity(m);
   uint32_t encoder_end_ticks = (measure_sense || marks != NULL) ? dwt_get_ticks() : 0u;
-  if (marks != NULL) marks->encoder_end = encoder_end_ticks;
+  if (measure_details) marks->encoder_end = encoder_end_ticks;
 
   clarke_transform(m->state.phase_current.ampere[0],
                    m->state.phase_current.ampere[1],
@@ -101,14 +102,18 @@ void foc_sense_update_timed(motor_handle_t *m, foc_sense_marks_t *marks, bool ou
   m->state.i_d = id;
   m->state.i_q = iq;
 
-  m->state.i_bus = sqrtf(SQ(id) + SQ(iq));
-  m->state.i_mod = lpf1_update(&m->i_mod_lpf, m->state.i_bus * 1000.0f);
+  // 屏蔽后耗时降低到 34us
+  // m->state.i_bus = sqrtf(SQ(id) + SQ(iq));
+  // m->state.i_mod = lpf1_update(&m->i_mod_lpf, m->state.i_bus * 1000.0f);
 
   if (measure_sense)
   {
     uint32_t sense_end_ticks = dwt_get_ticks();
-    rt->foc_sense_update_us = dwt_elapsed_us(sense_start_ticks, sense_end_ticks);
+    uint32_t sense_ticks = sense_end_ticks - sense_start_ticks;
+    rt->foc_sense_update_us = dwt_ticks_to_us(sense_ticks);
     rt->foc_current_sense_us = dwt_elapsed_us(sense_start_ticks, current_end_ticks);
     rt->foc_encoder_update_us = dwt_elapsed_us(current_end_ticks, encoder_end_ticks);
+    return sense_ticks;
   }
+  return 0u;
 }

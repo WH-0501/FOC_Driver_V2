@@ -69,7 +69,7 @@ APP_STATIC_INLINE int foc_modulate_voltage_sincos(float ud, float uq, float sin_
   foc_modulation_t next;
   float limit;
   float svm_a, svm_b, svm_c;
-  float center, inverse_bus;
+  float center, inverse_vbus;
 
   if (out == NULL || !foc_modulation_finite(ud) || !foc_modulation_finite(uq) ||
       !foc_modulation_finite(sin_el) || !foc_modulation_finite(cos_el) ||
@@ -114,12 +114,12 @@ APP_STATIC_INLINE int foc_modulate_voltage_sincos(float ud, float uq, float sin_
   inv_clarke_transform(next.u_alpha, next.u_beta, &next.u_a, &next.u_b, &next.u_c);
   svm(next.u_a, next.u_b, next.u_c, &svm_a, &svm_b, &svm_c);
   center = 0.5f * duty_max;
-  inverse_bus = 1.0f / vbus;
-  if (foc_modulation_finite(inverse_bus))
+  inverse_vbus = 1.0f / vbus;
+  if (foc_modulation_finite(inverse_vbus))
   {
-    next.duty_a = CLAMP(center + svm_a * inverse_bus, 0.0f, duty_max);
-    next.duty_b = CLAMP(center + svm_b * inverse_bus, 0.0f, duty_max);
-    next.duty_c = CLAMP(center + svm_c * inverse_bus, 0.0f, duty_max);
+    next.duty_a = CLAMP(center + svm_a * inverse_vbus, 0.0f, duty_max);
+    next.duty_b = CLAMP(center + svm_b * inverse_vbus, 0.0f, duty_max);
+    next.duty_c = CLAMP(center + svm_c * inverse_vbus, 0.0f, duty_max);
   }
   else
   {

@@ -15,10 +15,13 @@ static uint16_t counts[2];
 static bool ok[2];
 static unsigned reads[2], inits[2];
 static bool dual;
+float s_inv_gear_ratio = 1.0f;
 
 uint32_t board_time_us(void) { return (uint16_t)now_us; }
-uint32_t dwt_get_ticks(void) { return now_us * 180u; }
+static uint32_t cycle_counter;
+uint32_t dwt_get_ticks(void) { cycle_counter += 37u; return cycle_counter; }
 uint32_t dwt_get_ticks_us(void) { return now_us; }
+uint32_t dwt_ticks_to_us(uint32_t ticks) { return ticks / 180u; }
 uint32_t dwt_elapsed_us(uint32_t start,uint32_t end) { return (end-start)/180u; }
 void board_get_phase_current(motor_handle_t *m) { (void)m; }
 void board_get_vbus_and_temp(motor_handle_t *m) { (void)m; }
@@ -44,6 +47,7 @@ static void reset(void) {
   motor.ctrl_mode=CTRL_MODE_CST; motor.fsm=STATE_RUNNING;
   motor.config.param.pole_pairs=5u; motor.config.param.direction=1;
   motor.config.param.gear_ratio=2.0f;
+  s_inv_gear_ratio=1.0f/motor.config.param.gear_ratio;
   encoder_init();
   assert(inits[KTH71_CS_0]>0u && (inits[KTH71_CS_1]>0u)==dual);
 }
@@ -53,9 +57,10 @@ static void sample(int shaft, int joint, unsigned dt_us, bool outer, bool automa
   counts[0]=(uint16_t)(shaft & 8191); counts[1]=(uint16_t)(joint & 8191);
   now_us+=dt_us;
   if (automatic) foc_sense_update_timed(&motor,NULL,outer);
-  else encoder_update(&motor,outer);
+  else encoder_update(&motor,outer,NULL);
   assert(reads[0]==sr+1u && reads[1]==jr+(dual && outer));
-  assert(motor.state.theta_elec_rad==angle_normalize(motor.state.shaft.angle_rad*5.0f));
+  assert(motor.state.theta_elec_rad ==
+         angle_normalize(motor.state.shaft.angle_rad * 5.0f));
 }
 
 static void check_schedule(void) {
@@ -169,6 +174,14 @@ static void check_pll_rates(void) {
 int main(int argc, char **argv) {
   assert(argc==2 && (!strcmp(argv[1],"single") || !strcmp(argv[1],"dual")));
   dual=!strcmp(argv[1],"dual");
+  if (FOC_PROFILE_CST_OUTER == 2) {
+    foc_sense_marks_t marks = {0};
+    reset();
+    cycle_counter = UINT32_MAX - 120u; /* Single-axis position timing crosses zero. */
+    foc_sense_update_timed(&motor, &marks, true);
+    assert(marks.joint_position_ticks == (dual ? 0u : 37u));
+    assert(marks.velocity_ticks == 37u);
+  }
   check_schedule();
 #if FOC_ENCODER_USE_PLL
   check_pll_rates();

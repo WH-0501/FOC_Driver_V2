@@ -37,9 +37,20 @@ void foc_sense_update(motor_handle_t *m) {
   (void)m; ++sensed; test_ticks += 360u;
   if (runtime.profile_cst_outer) runtime.cst_shaft_spi_ticks = 360u;
 }
-void foc_sense_update_timed(motor_handle_t *m, foc_sense_marks_t *marks, bool outer_tick) {
+uint32_t foc_sense_update_timed(motor_handle_t *m, foc_sense_marks_t *marks, bool outer_tick) {
   sensed_outer=outer_tick;
-  if (!marks) { foc_sense_update(m); return; }
+  if (marks && FOC_PROFILE_CST_OUTER == 2) {
+    assert(outer_tick);
+    marks->joint_position_ticks = 37u;
+    marks->velocity_ticks = 211u;
+  }
+  if (!marks || FOC_PROFILE_CST_OUTER == 2) {
+    uint32_t start = test_ticks;
+    foc_sense_update(m);
+    test_ticks += 100u;
+    runtime.foc_sense_update_us = dwt_elapsed_us(start, test_ticks);
+    return test_ticks - start;
+  }
   ++sensed;
   test_ticks += 2u * 180u;
   marks->current_end = test_ticks;
@@ -50,13 +61,14 @@ void foc_sense_update_timed(motor_handle_t *m, foc_sense_marks_t *marks, bool ou
   marks->encoder_end = test_ticks;
   test_ticks += 180u;
   test_ticks += 2u * 180u;
+  return 0u;
 }
 static void check_sense_fields(void) {
   assert(runtime.foc_sense_update_us == 18u && runtime.foc_current_sense_us == 2u);
   assert(runtime.foc_encoder_update_us == 5u && runtime.foc_vel_loop_us == 3u);
   assert(runtime.foc_pos_loop_us == 4u);
 }
-void foc_current(motor_handle_t *m,motor_runtime_t *rt,float q) { ++current_calls;applied_iq=q;executed=m->ctrl_mode; test_ticks += 720u; rt->foc_cur_loop_us=4u;
+void foc_current(motor_handle_t *m,motor_runtime_t *rt,float q) { ++current_calls;applied_iq=q;executed=m->ctrl_mode; test_ticks += 820u; rt->foc_cur_loop_us=4u;
 }
 static error_t foc_pid_calc(pid_state_t *pid,const pid_param_t *param,float target,float feedback,float *out) {
   (void)param; assert(sensed_outer);
@@ -157,7 +169,7 @@ int main(void) {
       motor.state.shaft.velocity_rad_s=sign*MAX_VELOCITY_RAD_S;
       foc_control_loop(&motor);
       assert(!armed && !executed && motor.fsm==STATE_FAULT);
-      if (mode == CTRL_MODE_CST && FOC_PROFILE_CST_OUTER)
+      if (mode == CTRL_MODE_CST && FOC_PROFILE_CST_OUTER == 1)
       {
         assert(!runtime.profile_cst_outer && runtime.foc_control_loop_us == 20u && runtime.foc_ctrl_loop_us == 0u && runtime.foc_cur_loop_us == 0u);
         check_sense_fields();
@@ -190,7 +202,7 @@ int main(void) {
   can_fd_custom_apply_curr(&motor,200);foc_control_loop(&motor);
   assert(executed==CTRL_MODE_CST && applied_iq==.2f);
   assert(!runtime.profile_cst_outer);
-  if (FOC_PROFILE_CST_OUTER)
+  if (FOC_PROFILE_CST_OUTER == 1)
   {
     check_sense_fields();
     assert(runtime.foc_control_loop_us == 26u && runtime.foc_ctrl_loop_us == 5u && runtime.foc_cur_loop_us == 4u);
@@ -201,9 +213,24 @@ int main(void) {
     reset(); motor.ctrl_mode=CTRL_MODE_CST; motor.fsm=STATE_RUNNING; armed=1;
     runtime.current_soft_speed_rad_s=100.0f; motor.config.limits.iq_limit=1.0f;
   }
+  else if (FOC_PROFILE_CST_OUTER == 2)
+  {
+    assert(sensed_outer && runtime.foc_pos_loop_us == 37u && runtime.foc_vel_loop_us == 211u);
+    for (unsigned i = 1; i <= FW_FOC_OUTER_LOOP_DIV; ++i) {
+      foc_control_loop(&motor);
+      assert(sensed_outer == (i == FW_FOC_OUTER_LOOP_DIV));
+      assert(runtime.foc_pos_loop_us == (sensed_outer ? 37u : 0u));
+      assert(runtime.foc_vel_loop_us == (sensed_outer ? 211u : 0u));
+    }
+  }
   else
   {
-    assert(runtime.foc_ctrl_loop_us == 5u && runtime.foc_control_loop_us == 9u);
+    assert(runtime.foc_ctrl_loop_us == 5u && runtime.foc_control_loop_us == 10u);
+    assert(runtime.foc_sense_update_us == 2u && runtime.foc_vel_loop_us == 2u);
+    assert(sensed_outer && runtime.foc_pos_loop_us == 1u);
+    foc_control_loop(&motor);
+    assert(runtime.foc_pos_loop_us == (uint32_t)sensed_outer && sensed_outer == (FW_FOC_OUTER_LOOP_DIV == 1u));
+    assert(runtime.foc_vel_loop_us == 2u);
   }
   can_fd_custom_apply_curr(&motor,-300);foc_control_loop(&motor);assert(applied_iq==-.3f);
   foc_control_loop(&motor);assert(applied_iq==-.3f);

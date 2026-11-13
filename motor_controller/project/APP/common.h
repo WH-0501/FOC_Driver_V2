@@ -120,10 +120,11 @@
 #if FW_FOC_OUTER_LOOP_DIV < 1 || FW_FOC_OUTER_LOOP_DIV > 255
 #error FW_FOC_OUTER_LOOP_DIV must be between 1 and 255
 #endif
-/* 1: normal running CST reports sense stages and the actual current/control call durations.
- * Set to 0 to restore the nested current/encoder timing layout. */
+/* RUNNING CST telemetry: 0 = position field: outer_tick (0/1), velocity field:
+ * loop minus sense and control (us). 1 = encoder position/SPI/velocity breakdown (us).
+ * 2 = joint position conversion and velocity estimate (raw cycles on outer ticks). */
 #ifndef FOC_PROFILE_CST_OUTER
-#define FOC_PROFILE_CST_OUTER 1
+#define FOC_PROFILE_CST_OUTER 0
 #endif
 /* Park 正余弦算法：0 = 原 foc_sincos 多项式，1 = 512 点查表加角度补偿。 */
 #ifndef FOC_PARK_USE_SINCOS_LUT
@@ -138,6 +139,11 @@
 
 #ifndef FOC_CURRENT_BANDWIDTH_HZ
 #define FOC_CURRENT_BANDWIDTH_HZ (800.0f)
+#endif
+
+/* 电流环 ISR：1=Id 纯 P + Iq 精简 PID（调制仍完整校验）；0=A/B */
+#ifndef FOC_CUR_LOOP_FAST
+#define FOC_CUR_LOOP_FAST 0
 #endif
 
 /** 1=ODrive/DGM PLL；0=原始方式（raw 角 + Δangle/dt + 速度 LPF，默认） */
@@ -188,6 +194,28 @@
 /* 机械 100RPM → 机械角速度 [rad/s] */
 #define OL_OMEGA_100RPM_MECH   RPM_TO_RAD_PER_SEC(100.0f)
 
+/** 12-bit ADC 标度（电流环、板级慢路径共用；可在工程宏中覆写） */
+#ifndef FOC_ADC_VREF_V
+#define FOC_ADC_VREF_V (3.3f)
+#endif
+#ifndef FOC_ADC_FULL_SCALE
+#define FOC_ADC_FULL_SCALE (4095.0f)
+#endif
+#ifndef FOC_ADC_VOLTS_PER_LSB
+#define FOC_ADC_VOLTS_PER_LSB (FOC_ADC_VREF_V / FOC_ADC_FULL_SCALE)
+#endif
+
+/**
+ * 温度 ADC 线性化斜率 [V/℃]（与板载/电机温感同型公式；`board_get_vbus_and_temp` 更新 motor_temp）。
+ * 单点标定来自 `motor_config_t::temp_adc` / `temp`。
+ */
+#ifndef FOC_TEMP_ADC_SLOPE_V_PER_C
+#define FOC_TEMP_ADC_SLOPE_V_PER_C (-0.0042f)
+#endif
+#define FOC_TEMP_ADC_TO_CELSIUS(adc_raw, cal_adc, cal_temp_c)                       \
+  (((float)((uint16_t)(cal_adc) - (uint16_t)(adc_raw)) * FOC_ADC_VOLTS_PER_LSB) /   \
+   FOC_TEMP_ADC_SLOPE_V_PER_C + (float)(cal_temp_c))
+
 #define DEF_UVLO_VOLTAGE (9.0f)
 #define DEF_OVP_VOLTAGE (28.0f)
 #define DEF_OCP_CURRENT (1.5f)
@@ -224,8 +252,8 @@
 #define DEF_Q_LIMIT (0.0f)
 #define DEF_Q_D_FILTER (0.0f)
 #define DEF_D_KP (1.0f)
-#define DEF_D_KI (1507.96f)
-#define DEF_D_KD (0.0f)
+#define DEF_D_KI (0.0f) // 1507.96f
+#define DEF_D_KD (0.0f) 
 #define DEF_D_RAMP (0.0f)
 #define DEF_D_LIMIT (0.0f)
 #define DEF_D_D_FILTER (0.0f)

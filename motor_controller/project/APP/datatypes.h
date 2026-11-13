@@ -242,7 +242,7 @@ typedef struct
 
   motor_phase_current_t phase_current;  ///< 三相电流采样与标定结果
   temperature_t board_temp;             ///< 板载/驱动端温度采样
-  temperature_t motor_temp;             ///< 电机温度采样
+  temperature_t motor_temp;             ///< 电机温度（`foc_sense_poll_vbus` 慢路径更新）[℃]
 } motor_state_t;
 
 typedef struct

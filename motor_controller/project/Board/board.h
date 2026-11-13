@@ -45,7 +45,7 @@ void board_invoke_current_loop(void);
 
 void board_get_phase_current(motor_handle_t *m);
 
-/** 慢速路径：仅更新 state.vbus 原始值（ADC→物理量），不做滤波。 */
+/** 慢速路径：母线/板温/电机温 ADC 读取与 ℃ 换算；`foc_sense_poll_vbus` 调用，不做 vbus 滤波。 */
 void board_get_vbus_and_temp(motor_handle_t *m);
 
 void board_current_loop_irq_handler(void *adc_handle);

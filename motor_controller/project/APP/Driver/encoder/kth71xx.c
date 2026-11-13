@@ -112,8 +112,10 @@ static inline void spi_3wire_send_byte(unsigned char data)
     // 设置为输入模式
     SET_MISO_INPUT;
 #else
-    while(spi_i2s_flag_get(SPI2, SPI_I2S_TDBE_FLAG) == RESET);
-    spi_i2s_data_transmit(SPI2, data);
+    while ((SPI2->sts & SPI_I2S_TDBE_FLAG) == 0u)
+    {
+    }
+    SPI2->dt = data;
     
 #endif
 
@@ -310,8 +312,10 @@ inline unsigned char spi_3wire_receive_byte(void)
         delay_us(1);						//
     } 
 #else
-    while(spi_i2s_flag_get(SPI2, SPI_I2S_RDBF_FLAG) == RESET);
-    data = spi_i2s_data_receive(SPI2);
+    while ((SPI2->sts & SPI_I2S_RDBF_FLAG) == 0u)
+    {
+    }
+    data = (unsigned char)SPI2->dt;
 #endif
     return data;
 }
@@ -330,9 +334,9 @@ static void KTH71_SPI_TransmitReceive(unsigned char *pTxData, unsigned char *pRx
     
     kth71_bus_lock();
 #if !SPI_SOFT_CTRL
-    spi_enable(SPI2,FALSE);
-    spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_TX);
-    spi_enable(SPI2,TRUE);
+    SPI2->ctrl1_bit.spien = FALSE;
+    SPI2->ctrl1_bit.slbtd = SPI_HALF_DUPLEX_DIRECTION_TX;
+    SPI2->ctrl1_bit.spien = TRUE;
 #endif  
 	CSN_CLR;
 	for(i=0;i<txLen;i++)
@@ -341,11 +345,13 @@ static void KTH71_SPI_TransmitReceive(unsigned char *pTxData, unsigned char *pRx
          pTxData++;
 	}
 #if !SPI_SOFT_CTRL
-    while(spi_i2s_flag_get(SPI2, SPI_I2S_BF_FLAG) != RESET);
+    while ((SPI2->sts & SPI_I2S_BF_FLAG) != 0u)
+    {
+    }
 
-    spi_enable(SPI2,FALSE);
-    spi_half_duplex_direction_set(SPI2,SPI_HALF_DUPLEX_DIRECTION_RX);
-    spi_enable(SPI2,TRUE);
+    SPI2->ctrl1_bit.spien = FALSE;
+    SPI2->ctrl1_bit.slbtd = SPI_HALF_DUPLEX_DIRECTION_RX;
+    SPI2->ctrl1_bit.spien = TRUE;
 #endif
 	for(i=0;i<rxLen;i++)
 	{
@@ -353,7 +359,7 @@ static void KTH71_SPI_TransmitReceive(unsigned char *pTxData, unsigned char *pRx
         pRxData++;
 	}
 #if !SPI_SOFT_CTRL
-    spi_enable(SPI2,FALSE);
+    SPI2->ctrl1_bit.spien = FALSE;
 #endif
 	CSN_SET;
     kth71_bus_unlock();

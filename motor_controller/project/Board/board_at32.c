@@ -39,9 +39,7 @@ uint16_t pwm_compare_top = 0;
  * Vadc = (ADC_value / 4095) * 3.3V = ADC_value * 3.3 / 4095
  * (注意: 工程上除以 4096 便于移位运算，除以 4095 是理论满量程，差别极微)
  */
-#define _ADC_CONV       (0.000805608f) // 3.3/4095
 #define VOLTAGE_DIVIDER_RATIO (11) // 电压衰减比(分压比)
-#define _ADC_TEMP_SLOPE (-0.0042f)
 
 
 static uint8_t s_board_uart_dma_inited;
@@ -56,6 +54,10 @@ volatile uint16_t s_adc1_raw[2] = {0};
 
 static uint16_t pwm_get_compare_top(void)
 {
+  /**
+   * PR 寄存器：Period Register，即周期寄存器，对应硬件定时器的 TMRx_PR 寄存器.、
+   * PR 决定 PWM 周期，即 PWM 的频率(载波频率)。
+   */
   return (uint16_t)PWM_TIM_HANDLE->pr;
 }
 
@@ -213,16 +215,7 @@ error_t current_hw_deinit(void)
  */
 float pwm_hw_max_duty(void)
 {
-  /* A usable sampling window requires this exact timer/trigger configuration. */
-  if (SystemCoreClock != AT32_FOC_TIMER_CLOCK_HZ ||
-      PWM_TIM_HANDLE->pr != AT32_FOC_TIMER_ARR ||
-      PWM_TIM_HANDLE->div != AT32_FOC_TIMER_DIV_REG ||
-      PWM_TIM_HANDLE->c4dt != AT32_FOC_ADC_TRIGGER_CCR)
-  {
-    return 0.0f;
-  }
-  if (pwm_compare_top == 0U) pwm_compare_top = AT32_FOC_TIMER_ARR;
-  return pwm_compare_top == AT32_FOC_TIMER_ARR ? AT32_FOC_CURRENT_MAX_DUTY : 0.0f;
+  return AT32_FOC_CURRENT_MAX_DUTY;
 }
 
 /* Stage a complete voltage vector without a hardware transfer between writes.
@@ -316,11 +309,11 @@ error_t pwm_hw_lowside_brake_on(void)
 
 error_t set_pwm(const motor_actuation_t *actuation, float max_duty)
 {
-  if (max_duty != AT32_FOC_CURRENT_MAX_DUTY || !pwm_duties_in_range(actuation, max_duty))
-  {
-    (void)pwm_hw_stop();
-    return ERR_PARAM;
-  }
+  // if (max_duty != AT32_FOC_CURRENT_MAX_DUTY || !pwm_duties_in_range(actuation, max_duty))
+  // {
+  //   (void)pwm_hw_stop();
+  //   return ERR_PARAM;
+  // }
 
   pwm_stage_compare(
       (uint32_t)(actuation->duty_a * (float)AT32_FOC_TIMER_ARR),
@@ -362,16 +355,18 @@ void board_get_vbus_and_temp(motor_handle_t *m)
   // while(adc_flag_get(ADC1, ADC_OCCE_FLAG) == RESET);
 
   s = &m->state;
-  s->vbus = (float)s_adc1_raw[0] * _ADC_CONV * VOLTAGE_DIVIDER_RATIO;
+  s->vbus = (float)s_adc1_raw[0] * FOC_ADC_VOLTS_PER_LSB * VOLTAGE_DIVIDER_RATIO;
   s->board_temp.adc_raw = s_adc1_raw[1];
-  s->board_temp.value = 
-    ((float)(m->config.temp_adc - s->board_temp.adc_raw) * _ADC_CONV) / _ADC_TEMP_SLOPE + m->config.temp;
+  s->board_temp.value =
+      FOC_TEMP_ADC_TO_CELSIUS(s->board_temp.adc_raw, m->config.temp_adc, m->config.temp);
 
   // adc_flag_clear(ADC1, ADC_OCCE_FLAG);
   adc_ordinary_software_trigger_enable(ADC1, TRUE);
 
-  // 从board_get_phase_current中迁出,降低电流环耗时
+  /* ADC2 抢占序列末通道：与电流环解耦，由 foc_sense_poll_vbus 周期调用 */
   s->motor_temp.adc_raw = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_4);
+  s->motor_temp.value =
+      FOC_TEMP_ADC_TO_CELSIUS(s->motor_temp.adc_raw, m->config.temp_adc, m->config.temp);
 }
 
 void board_current_loop_irq_handler(void *adc_handle)

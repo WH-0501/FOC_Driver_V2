@@ -190,7 +190,4 @@ void current_sense_process_sample(motor_handle_t *m)
   state->phase_current.ampere[1] -= current_avg;
   state->phase_current.ampere[2] -= current_avg;
 #endif
-
-  state->motor_temp.value =
-      (float)state->motor_temp.adc_raw * TEMPERATURE_SENSE_ADC_GAIN;
 }

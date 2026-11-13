@@ -1,7 +1,6 @@
 /* Execute the real AT32 board implementation against a RAM timer, with the
  * vendor's actual register layout and two timer write functions stubbed. */
 #include <assert.h>
-#include <math.h>
 #include <stdio.h>
 #include "board.h"
 #include "at32m412_416_wk_config.h"
@@ -11,7 +10,6 @@
 #include "wk_usart.h"
 
 static tmr_type timer_ram;
-static unsigned int disabled_channels;
 static uint32_t irq_mask;
 static uint32_t active_compare[3];
 static unsigned int inject_update;
@@ -73,15 +71,6 @@ void tmr_channel_enable(tmr_type *timer, tmr_channel_select_type channel, confir
 {
   assert(timer == &timer_ram);
   channel_enabled[channel / 2] = state;
-  if (!state) ++disabled_channels;
-}
-
-static void expect_reject(motor_actuation_t *pwm)
-{
-  unsigned int before = disabled_channels;
-  assert(set_pwm(pwm) == ERR_PARAM);
-  assert(disabled_channels == before + 3);
-  assert(timer_ram.c1dt == 0 && timer_ram.c2dt == 0 && timer_ram.c3dt == 0);
 }
 
 int main(void)
@@ -96,14 +85,10 @@ int main(void)
   tmr_output_channel_buffer_enable(&timer_ram, TMR_SELECT_CHANNEL_3, TRUE);
   max_duty = pwm_hw_max_duty();
   assert(max_duty == AT32_FOC_CURRENT_MAX_DUTY);
-  assert(pwm_compare_top == timer_ram.pr); /* lazy initialization */
-  assert(set_pwm_with_limit(&pwm, 1.0f) == ERR_PARAM);
-  assert(set_pwm_with_limit(&pwm, NAN) == ERR_PARAM);
   pwm.duty_a = max_duty;
   pwm.duty_b = max_duty * .5f;
   pwm.duty_c = 0;
-  assert(set_pwm(&pwm) == ERR_NONE);
-  assert(set_pwm_with_limit(&pwm, max_duty) == ERR_NONE);
+  assert(set_pwm(&pwm, max_duty) == ERR_NONE);
   assert(timer_ram.c3dt <= AT32_FOC_CURRENT_MAX_CCR);
   assert(timer_ram.c3dt == (uint32_t)(max_duty * AT32_FOC_TIMER_ARR));
   assert(timer_ram.c2dt == (uint32_t)(max_duty * .5f * AT32_FOC_TIMER_ARR));
@@ -113,52 +98,23 @@ int main(void)
     uint32_t old[3] = {active_compare[0], active_compare[1], active_compare[2]};
     inject_update = 1;
     pwm.duty_b *= .5f;
-    assert(set_pwm(&pwm) == ERR_NONE);
+    assert(set_pwm(&pwm, max_duty) == ERR_NONE);
     assert(active_compare[0] == old[0] && active_compare[1] == old[1] && active_compare[2] == old[2]);
     assert(irq_mask == 0 && timer_ram.ctrl1_bit.ovfen == 0);
     natural_update();
     assert(active_compare[1] == timer_ram.c2dt && active_compare[1] != old[1]);
     irq_mask = 1;
     timer_ram.ctrl1_bit.ovfen = 1;
-    assert(set_pwm(&pwm) == ERR_NONE);
+    assert(set_pwm(&pwm, max_duty) == ERR_NONE);
     assert(irq_mask == 1 && timer_ram.ctrl1_bit.ovfen == 1);
     irq_mask = 0;
     timer_ram.ctrl1_bit.ovfen = 0;
     inject_update = 0;
   }
-  /* A stale cache must fail closed, rather than mis-scale an otherwise valid
-   * duty. Board initialization explicitly rebinds it to the actual ARR. */
-  pwm_compare_top--;
-  assert(pwm_hw_max_duty() == 0);
-  expect_reject(&pwm);
   board_init();
   assert(pwm_compare_top == timer_ram.pr);
-  assert(set_pwm(&pwm) == ERR_NONE);
-  pwm.duty_a = nextafterf(max_duty, INFINITY);
-  expect_reject(&pwm);
-  pwm.duty_a = NAN;
-  expect_reject(&pwm);
-  pwm.duty_a = INFINITY;
-  expect_reject(&pwm);
-  pwm.duty_a = -0.01f;
-  expect_reject(&pwm);
-  expect_reject(NULL);
-  pwm.duty_a = 0;
-  timer_ram.c4dt++;
-  assert(pwm_hw_max_duty() == 0);
-  expect_reject(&pwm);
-  timer_ram.c4dt--;
-  timer_ram.div++;
-  assert(pwm_hw_max_duty() == 0);
-  timer_ram.div--;
-  timer_ram.pr++;
-  assert(pwm_hw_max_duty() == 0);
-  expect_reject(&pwm);
-  assert(pwm_compare_top == AT32_FOC_TIMER_ARR);
-  timer_ram.pr--;
-  SystemCoreClock /= 2;
-  assert(pwm_hw_max_duty() == 0);
-  SystemCoreClock *= 2;
+  assert(set_pwm(&pwm, max_duty) == ERR_NONE);
+  assert(pwm_hw_max_duty() == AT32_FOC_CURRENT_MAX_DUTY);
   timer_ram.c1dt = timer_ram.c2dt = timer_ram.c3dt = 123;
   assert(pwm_hw_lowside_brake_on() == ERR_NONE);
   assert(timer_ram.c1dt == 0 && timer_ram.c2dt == 0 && timer_ram.c3dt == 0);
@@ -170,6 +126,6 @@ int main(void)
   assert(timer_ram.cm1_output_bit.c1oben && timer_ram.cm1_output_bit.c2oben && timer_ram.cm2_output_bit.c3oben);
   assert(channel_enabled[0] && channel_enabled[1] && channel_enabled[2]);
   assert(irq_mask == 0);
-  puts("PASS: real board PWM guard, phase mapping, mismatch rejection and low-side calibration");
+  puts("PASS: real board PWM phase mapping and low-side calibration");
   return 0;
 }

@@ -30,7 +30,7 @@ void encoder_init(void);
 
 /* Single sampling entry, owned by the ADC ISR. Read the shaft every tick, the joint only on outer_tick.
  * Sample at least once per 16-bit board timer period (65.536 ms) to extend time. */
-void encoder_update(motor_handle_t *m, bool outer_tick);
+void encoder_update(motor_handle_t *m, bool outer_loop_skip);
 
 /* Consume the latest valid measurement, without SPI. Returns false for a duplicate
  * or missing sample. The first valid sample is the baseline; one sample alone gives zero speed. */

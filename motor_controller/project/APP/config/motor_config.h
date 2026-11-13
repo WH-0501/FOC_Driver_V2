@@ -20,6 +20,9 @@ typedef struct
 bool motor_config_register_storage(const motor_config_storage_ops_t *ops);
 void motor_config_clear_storage(void);
 
+/* 1/gear_ratio，motor_config_init 时计算，运行时只做乘法。 */
+extern float s_inv_gear_ratio;
+
 void motor_config_set_defaults(motor_config_t *config);
 bool motor_config_init(motor_config_t *config);
 bool motor_config_load(motor_config_t *config);

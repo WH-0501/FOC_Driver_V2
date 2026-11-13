@@ -2,6 +2,7 @@
 #include "board.h"
 #include "foc_filter.h"
 #include "motor.h"
+#include "motor_config.h"
 #include <string.h>
 
 static encoder_observer_t s_observers[ENCODER_ROLE_COUNT];
@@ -63,7 +64,7 @@ static bool read_angle(motor_handle_t *m, encoder_role_t role, uint16_t *raw)
   const encoder_binding_t *binding = &s_encoder_bindings[role];
   if (binding->dev != ENCODER_DEV_KTH71) return false;
 
-  motor_runtime_t *rt = FOC_PROFILE_CST_OUTER && role == ENCODER_ROLE_SHAFT ? motor_runtime(m) : NULL;
+  motor_runtime_t *rt = (FOC_PROFILE_CST_OUTER == 1) && role == ENCODER_ROLE_SHAFT ? motor_runtime(m) : NULL;
   bool profile = rt != NULL && rt->profile_cst_outer;
   uint32_t start = profile ? dwt_get_ticks() : 0u;
   bool ok = KTH71_ReadAngleCS(binding->kth71_cs, raw) != 0u;
@@ -164,7 +165,7 @@ static void update_axis_position(motor_handle_t *m, encoder_role_t role, uint32_
   v->counts = counts;
 }
 
-void encoder_update(motor_handle_t *m, bool outer_tick)
+void encoder_update(motor_handle_t *m, bool outer_loop_skip)
 {
   if (m == NULL) return;
 
@@ -174,7 +175,7 @@ void encoder_update(motor_handle_t *m, bool outer_tick)
   m->state.theta_elec_rad = electrical_angle(m, m->state.shaft.angle_rad);
 
   /* 外环拍不读取关节 SPI；单编码器则用电机轴换算关节位置。 */
-  if (!outer_tick) return;
+  if (!outer_loop_skip) return;
 
   /* 外环拍才读取关节 SPI；单编码器则用电机轴换算关节位置。 */
   if (joint_encoder_enabled())
@@ -185,7 +186,7 @@ void encoder_update(motor_handle_t *m, bool outer_tick)
   {
     m->state.joint.counts = 0u;
     m->state.joint.turn_count = 0;
-    m->state.joint.position_rad = m->state.shaft.position_rad / m->config.param.gear_ratio;
+    m->state.joint.position_rad = m->state.shaft.position_rad * s_inv_gear_ratio;
     m->state.joint.angle_rad = angle_normalize(m->state.joint.position_rad);
   }
 }
@@ -220,8 +221,8 @@ bool encoder_estimate_velocity(motor_handle_t *m)
   bool updated = false;
   
   /* Manual callers share the latest samples and accumulators with the ADC ISR. */
-  uint32_t mask = __get_PRIMASK();
-  __disable_irq();
+  // uint32_t mask = __get_PRIMASK();
+  // __disable_irq();
 
   updated = estimate_axis_velocity(m, ENCODER_ROLE_SHAFT);
   if (joint_encoder_enabled())
@@ -230,10 +231,10 @@ bool encoder_estimate_velocity(motor_handle_t *m)
   }
   else if (updated)
   {
-    m->state.joint.velocity_rad_s = m->state.shaft.velocity_rad_s / m->config.param.gear_ratio;
+    m->state.joint.velocity_rad_s = m->state.shaft.velocity_rad_s * s_inv_gear_ratio;
   }
 
-  __set_PRIMASK(mask);
+  // __set_PRIMASK(mask);
   return updated;
 }
 

@@ -26,6 +26,7 @@ typedef struct
 
 static const motor_config_storage_ops_t *s_storage_ops[MOTOR_CONFIG_MAX_STORAGE_BACKENDS];
 static unsigned int s_storage_count = 0u;
+float s_inv_gear_ratio = 1.0f; /* 1/gear_ratio，初始化时计算，后续位置/速度只乘这个值 */
 
 static uint32_t motor_config_checksum32(const uint8_t *data, uint32_t len)
 {
@@ -211,20 +212,22 @@ void motor_config_set_defaults(motor_config_t *config)
 
 bool motor_config_init(motor_config_t *config)
 {
-  bool loaded_from_storage;
+  bool rtn = false;
 
   if (config == NULL)
   {
     return false;
   }
 
-  loaded_from_storage = motor_config_load(config);
-  if (!loaded_from_storage)
+  rtn = motor_config_load(config);
+  if (!rtn)
   {
-    (void)motor_config_save(config);
+    rtn = motor_config_save(config);
   }
 
-  return loaded_from_storage;
+  s_inv_gear_ratio = 1.0f / config->param.gear_ratio;
+
+  return rtn;
 }
 
 bool motor_config_load(motor_config_t *config)

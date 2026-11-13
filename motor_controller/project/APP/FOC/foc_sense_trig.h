@@ -71,7 +71,9 @@ static const float foc_sine_lut[512] = {
   -0.0980171412f, -0.0857973099f, -0.0735645667f, -0.061320737f, -0.0490676761f, -0.0368072242f, -0.024541229f, -0.0122715384f,
 };
 
-/* For a normalized shaft electrical angle, rotate the nearest table pair
+/* 
+ * 使用查表法计算 sin(theta) 和 cos(theta)
+ * For a normalized shaft electrical angle, rotate the nearest table pair
  * by delta, where |delta| <= pi/512. The omitted cubic term is < 4e-8.
  * Use the existing routine for out-of-range and non-finite inputs. */
 APP_STATIC_INLINE void foc_sense_sincos(float theta, float *s, float *c)

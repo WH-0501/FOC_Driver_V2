@@ -1,12 +1,6 @@
 /**
  * @file foc_pid.h
- * @author your name (you@domain.com)
- * @brief This file provides the PID controller for the FOC motor control.
- * @version 0.1
- * @date 2026-05-18
- * 
- * @copyright Copyright (c) 2026
- * 
+ * @brief FOC 三环 PID：运行期增益在 pid_param_t，环状态在 pid_state_t。
  */
 
 #ifndef __FOC_PID_H__
@@ -17,6 +11,10 @@
 
 /** 电流环 config/CAN 中 Ki 为 Ki_phys / FOC_PID_CUR_KI_SCALE；环内积分还原为物理 Ki。 */
 #define FOC_PID_CUR_KI_SCALE (10000.0f)
+
+#define FOC_PID_LOOP_POSITION 0u
+#define FOC_PID_LOOP_VELOCITY 1u
+#define FOC_PID_LOOP_CURRENT  2u
 
 typedef struct
 {
@@ -37,19 +35,18 @@ typedef struct
   float last_output;    ///< 上一次输出
   float last_integral;  ///< 上一次积分项累加
   uint32_t timestamp;   ///< 时间戳，用于积分/微分时间步. us
-
   float d_state;        ///< 微分状态
   float last_feedback;  ///< 上一次反馈值
-
   float target;         ///< 参考值
   float feedback;       ///< 反馈值
   float dt;             ///< 控制周期
 } pid_state_t;
 
-
-error_t foc_pid_init(pid_state_t *pid, uint8_t mode);
+error_t foc_pid_init(pid_state_t *pid, const uint8_t mode);
 error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, float feedback, float *output);
+/** 电流环 ISR：假定 kd/ramp=0、param 已校验；无 timestamp/CAN 观测字段更新 */
+error_t foc_pid_calc_iq_current(pid_state_t *pid, const pid_param_t *param, float target, float feedback,
+                                float *output);
 error_t foc_pid_clear(pid_state_t *pid);
-
 
 #endif /* __FOC_PID_H__ */

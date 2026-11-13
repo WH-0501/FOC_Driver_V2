@@ -65,6 +65,7 @@ APP_STATIC_INLINE float foc_wrapAngle(float angle)
  * Keep libm semantics for nonfinite/large external angles. */
 APP_STATIC_INLINE void foc_sincos(float theta, float *s, float *c)
 {
+#if 1
   theta = foc_wrapAngle(theta);
   float sign = 1.0f;
 
@@ -77,20 +78,21 @@ APP_STATIC_INLINE void foc_sincos(float theta, float *s, float *c)
   float temp = theta * theta;
   *s = (sign * (0.999999967F + (-0.499999269F + (0.041664091F + (-0.001385742F + 0.000023238F * temp) * temp) * temp) * temp));
   *c = (sign * (-0.9999974871F + (0.1666516805F + (-0.0083095164F + 0.0001844721F * temp) * temp) * temp) * theta);
-
-  // float x=theta, sign=1.0f, z;
-  // if (!(x >= -_2PI && x <= _2PI)) {
-  //   *s=sinf(theta); *c=cosf(theta); return;
-  // }
-  // if(x>_PI)x-=_2PI;
-  // else if(x<-_PI)x+=_2PI;
-  // if(x>0.5f*_PI){x=_PI-x;sign=-1.0f;}
-  // else if(x<-0.5f*_PI){x=-_PI-x;sign=-1.0f;}
-  // z=x*x;
-  // *s=x*(1.0f+z*(-1.0f/6.0f+z*(1.0f/120.0f+z*(-1.0f/5040.0f+
-  //   z*(1.0f/362880.0f+z*(-1.0f/39916800.0f+z*(1.0f/6227020800.0f)))))));
-  // *c=sign*(1.0f+z*(-1.0f/2.0f+z*(1.0f/24.0f+z*(-1.0f/720.0f+
-  //   z*(1.0f/40320.0f+z*(-1.0f/3628800.0f+z*(1.0f/479001600.0f)))))));
+#else
+  float x=theta, sign=1.0f, z;
+  if (!(x >= -_2PI && x <= _2PI)) {
+    *s=sinf(theta); *c=cosf(theta); return;
+  }
+  if(x>_PI)x-=_2PI;
+  else if(x<-_PI)x+=_2PI;
+  if(x>0.5f*_PI){x=_PI-x;sign=-1.0f;}
+  else if(x<-0.5f*_PI){x=-_PI-x;sign=-1.0f;}
+  z=x*x;
+  *s=x*(1.0f+z*(-1.0f/6.0f+z*(1.0f/120.0f+z*(-1.0f/5040.0f+
+    z*(1.0f/362880.0f+z*(-1.0f/39916800.0f+z*(1.0f/6227020800.0f)))))));
+  *c=sign*(1.0f+z*(-1.0f/2.0f+z*(1.0f/24.0f+z*(-1.0f/720.0f+
+    z*(1.0f/40320.0f+z*(-1.0f/3628800.0f+z*(1.0f/479001600.0f)))))));
+#endif
  }
  
 
