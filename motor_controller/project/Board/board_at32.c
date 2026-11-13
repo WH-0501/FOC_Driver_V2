@@ -333,13 +333,13 @@ void board_get_phase_current(motor_handle_t *m)
 
   s = &m->state;
   /* Keep this mapping aligned with wk_adc2_init: currents first, temperature last. */
-  // s->phase_current.adc_raw[0] = (uint16_t)ADC2->pdt1;
-  // s->phase_current.adc_raw[1] = (uint16_t)ADC2->pdt2;
-  // s->phase_current.adc_raw[2] = (uint16_t)ADC2->pdt3;
   // s->motor_temp.adc_raw = (uint16_t)ADC2->pdt4;
-  s->phase_current.adc_raw[0] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_1);
-  s->phase_current.adc_raw[1] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_2);
-  s->phase_current.adc_raw[2] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_3);
+  s->phase_current.adc_raw[0] = (uint16_t)ADC2->pdt1;
+  s->phase_current.adc_raw[1] = (uint16_t)ADC2->pdt2;
+  s->phase_current.adc_raw[2] = (uint16_t)ADC2->pdt3;
+  // s->phase_current.adc_raw[0] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_1);
+  // s->phase_current.adc_raw[1] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_2);
+  // s->phase_current.adc_raw[2] = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_3);
 }
 
 void board_get_vbus_and_temp(motor_handle_t *m)

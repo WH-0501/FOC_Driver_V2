@@ -69,7 +69,7 @@ uint32_t foc_sense_update_timed(motor_handle_t *m, foc_sense_marks_t *marks, boo
   current_sense_process_sample(m);
   uint32_t current_end_ticks = (measure_sense || marks != NULL) ? dwt_get_ticks() : 0u;
 
-  bool measure_details = FOC_PROFILE_CST_OUTER == 1 && marks != NULL;
+  bool measure_details = FOC_PROFILE_CST_OUTER && marks != NULL;
   if (measure_details) marks->current_end = current_end_ticks;
 
   encoder_update(m, outer_loop_skip);

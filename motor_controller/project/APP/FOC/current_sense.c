@@ -161,9 +161,9 @@ void current_sense_process_sample(motor_handle_t *m)
   /* Zero-offset accumulation runs only on the startup fresh-event calibration path. */
   state = &m->state;
 
+  float v_pin = 0.0f;
   for (i = 0U; i < 3U; i++)
   {
-    float v_pin = 0.0f;
     if (!m->current_offset_cal_done)
     {
       v_pin = (float)state->phase_current.adc_raw[i] * kv;
@@ -171,7 +171,7 @@ void current_sense_process_sample(motor_handle_t *m)
     }
     else
     {
-      v_pin = (float)((uint16_t)state->phase_current.adc_raw[i] - (uint16_t)state->phase_current.adc_offset[i]) * kv;
+      v_pin = (float)(state->phase_current.adc_raw[i] - state->phase_current.adc_offset[i]) * kv;
       state->phase_current.ampere[i] = v_pin * gain;
     }
   }

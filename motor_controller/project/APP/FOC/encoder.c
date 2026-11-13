@@ -26,8 +26,8 @@ static bool joint_encoder_enabled(void)
 
 static int32_t wrap_counts(int32_t diff)
 {
-  if (diff > ENCODER_COUNTS_PER_REV / 2) return diff - ENCODER_COUNTS_PER_REV;
-  if (diff < -ENCODER_COUNTS_PER_REV / 2) return diff + ENCODER_COUNTS_PER_REV;
+  if (diff > ENCODER_COUNTS_HALF_REV) return diff - ENCODER_COUNTS_PER_REV;
+  if (diff < -ENCODER_COUNTS_HALF_REV) return diff + ENCODER_COUNTS_PER_REV;
   return diff;
 }
 
@@ -131,7 +131,7 @@ static void update_axis_position(motor_handle_t *m, encoder_role_t role, uint32_
       bool rejected = gate > 0.0f && fabsf((float)step) > gate;
       if (rejected) step = 0;
       encoder_pll_update(&u->pll, (float)counts, dt,
-                         (float)ENCODER_COUNTS_PER_REV, ENCODER_COUNTS_PER_REV * 0.5f);
+                         (float)ENCODER_COUNTS_PER_REV, (float)ENCODER_COUNTS_HALF_REV);
       u->pll_rejected = rejected || u->pll.innovation_rejected;
       if (!rejected) u->accepted_counts = counts;
     }
@@ -144,7 +144,7 @@ static void update_axis_position(motor_handle_t *m, encoder_role_t role, uint32_
 #else
   /* Keep the shaft's wrap threshold. Joint samples can move farther between outer ticks.使用 counts 效率比 angle 更高 */
   const int32_t turn_threshold = role == ENCODER_ROLE_JOINT && u->valid ?
-                    (int32_t)(ENCODER_COUNTS_PER_REV * 0.5f) : (int32_t)(0.8f * ENCODER_COUNTS_PER_REV);
+                    ENCODER_COUNTS_HALF_REV : ENCODER_COUNTS_TURN_THRESH;
   if (diff > turn_threshold) --v->turn_count;
   else if (diff < -turn_threshold) ++v->turn_count;
   // 多圈机械角 = dir * (累计整圈数 * 2π + 单圈机械角 - 偏移角)

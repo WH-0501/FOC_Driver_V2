@@ -19,6 +19,9 @@
 #define THETA_ELEC_OFFSET_RAD (0.0f) ///< 电角度零偏置 [rad]，对齐/校准后写入
 #define THETA_OFFSET_RAD (0.0f) ///< 机械角度零偏置 [rad]，对齐/校准后写入
 
+#define ENCODER_COUNTS_HALF_REV (ENCODER_COUNTS_PER_REV / 2) ///< 半圈计数，即 counts * 0.5
+#define ENCODER_COUNTS_TURN_THRESH ((ENCODER_COUNTS_PER_REV * 4) / 5) ///< 0.8 圈计数，截断与 (int32_t)(0.8f * counts) 相同
+
 /* 速度单位换算（内部统一使用 rad/s） */
 #define RPM_TO_RAD_PER_SEC(rpm) ((float)(rpm) * (_2PI / 60.0f))
 #define RAD_PER_SEC_TO_RPM(rad_s) ((float)(rad_s) * (60.0f / _2PI))
