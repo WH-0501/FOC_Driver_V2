@@ -15,6 +15,7 @@
 #define __FOC_MATH_H__
 
 #include <math.h>
+#include <float.h>
 #include <stdint.h>
 #include "compiler_port.h"
 #include "math_compat.h"
@@ -131,7 +132,7 @@ APP_STATIC_INLINE float angle_normalize(float angle)
 
   // 把正数向 -inf 取整，等价于 floorf，不调用libm
   int32_t k;
-  if (f >= 0.0f)
+  if (f >= FLT_EPSILON)
   {
     k = (int32_t)f;
   }

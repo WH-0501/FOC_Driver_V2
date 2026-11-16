@@ -150,7 +150,6 @@ void current_sense_process_sample(motor_handle_t *m)
 {
   uint32_t i;
   const float kv = CURRENT_SENSE_ADC_VOLTS_PER_LSB;
-  const float gain = CURRENT_SENSE_SO_AMPS_PER_VOLT * CURRENT_SENSE_PHASE_POLARITY;
   motor_state_t *state;
 
   if (m == NULL)
@@ -166,13 +165,13 @@ void current_sense_process_sample(motor_handle_t *m)
   {
     if (!m->current_offset_cal_done)
     {
-      v_pin = (float)state->phase_current.adc_raw[i] * kv;
-      state->phase_current.ampere[i] = (v_pin - CURRENT_SENSE_SO_BIAS_V) * gain;
+      v_pin = (float)state->phase_current.adc_raw[i] * CURRENT_SENSE_ADC_VOLTS_PER_LSB; // kv
+      state->phase_current.ampere[i] = (v_pin - CURRENT_SENSE_SO_BIAS_V) * CURRENT_SENSE_SO_GAIN;
     }
     else
     {
-      v_pin = (float)(state->phase_current.adc_raw[i] - state->phase_current.adc_offset[i]) * kv;
-      state->phase_current.ampere[i] = v_pin * gain;
+      v_pin = (float)(state->phase_current.adc_raw[i] - state->phase_current.adc_offset[i]) * CURRENT_SENSE_ADC_VOLTS_PER_LSB; // kv
+      state->phase_current.ampere[i] = v_pin * CURRENT_SENSE_SO_GAIN;
     }
   }
 #if 0
