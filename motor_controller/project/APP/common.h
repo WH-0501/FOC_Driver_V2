@@ -241,10 +241,9 @@
 
 /** 电流环：采样率与测量链 lpf1（Id/Iq/相电压/相电流等，见 foc_init_filters） */
 #define FOC_CURRENT_LOOP_FS_HZ  (FOC_PWM_HZ)
-#define FOC_CURRENT_MEAS_PERIOD ((float)(1.0f / (float)FOC_CURRENT_LOOP_FS_HZ))
+#define FOC_CURRENT_PERIOD_S    (1.0f / (float)FOC_CURRENT_LOOP_FS_HZ) /* 电流环周期 [s] */
 #define FOC_MEAS_LPF_FS_HZ      (FOC_CURRENT_LOOP_FS_HZ)
 #define FOC_MEAS_LPF_FC_HZ      (FOC_CURRENT_BANDWIDTH_HZ * 3.0f) /* 与速度链 fc=带宽×3 一致；须 < FOC_MEAS_LPF_FS_HZ/2 */
-#define FOC_CURRENT_PERIOD_S    (1.0f / FOC_CURRENT_LOOP_FS_HZ)
 
 /**
  * 速度观测（非 PLL）：差分 raw + 一阶 LPF
@@ -252,7 +251,7 @@
  */
 #define FOC_VEL_LPF_FC_HZ       (FOC_VEL_BANDWIDTH_HZ * 3.0f)
 #define FOC_VEL_LPF_TAU         (1.0e6f / (_2PI * FOC_VEL_LPF_FC_HZ)) /* [µs] */
-#define FOC_VEL_MEAS_PERIOD_S   ((float)(FOC_CURRENT_MEAS_PERIOD * (float)FW_FOC_OUTER_LOOP_DIV)) /* [s] */
+#define FOC_VEL_MEAS_PERIOD_S   (FOC_CURRENT_PERIOD_S * (float)FW_FOC_OUTER_LOOP_DIV) /* [s] */
 #define FOC_VEL_MEAS_PERIOD_US  (FOC_VEL_MEAS_PERIOD_S * 1.0e6f) /* [µs]，与 FOC_VEL_LPF_TAU 同单位 */
 /** v = Δθ/dt；用 1/dt [1/s] 替代除法（dt 取外环固定周期） */
 #define FOC_INV_VEL_MEAS_PERIOD (1.0f / FOC_VEL_MEAS_PERIOD_S) /* [1/s] */
@@ -267,6 +266,6 @@
 #define FOC_VBUS_LPF_FC_HZ    (10.0f)
 #define FOC_VBUS_POLL_MIN_INTERVAL_US ((uint32_t)(1000000.0f / FOC_VBUS_SAMPLE_FS_HZ))
 
-#define OPEN_LOOP_TS FOC_CURRENT_MEAS_PERIOD
+#define OPEN_LOOP_TS FOC_CURRENT_PERIOD_S
 
 #endif /* __COMMON_H__ */

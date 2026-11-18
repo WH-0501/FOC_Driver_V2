@@ -59,14 +59,14 @@ static void foc_apply_voltage(motor_handle_t *m, float uq, float ud, float sin_e
   foc_modulation_t modulation;
   float duty_max = AT32_FOC_CURRENT_MAX_DUTY;
   float vbus = m->state.vbus_filtered;
-  if (!(vbus > 0.0f))
+  if (!(vbus > FLT_EPSILON))
   {
     vbus = m->config.limits.vbus_nominal;
-    if (!(vbus > 0.0f)) vbus = BUS_VOLTAGE;
+    if (!(vbus > FLT_EPSILON)) vbus = BUS_VOLTAGE;
   }
   if (!foc_modulate_voltage_sincos(ud, uq, sin_el, cos_el, vbus, duty_max, &modulation))
   {
-    fault_t fault = duty_max > 0.0f && duty_max <= 1.0f ? FAULT_PARAM : FAULT_CURRENT_SENSOR;
+    fault_t fault = duty_max > FLT_EPSILON && duty_max <= 1.0f ? FAULT_PARAM : FAULT_CURRENT_SENSOR;
     motor_fault_raise(m, fault);
     motor_disarm(m);
     return;

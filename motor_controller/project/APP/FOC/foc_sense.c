@@ -102,7 +102,7 @@ uint32_t foc_sense_update_timed(motor_handle_t *m, foc_sense_marks_t *marks, boo
   m->state.i_d = id;
   m->state.i_q = iq;
 
-  // 屏蔽后耗时降低到 34us
+  // 屏蔽后耗时降低 1~2us
   // m->state.i_bus = sqrtf(SQ(id) + SQ(iq));
   // m->state.i_mod = lpf1_update(&m->i_mod_lpf, m->state.i_bus * 1000.0f);
 

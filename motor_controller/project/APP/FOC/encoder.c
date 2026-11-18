@@ -51,7 +51,7 @@ void encoder_init(void)
 #if FOC_ENCODER_USE_PLL
     encoder_observer_t *u = &s_observers[i];
     u->init_count = 20u;
-    float period = FOC_CURRENT_MEAS_PERIOD * (i == ENCODER_ROLE_JOINT ? FW_FOC_OUTER_LOOP_DIV : 1u);
+    float period = FOC_CURRENT_PERIOD_S * (float)(i == ENCODER_ROLE_JOINT ? FW_FOC_OUTER_LOOP_DIV : 1u);
     /* Keep the discrete PLL stable even when using a long joint sample period. */
     float bandwidth = fminf(_2PI * FOC_ENCODER_PLL_BW_HZ, 0.45f / period);
     encoder_pll_init(&u->pll, bandwidth, period);

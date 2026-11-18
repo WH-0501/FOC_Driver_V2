@@ -18,7 +18,7 @@ bool motor_fault_check_shaft_speed(motor_handle_t *m)
     return false;
   }
   w = m->state.shaft.velocity_rad_s;
-  if (!(w <= 0.0f || w >= 0.0f)) {
+  if (!(w <= FLT_EPSILON || w >= FLT_EPSILON)) {
     motor_fault_raise(m, FAULT_ENCODER);
     return true;
   }
