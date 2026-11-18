@@ -190,6 +190,12 @@ bool Session::telemetryFresh(quint32 n) const {
     return connected_ && receivedAt_.contains(n) &&
            std::chrono::steady_clock::now() - receivedAt_.value(n) < std::chrono::milliseconds(750);
 }
+bool Session::motorEnabled(quint32 n) const {
+    if (!telemetryFresh(n))
+        return false;
+    auto s = latest(n);
+    return s && s->enabled;
+}
 QJsonObject Session::parameters(quint32 n) const {
     QMutexLocker l(&mutex_);
     return params_.value(n);
@@ -312,7 +318,10 @@ void Session::run() {
                 stop();
             if (upgrading_ && !phase) {
                 auto state = latest(iapNode_);
-                if (!state || state->enabled || t - lastSeen.value(iapNode_, -100) > 0.75) {
+                bool fresh = t - lastSeen.value(iapNode_, -100) < 0.75;
+                if (!state) {
+                    iapFinish(false, "升级要求目标节点曾收到遥测");
+                } else if (fresh && state->enabled) {
                     iapFinish(false, "升级要求目标节点新鲜遥测确认已失能");
                 } else {
                     cancelQueue("升级独占链路");
@@ -371,9 +380,9 @@ void Session::run() {
                         rejection = "使能/失能参数必须为单字节 00 或 01";
                     else if (r.node == 0 && (enabling || requiresDisabled(r.cmd) || motion || limits))
                         rejection = "高风险命令仅允许单播已确认节点";
-                    else if ((requiresDisabled(r.cmd) || enabling || motion || limits) && !fresh)
+                    else if ((enabling || motion || limits) && !fresh)
                         rejection = "缺少 750ms 内的目标节点遥测";
-                    else if (requiresDisabled(r.cmd) && s->enabled)
+                    else if (requiresDisabled(r.cmd) && fresh && s->enabled)
                         rejection = "必须先失能并等待遥测确认";
                     else if (enabling && (s->error || (config_.version == Version::V2 && s->mode == 0)))
                         rejection = "故障或 IDLE 模式不允许使能";
@@ -807,11 +816,12 @@ void Session::run() {
                         if (it->enabled && t - lastSeen.value(it.key(), -100) > .75 &&
                             !staleWarned.contains(it.key())) {
                             stale = true;
-                            staleWarned.insert(it.key()); // Never invent a disabled telemetry state.
+                            staleWarned.insert(it.key());
                         }
                 }
                 if (stale) {
-                    emit log("WARNING", "运行节点遥测超时，请检查连接和设备状态");
+                    emit log("WARNING",
+                             "运行节点遥测超时：门禁按失能处理，仍可在确认现场安全后升级或下发失能类命令");
                 }
             }
             Q_UNUSED(queryNext);

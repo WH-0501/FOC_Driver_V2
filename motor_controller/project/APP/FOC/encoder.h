@@ -6,12 +6,12 @@
 
 /* Directed per-sample travel accumulates until this axis is next estimated. */
 typedef struct {
-  uint32_t pending_counts; ///< 未处理的计数
-  uint32_t time_us;
-  uint32_t velocity_time_us;
-  float raw_velocity_rad_s;
-  bool valid;
-  bool velocity_valid;
+  uint32_t pending_counts;    ///< 未处理的计数
+  uint32_t time_us;           ///< 上一拍位置采样的时刻. 每拍都会更新
+  uint32_t velocity_time_us;  ///< 上一拍速度计算的时刻. 只在外环拍更新
+  float raw_velocity_rad_s;   ///< 原始速度
+  bool valid;                 ///< 有效标志
+  bool velocity_valid;        ///< 速度有效标志
 #if FOC_ENCODER_USE_PLL
   uint16_t accepted_counts;
   int32_t shadow_count;

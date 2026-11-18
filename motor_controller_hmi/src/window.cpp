@@ -529,6 +529,7 @@ void Window::refresh() {
                        : QString("—");
         };
         bool fresh = session.telemetryFresh(node());
+        bool gateEnabled = session.motorEnabled(node());
         live_->setText(QString("<span style='color:%1'>● %2</span>"
                                "<table width='100%' cellspacing='4'>"
                                "<tr><td><small>位置 / rad</small><br><span "
@@ -547,17 +548,17 @@ void Window::refresh() {
                                "%12 RPM · 电流 %13 A</small>")
                            .arg(!fresh       ? "#ffbc33"
                                 : s->error   ? "#FF6363"
-                                : s->enabled ? "#5fc992"
-                                             : "#9c9c9d")
-                           .arg(!fresh       ? "遥测已过期 · 以下为最后反馈"
-                                : s->enabled ? "已使能"
-                                             : "已失能")
+                                : gateEnabled ? "#5fc992"
+                                              : "#9c9c9d")
+                           .arg(!fresh ? "通信异常 · 按失能处理"
+                                : gateEnabled ? "已使能"
+                                              : "已失能")
                            .arg(val(6), val(5), val(0), val(7), val(8))
                            .arg(modes(connection_.version).value(s->mode, "未知"))
                            .arg(s->error, 2, 16, QChar('0'))
                            .arg(telemetryErrorName(s->error, connection_.version))
                            .arg(val(9), val(10), val(11)));
-        enable_->setEnabled(session.telemetryFresh(node()) && !s->enabled && !session.upgrading() &&
+        enable_->setEnabled(session.telemetryFresh(node()) && !gateEnabled && !session.upgrading() &&
                             !enableToken_ && !disableToken_);
     } else {
         live_->setText("等待当前节点遥测");
@@ -623,8 +624,9 @@ quint64 Window::request(int c, const QByteArray &p, std::function<void(QJsonObje
 void Window::safeAction(int c, const QByteArray &p, const QString &title,
                         std::function<void(QJsonObject)> done) {
     auto s = session.latest(node());
-    if (!s || s->enabled) {
-        log("WARNING", "操作要求目标节点已失能");
+    if (!s || session.motorEnabled(node())) {
+        log("WARNING", session.telemetryFresh(node()) ? "操作要求目标节点已失能"
+                                                      : "操作要求目标节点失能或遥测已确认失能；通信异常时请先确认现场安全");
         return;
     }
     if (confirm(title))

@@ -95,11 +95,22 @@
 #ifndef FOC_CURRENT_LOOP_FS_HZ
 #define FOC_CURRENT_LOOP_FS_HZ (FOC_PWM_HZ) // 当前 20KHz
 #endif
-#ifndef FOC_MEAS_LPF_FC_HZ
-#define FOC_MEAS_LPF_FC_HZ (FOC_CURRENT_LOOP_FS_HZ / 10u)
-#endif
 #ifndef FOC_CURRENT_MEAS_PERIOD
 #define FOC_CURRENT_MEAS_PERIOD (float)(1.0f / (float)FOC_CURRENT_LOOP_FS_HZ)
+#endif
+#ifndef FOC_VEL_LPF_FC_HZ
+#define FOC_VEL_LPF_FC_HZ (FOC_CURRENT_LOOP_FS_HZ / 10u)
+#endif
+#ifndef FOC_VEL_LPF_TAU
+/* 一阶低通时间常数 τ = 1 / (2π * FOC_VEL_LPF_FC_HZ) */
+#define FOC_VEL_LPF_TAU (1.0e6f / (_2PI * FOC_VEL_LPF_FC_HZ))
+#endif
+#ifndef FOC_VEL_MEAS_PERIOD
+#define FOC_VEL_MEAS_PERIOD (float)(FOC_CURRENT_MEAS_PERIOD * 5.0f)
+#endif
+#ifndef FOC_VEL_LPF_ALPHA
+/* 一阶低通滤波器系数 α = dt / (dt + τ) . 注意 dt */
+#define FOC_VEL_LPF_ALPHA (FOC_VEL_MEAS_PERIOD * 5 / (FOC_VEL_MEAS_PERIOD + FOC_VEL_LPF_TAU))
 #endif
 
 /*

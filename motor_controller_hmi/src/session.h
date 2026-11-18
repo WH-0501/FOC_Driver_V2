@@ -37,6 +37,8 @@ class Session : public QThread {
     bool upgrading() const { return upgrading_; }
     std::optional<Sample> latest(quint32 node) const;
     bool telemetryFresh(quint32 node) const;
+    /** Last sample enabled bit; false when telemetry is stale (safe gating default). */
+    bool motorEnabled(quint32 node) const;
     QJsonObject parameters(quint32 node) const;
     QJsonObject faultSnapshot() const;
     Sampling sampling;

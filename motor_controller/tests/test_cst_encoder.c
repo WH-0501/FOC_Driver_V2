@@ -57,7 +57,7 @@ static void sample(int shaft, int joint, unsigned dt_us, bool outer, bool automa
   counts[0]=(uint16_t)(shaft & 8191); counts[1]=(uint16_t)(joint & 8191);
   now_us+=dt_us;
   if (automatic) foc_sense_update_timed(&motor,NULL,outer);
-  else encoder_update(&motor,outer,NULL);
+  else encoder_update(&motor,outer);
   assert(reads[0]==sr+1u && reads[1]==jr+(dual && outer));
   assert(motor.state.theta_elec_rad ==
          angle_normalize(motor.state.shaft.angle_rad * 5.0f));
@@ -105,7 +105,7 @@ static void check_window(void) {
   float tau=1e6f/(_2PI*FOC_MEAS_LPF_FC_HZ);
   float speed=10.0f*RAW_ANGLE_U16_TO_RAD/50e-6f*(100000.0f/(100000.0f+tau));
   assert(fabsf(motor.state.shaft.velocity_rad_s-speed)<0.001f);
-  assert(fabsf(motor.state.joint.velocity_rad_s-(dual ? -0.5f : 0.5f)*speed)<0.001f);
+  assert(fabsf(motor.state.joint.velocity_rad_s-motor.state.shaft.velocity_rad_s*s_inv_gear_ratio)<0.001f);
 }
 
 static void check_crc(void) {
@@ -114,20 +114,25 @@ static void check_crc(void) {
   ok[selected]=false;
   for (unsigned i=1;i<=FW_FOC_OUTER_LOOP_DIV;++i) {
     sample(100+2*i,300-i,50,i==FW_FOC_OUTER_LOOP_DIV,true);
-    assert(motor.state.joint.velocity_rad_s==0.0f);
+    if (!dual || i!=FW_FOC_OUTER_LOOP_DIV) assert(motor.state.joint.velocity_rad_s==0.0f);
   }
   assert(!encoder_estimate_velocity(&motor));
-  assert(motor.state.joint.velocity_rad_s==0.0f);
-  if (dual) assert(motor.state.shaft.velocity_rad_s>0.0f);
+  if (dual) {
+    assert(motor.state.shaft.velocity_rad_s>0.0f);
+    assert(fabsf(motor.state.joint.velocity_rad_s-motor.state.shaft.velocity_rad_s*s_inv_gear_ratio)<0.001f);
+  } else {
+    assert(motor.state.joint.velocity_rad_s==0.0f);
+  }
   ok[selected]=true;
   for (unsigned i=1;i<=FW_FOC_OUTER_LOOP_DIV;++i) {
     unsigned k=i+FW_FOC_OUTER_LOOP_DIV;
     sample(100+2*k,300-k,50,i==FW_FOC_OUTER_LOOP_DIV,true);
   }
   float dt=100.0f*FW_FOC_OUTER_LOOP_DIV;
-  float expected=(dual ? -1.0f : 1.0f)*RAW_ANGLE_U16_TO_RAD/50e-6f*
+  float expected=RAW_ANGLE_U16_TO_RAD/50e-6f*
                  dt/(dt+1e6f/(_2PI*FOC_MEAS_LPF_FC_HZ));
-  assert(fabsf(motor.state.joint.velocity_rad_s-expected)<0.001f);
+  if (dual) assert(fabsf(motor.state.joint.velocity_rad_s-motor.state.shaft.velocity_rad_s*s_inv_gear_ratio)<0.001f);
+  else assert(fabsf(motor.state.joint.velocity_rad_s-expected)<0.001f);
 }
 
 static void check_shaft_protection_sample(void) {
@@ -138,7 +143,7 @@ static void check_shaft_protection_sample(void) {
     bool outer=i%FW_FOC_OUTER_LOOP_DIV==0u;
     sample(500+100*i,400,50,outer,true);
     if (!outer) assert(motor.state.shaft.velocity_rad_s==last);
-    if (dual) assert(motor.state.joint.velocity_rad_s==0);
+    assert(fabsf(motor.state.joint.velocity_rad_s-motor.state.shaft.velocity_rad_s*s_inv_gear_ratio)<0.001f);
   }
   assert(motor.state.shaft.velocity_rad_s>MAX_VELOCITY_RAD_S);
 }
@@ -148,7 +153,7 @@ static void check_delayed_estimate_and_reset(void) {
   sample(200,500,50,true,false);
   sample(202,499,50,true,false);
   assert(encoder_estimate_velocity(&motor) && !encoder_estimate_velocity(&motor));
-  assert(dual ? motor.state.joint.velocity_rad_s<0 : motor.state.joint.velocity_rad_s>0);
+  assert(motor.state.joint.velocity_rad_s>0);
   encoder_init(); encoder_shaft_debug_t dbg;
   assert(encoder_get_shaft_debug(&motor,&dbg) && dbg.velocity_rad_s_filt==0);
   ok[0]=ok[1]=false; sample(600,650,50,true,true);
@@ -164,7 +169,7 @@ static void check_pll_rates(void) {
   }
   float shaft_speed=2.0f*RAW_ANGLE_U16_TO_RAD/50e-6f;
   assert(fabsf(motor.state.shaft.velocity_rad_s-shaft_speed)<0.08f*shaft_speed);
-  float joint_speed=(dual ? -0.5f : 0.5f)*shaft_speed;
+  float joint_speed=0.5f*shaft_speed;
   assert(fabsf(motor.state.joint.velocity_rad_s-joint_speed)<0.08f*shaft_speed);
   sample(3201,3499,20000,true,true); /* Re-anchor after a long sampling gap. */
   assert(motor.state.shaft.velocity_rad_s==0 && motor.state.joint.velocity_rad_s==0);

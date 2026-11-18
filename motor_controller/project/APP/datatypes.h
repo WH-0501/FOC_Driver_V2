@@ -235,7 +235,7 @@ typedef struct
 
   float theta_elec_rad;     ///< 电角 [rad]：normalize(shaft.angle_rad * pole_pairs - offset)，Park/逆 Park 用
   encoder_sample_t shaft;   ///< 电机轴端观测量（控制系）
-  encoder_sample_t joint;   ///< 关节端观测量；单编时由 shaft 经 gear_ratio 推算（控制系）
+  encoder_sample_t joint;   ///< 关节端观测量；速度由电机轴经 gear_ratio 推算，单编时位置同样推算（控制系）
 
   float sin_elec;       ///< sin(θ_e)；FOC_REUSE_PARK_SINCOS 时由 foc_sense Park 写入
   float cos_elec;       ///< cos(θ_e)；与 theta_elec_rad 同拍，供逆 Park 复用

@@ -151,13 +151,17 @@ static void update_axis_position(motor_handle_t *m, encoder_role_t role, uint32_
   v->position_rad = dir * ((float)v->turn_count * _2PI + angle - zero);
   v->angle_rad = dir < 0 && counts != 0 ? _2PI - angle : angle;
 #endif
-  if (u->valid)
+  /* 闭环速度只结算电机轴，关节侧不累积速度差分。 */
+  if (role == ENCODER_ROLE_SHAFT)
   {
-    u->pending_counts += (uint32_t)(step * dir);
-  }
-  else
-  {
-    u->velocity_time_us = time_us;
+    if (u->valid)
+    {
+      u->pending_counts += (uint32_t)(step * dir);
+    }
+    else
+    {
+      u->velocity_time_us = time_us;
+    }
   }
   u->valid = true;
   u->time_us = time_us;
@@ -169,7 +173,20 @@ void encoder_update(motor_handle_t *m, bool outer_loop_skip)
 {
   if (m == NULL) return;
 
-  /* 电流环每拍读取电机轴；计时器在 CRC 失败时也要继续累计。 */
+  /**
+   * 取 16 位计数器从上一次到现在的增量. 
+   * (uint16_t) 只留低 16 位，所以减掉的是上次锁存的计数值。
+   * 计数器从 65530 绕到 10，差是 16 µs，加回去得到 65546，低 16 位又等于当前硬件值 10
+   * 例：
+   * 上次 s_sample_time_us	本次 board_time_us()	低 16 位差	累加后
+   * 0	50	50	50
+   * 50	100	50	100
+   * 65530	10	16	65546  // (10 - 65530) + 65536 = 16
+   * 65546	60	50	65596  // (60 - 65546) + 65536 = 50
+   * 以第三行为例，如果写成 s_sample_time_us = board_time_us()，值会从 65530 跳回 10，
+   * 速度用的是 32 位无符号相减，10 - 65530 变成约 4294901776 µs.m
+   * 
+   */
   s_sample_time_us += (uint16_t)(board_time_us() - s_sample_time_us);
   update_axis_position(m, ENCODER_ROLE_SHAFT, s_sample_time_us);
   m->state.theta_elec_rad = electrical_angle(m, m->state.shaft.angle_rad);
@@ -205,8 +222,8 @@ static bool estimate_axis_velocity(motor_handle_t *m, encoder_role_t role)
 #if FOC_ENCODER_USE_PLL
   sample->velocity_rad_s = axis_direction(m, role) * u->pll.vel_counts * RAW_ANGLE_U16_TO_RAD;
 #else
-  const float tau_us = 1.0e6f / (_2PI * FOC_MEAS_LPF_FC_HZ);
-  float alpha = (float)dt_us / ((float)dt_us + tau_us);
+  /* 一阶低通滤波器系数 α = dt / (dt + τ) */
+  float alpha = (float)dt_us / ((float)dt_us + FOC_VEL_LPF_TAU);
   sample->velocity_rad_s = lpf1_blend(alpha, u->raw_velocity_rad_s, sample->velocity_rad_s);
 #endif
   u->pending_counts = 0u;
@@ -219,22 +236,13 @@ bool encoder_estimate_velocity(motor_handle_t *m)
 {
   if (m == NULL) return false;
   bool updated = false;
-  
-  /* Manual callers share the latest samples and accumulators with the ADC ISR. */
-  // uint32_t mask = __get_PRIMASK();
-  // __disable_irq();
 
   updated = estimate_axis_velocity(m, ENCODER_ROLE_SHAFT);
-  if (joint_encoder_enabled())
-  {
-    updated = estimate_axis_velocity(m, ENCODER_ROLE_JOINT);
-  }
-  else if (updated)
+  if (updated)
   {
     m->state.joint.velocity_rad_s = m->state.shaft.velocity_rad_s * s_inv_gear_ratio;
   }
 
-  // __set_PRIMASK(mask);
   return updated;
 }
 

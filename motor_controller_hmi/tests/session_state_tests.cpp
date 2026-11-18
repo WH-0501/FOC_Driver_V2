@@ -230,7 +230,7 @@ class SessionStateTests : public QObject {
         s.shutdown();
         QVERIFY(s.wait(3000));
     }
-    void lostTelemetryNeverInventsDisabledState() {
+    void lostTelemetryGatesAsDisabled() {
         auto state = std::make_shared<ScriptState>();
         state->scenario = Scenario::NoTelemetry;
         Session s(nullptr, factory(state));
@@ -241,6 +241,7 @@ class SessionStateTests : public QObject {
         QTRY_VERIFY_WITH_TIMEOUT(!s.telemetryFresh(1), 2000);
         QTRY_VERIFY(!failures.empty());
         QVERIFY(s.latest(1)->enabled);
+        QVERIFY(!s.motorEnabled(1));
         QVERIFY(result(replies, token).isEmpty());
         s.shutdown();
         QVERIFY(s.wait(3000));
