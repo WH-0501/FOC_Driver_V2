@@ -187,7 +187,11 @@ void encoder_update(motor_handle_t *m, bool outer_loop_skip)
    * 速度用的是 32 位无符号相减，10 - 65530 变成约 4294901776 µs.m
    * 
    */
+#ifndef USE_VEL_PERIOD
   s_sample_time_us += (uint16_t)(board_time_us() - s_sample_time_us);
+#else
+  s_sample_time_us = FOC_VEL_MEAS_PERIOD;
+#endif
   update_axis_position(m, ENCODER_ROLE_SHAFT, s_sample_time_us);
   m->state.theta_elec_rad = electrical_angle(m, m->state.shaft.angle_rad);
 
@@ -222,9 +226,13 @@ static bool estimate_axis_velocity(motor_handle_t *m, encoder_role_t role)
 #if FOC_ENCODER_USE_PLL
   sample->velocity_rad_s = axis_direction(m, role) * u->pll.vel_counts * RAW_ANGLE_U16_TO_RAD;
 #else
+#ifndef USE_VEL_PERIOD
   /* 一阶低通滤波器系数 α = dt / (dt + τ) */
   float alpha = (float)dt_us / ((float)dt_us + FOC_VEL_LPF_TAU);
   sample->velocity_rad_s = lpf1_blend(alpha, u->raw_velocity_rad_s, sample->velocity_rad_s);
+#else
+  sample->velocity_rad_s = lpf1_blend(FOC_VEL_LPF_ALPHA, u->raw_velocity_rad_s, sample->velocity_rad_s);
+#endif
 #endif
   u->pending_counts = 0u;
   u->velocity_time_us = u->time_us;

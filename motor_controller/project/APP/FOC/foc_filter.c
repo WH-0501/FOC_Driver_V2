@@ -18,6 +18,14 @@ float lpf1_filer(float Tf, float dt, float x, float y_prev)
 /*========================================================
  * Low-Pass Filter
  *========================================================*/
+/**
+ * @brief 初始化一阶低通滤波器
+ * @param lpf 低通滤波器句柄
+ * @param fc 截止频率
+ * @param fs 采样频率
+ * @return true 成功
+ * @return false 失败
+ */
 bool lpf1_init(lpf1_t *lpf, float fc, float fs)
 {
     /* fc 须低于奈奎斯特频率，否则离散近似无意义 */

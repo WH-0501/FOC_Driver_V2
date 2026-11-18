@@ -34,16 +34,20 @@ static void foc_validate_config(motor_handle_t *m)
 
 static void foc_init_filters(motor_handle_t *m)
 {
+  const float meas_fc = FOC_MEAS_LPF_FC_HZ;
+  const float meas_fs = FOC_MEAS_LPF_FS_HZ;
+
   lpf1_init(&m->vbus_lpf, FOC_VBUS_LPF_FC_HZ, FOC_VBUS_SAMPLE_FS_HZ);
-  lpf1_init(&m->v_a_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
-  lpf1_init(&m->v_b_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
-  lpf1_init(&m->v_c_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
-  lpf1_init(&m->i_d_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
-  lpf1_init(&m->i_q_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
-  lpf1_init(&m->i_mod_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
-  lpf1_init(&m->i_bus_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
-  lpf1_init(&m->v_d_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
-  lpf1_init(&m->v_q_lpf, FOC_MEAS_LPF_FC_HZ, FOC_CURRENT_LOOP_FS_HZ);
+
+  lpf1_init(&m->v_a_lpf, meas_fc, meas_fs);
+  lpf1_init(&m->v_b_lpf, meas_fc, meas_fs);
+  lpf1_init(&m->v_c_lpf, meas_fc, meas_fs);
+  lpf1_init(&m->i_d_lpf, meas_fc, meas_fs);
+  lpf1_init(&m->i_q_lpf, meas_fc, meas_fs);
+  lpf1_init(&m->i_mod_lpf, meas_fc, meas_fs);
+  lpf1_init(&m->i_bus_lpf, meas_fc, meas_fs);
+  lpf1_init(&m->v_d_lpf, meas_fc, meas_fs);
+  lpf1_init(&m->v_q_lpf, meas_fc, meas_fs);
 }
 
 /* Both the closed-loop and explicit-angle callers supply the trig pair they need. */

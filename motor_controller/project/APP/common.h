@@ -86,32 +86,6 @@
 #endif
 #define FOC_PWM_HZ (FOC_TMR1_CLK_HZ / (2u *  (FOC_TMR1_DIV_REG + 1u) * (FOC_TMR1_PERIOD + 1u)))
 #define FOC_PWM_PERIOD_TS    (1.0f / (float)FOC_PWM_HZ)
-/**
- * @brief 电流环与测量链路的采样率/滤波配置
- *        1. FOC_CURRENT_LOOP_FS_HZ: 电流环采样率
- *        2. FOC_MEAS_LPF_FC_HZ: 电流环滤波器截止频率
- *        3. FOC_CURRENT_MEAS_PERIOD: 电流环周期
- */
-#ifndef FOC_CURRENT_LOOP_FS_HZ
-#define FOC_CURRENT_LOOP_FS_HZ (FOC_PWM_HZ) // 当前 20KHz
-#endif
-#ifndef FOC_CURRENT_MEAS_PERIOD
-#define FOC_CURRENT_MEAS_PERIOD (float)(1.0f / (float)FOC_CURRENT_LOOP_FS_HZ)
-#endif
-#ifndef FOC_VEL_LPF_FC_HZ
-#define FOC_VEL_LPF_FC_HZ (FOC_CURRENT_LOOP_FS_HZ / 10u)
-#endif
-#ifndef FOC_VEL_LPF_TAU
-/* 一阶低通时间常数 τ = 1 / (2π * FOC_VEL_LPF_FC_HZ) */
-#define FOC_VEL_LPF_TAU (1.0e6f / (_2PI * FOC_VEL_LPF_FC_HZ))
-#endif
-#ifndef FOC_VEL_MEAS_PERIOD
-#define FOC_VEL_MEAS_PERIOD (float)(FOC_CURRENT_MEAS_PERIOD * 5.0f)
-#endif
-#ifndef FOC_VEL_LPF_ALPHA
-/* 一阶低通滤波器系数 α = dt / (dt + τ) . 注意 dt */
-#define FOC_VEL_LPF_ALPHA (FOC_VEL_MEAS_PERIOD * 5 / (FOC_VEL_MEAS_PERIOD + FOC_VEL_LPF_TAU))
-#endif
 
 /*
  * FOC 电流环 / AT32 PWM 热点优化（A/B 对比：调试时只改本节 0/1，然后全量重编）。
@@ -151,10 +125,6 @@
 #define AT32_PWM_INLINE_STAGE_CCR 1 /* pwm_stage_compare 内联写 c1/2/3dt */
 #endif
 
-#ifndef FOC_CURRENT_BANDWIDTH_HZ
-#define FOC_CURRENT_BANDWIDTH_HZ (800.0f)
-#endif
-
 /* 电流环 ISR：1=Id 纯 P + Iq 精简 PID（调制仍完整校验）；0=A/B */
 #ifndef FOC_CUR_LOOP_FAST
 #define FOC_CUR_LOOP_FAST 0
@@ -183,27 +153,6 @@
 #define FOC_ENCODER_PLL_INNOVATION_GATE_VEL_FACTOR (4.0f)
 #endif
 #endif /* FOC_ENCODER_USE_PLL */
-
-/* 开环周期 */
-#define OPEN_LOOP_TS         FOC_CURRENT_MEAS_PERIOD
-#define FOC_CURRENT_PERIOD_S (1.0f / FOC_CURRENT_LOOP_FS_HZ) ///< 单位：秒
-
-/** 
- * @brief 母线电压采样率 [Hz]（慢路径，与电流环解耦）
- * 1. 母线电压 LPF 截止 [Hz]（须 < FOC_VBUS_SAMPLE_FS_HZ/2，否则 lpf1_init 失败）
- * 2. 母线电压滤波只是让电压波形看起来更平滑，真正决定 SVPWM 精度的是母线电容
- * 3. 可以考虑直接降低采样频次达到一样的效果（如降低到 100Hz）
- * 4. 或者使用多次采样平均值作为母线电压值（如 4 次采样平均）
- */
-#ifndef FOC_VBUS_SAMPLE_FS_HZ
-#define FOC_VBUS_SAMPLE_FS_HZ (100.0f)  ///< fs
-#endif
-#ifndef FOC_VBUS_LPF_FC_HZ
-#define FOC_VBUS_LPF_FC_HZ (10.0f)  ///< fc
-#endif
-#ifndef FOC_VBUS_POLL_MIN_INTERVAL_US
-#define FOC_VBUS_POLL_MIN_INTERVAL_US ((uint32_t)(1000000.0f / FOC_VBUS_SAMPLE_FS_HZ))
-#endif
 
 /* 机械 100RPM → 机械角速度 [rad/s] */
 #define OL_OMEGA_100RPM_MECH   RPM_TO_RAD_PER_SEC(100.0f)
@@ -277,5 +226,44 @@
 
 #define PID_DT_THRESHOLD (0.5f)
 #define PID_DT_MAX (0.001f)
+
+/* 是否使用速度环固定周期 */
+#define USE_VEL_PERIOD        (1)
+
+/* ==========================================================================
+ * 一阶低通与测量链路（统一定义；改带宽/截止频率只改本节）
+ * ========================================================================== */
+
+/** 环路带宽设计参考 [Hz]（电流环 PID 尚未按该宏自动整定） */
+#define FOC_CURRENT_BANDWIDTH_HZ (800.0f)
+#define FOC_VEL_BANDWIDTH_HZ     (100.0f)
+#define FOC_POS_BANDWIDTH_TAU    (40.0f)
+
+/** 电流环：采样率与测量链 lpf1（Id/Iq/相电压/相电流等，见 foc_init_filters） */
+#define FOC_CURRENT_LOOP_FS_HZ  (FOC_PWM_HZ)
+#define FOC_CURRENT_MEAS_PERIOD ((float)(1.0f / (float)FOC_CURRENT_LOOP_FS_HZ))
+#define FOC_MEAS_LPF_FS_HZ      (FOC_CURRENT_LOOP_FS_HZ)
+#define FOC_MEAS_LPF_FC_HZ      (FOC_CURRENT_BANDWIDTH_HZ * 3.0f) /* 与速度链 fc=带宽×3 一致；须 < FOC_MEAS_LPF_FS_HZ/2 */
+#define FOC_CURRENT_PERIOD_S    (1.0f / FOC_CURRENT_LOOP_FS_HZ)
+
+/**
+ * 速度观测（非 PLL）：差分 raw + 一阶 LPF
+ * fc 取速度带宽的 3 倍；τ_us = 1/(2π·fc)，α = dt/(dt+τ)
+ */
+#define FOC_VEL_LPF_FC_HZ   (FOC_VEL_BANDWIDTH_HZ * 3.0f)
+#define FOC_VEL_LPF_TAU     (1.0e6f / (_2PI * FOC_VEL_LPF_FC_HZ))
+#define FOC_VEL_MEAS_PERIOD ((float)(FOC_CURRENT_MEAS_PERIOD * (float)FW_FOC_OUTER_LOOP_DIV))
+/** 1：编码器速度 LPF 用固定 FOC_VEL_LPF_ALPHA；0：用实测 dt_us 算 α */
+#define FOC_VEL_LPF_ALPHA     (FOC_VEL_MEAS_PERIOD / (FOC_VEL_MEAS_PERIOD + FOC_VEL_LPF_TAU))
+
+/**
+ * 母线慢路径（foc_sense_poll_vbus，与电流环解耦）
+ * fc 须 < FOC_VBUS_SAMPLE_FS_HZ/2，否则 lpf1_init 失败
+ */
+#define FOC_VBUS_SAMPLE_FS_HZ (100.0f)
+#define FOC_VBUS_LPF_FC_HZ    (10.0f)
+#define FOC_VBUS_POLL_MIN_INTERVAL_US ((uint32_t)(1000000.0f / FOC_VBUS_SAMPLE_FS_HZ))
+
+#define OPEN_LOOP_TS FOC_CURRENT_MEAS_PERIOD
 
 #endif /* __COMMON_H__ */
