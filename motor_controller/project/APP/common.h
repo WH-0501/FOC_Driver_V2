@@ -250,11 +250,14 @@
  * 速度观测（非 PLL）：差分 raw + 一阶 LPF
  * fc 取速度带宽的 3 倍；τ_us = 1/(2π·fc)，α = dt/(dt+τ)
  */
-#define FOC_VEL_LPF_FC_HZ   (FOC_VEL_BANDWIDTH_HZ * 3.0f)
-#define FOC_VEL_LPF_TAU     (1.0e6f / (_2PI * FOC_VEL_LPF_FC_HZ))
-#define FOC_VEL_MEAS_PERIOD ((float)(FOC_CURRENT_MEAS_PERIOD * (float)FW_FOC_OUTER_LOOP_DIV))
+#define FOC_VEL_LPF_FC_HZ       (FOC_VEL_BANDWIDTH_HZ * 3.0f)
+#define FOC_VEL_LPF_TAU         (1.0e6f / (_2PI * FOC_VEL_LPF_FC_HZ)) /* [µs] */
+#define FOC_VEL_MEAS_PERIOD_S   ((float)(FOC_CURRENT_MEAS_PERIOD * (float)FW_FOC_OUTER_LOOP_DIV)) /* [s] */
+#define FOC_VEL_MEAS_PERIOD_US  (FOC_VEL_MEAS_PERIOD_S * 1.0e6f) /* [µs]，与 FOC_VEL_LPF_TAU 同单位 */
+/** v = Δθ/dt；用 1/dt [1/s] 替代除法（dt 取外环固定周期） */
+#define FOC_INV_VEL_MEAS_PERIOD (1.0f / FOC_VEL_MEAS_PERIOD_S) /* [1/s] */
 /** 1：编码器速度 LPF 用固定 FOC_VEL_LPF_ALPHA；0：用实测 dt_us 算 α */
-#define FOC_VEL_LPF_ALPHA     (FOC_VEL_MEAS_PERIOD / (FOC_VEL_MEAS_PERIOD + FOC_VEL_LPF_TAU))
+#define FOC_VEL_LPF_ALPHA       (FOC_VEL_MEAS_PERIOD_US / (FOC_VEL_MEAS_PERIOD_US + FOC_VEL_LPF_TAU))
 
 /**
  * 母线慢路径（foc_sense_poll_vbus，与电流环解耦）

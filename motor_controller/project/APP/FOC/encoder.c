@@ -190,7 +190,7 @@ void encoder_update(motor_handle_t *m, bool outer_loop_skip)
 #ifndef USE_VEL_PERIOD
   s_sample_time_us += (uint16_t)(board_time_us() - s_sample_time_us);
 #else
-  s_sample_time_us = FOC_VEL_MEAS_PERIOD;
+  s_sample_time_us = (uint32_t)FOC_VEL_MEAS_PERIOD_US;
 #endif
   update_axis_position(m, ENCODER_ROLE_SHAFT, s_sample_time_us);
   m->state.theta_elec_rad = electrical_angle(m, m->state.shaft.angle_rad);
@@ -216,13 +216,21 @@ static bool estimate_axis_velocity(motor_handle_t *m, encoder_role_t role)
 {
   encoder_observer_t *u = &s_observers[role];
   if (!u->valid) return false;
+
+#ifndef USE_VEL_PERIOD
   uint32_t dt_us = u->time_us - u->velocity_time_us;
   if (dt_us == 0u && u->velocity_valid) return false;
+#endif
 
   encoder_sample_t *sample = role == ENCODER_ROLE_SHAFT ? &m->state.shaft : &m->state.joint;
   int32_t delta = (int32_t)u->pending_counts;
+#ifndef USE_VEL_PERIOD
   u->raw_velocity_rad_s = (dt_us && delta) ?
       (float)delta * RAW_ANGLE_U16_TO_RAD / ((float)dt_us * 1.0e-6f) : 0.0f;
+#else
+  u->raw_velocity_rad_s = (delta) ?
+      (float)delta * RAW_ANGLE_U16_TO_RAD * FOC_INV_VEL_MEAS_PERIOD : 0.0f;
+#endif
 #if FOC_ENCODER_USE_PLL
   sample->velocity_rad_s = axis_direction(m, role) * u->pll.vel_counts * RAW_ANGLE_U16_TO_RAD;
 #else
