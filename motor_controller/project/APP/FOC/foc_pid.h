@@ -40,6 +40,7 @@ typedef struct
   float target;         ///< 参考值
   float feedback;       ///< 反馈值
   float dt;             ///< 控制周期
+  float inv_dt;         ///< 控制周期倒数. 固定周期时可降低计算量
 } pid_state_t;
 
 error_t foc_pid_init(pid_state_t *pid, const uint8_t mode);

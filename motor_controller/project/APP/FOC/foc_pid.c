@@ -21,8 +21,14 @@ error_t foc_pid_init(pid_state_t *pid, const uint8_t mode)
   pid->last_feedback = 0.0f;
   pid->target = 0.0f;
   pid->feedback = 0.0f;
+#if USE_FIXED_PID_DT
   pid->dt = (mode == FOC_PID_LOOP_CURRENT) ? FOC_CURRENT_PERIOD_S :
-                        FW_FOC_OUTER_LOOP_DIV * FOC_CURRENT_PERIOD_S;
+             (mode == FOC_PID_LOOP_VELOCITY) ? FOC_VEL_PERIOD_S :
+             (mode == FOC_PID_LOOP_POSITION) ? FOC_VEL_PERIOD_S : 0.0f;
+  pid->inv_dt = 1.0f / pid->dt;
+#else
+  pid->dt = PID_DT_MAX;
+#endif
   pid->timestamp = dwt_get_ticks_us();
   return ERR_NONE;
 }
@@ -53,18 +59,33 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
   {
     pid->last_integral = 0.0f;
   }
-
+#if USE_FIXED_PID_DT
   /* The PID advances only when its loop executes. Timestamp units are microseconds. */
   pid->timestamp += (uint32_t)(pid->dt * 1.0e6f + 0.5f);
+#else
+  uint32_t current_timestamp = dwt_get_ticks_us();
+  if (pid->timestamp == 0) {
+    pid->timestamp = current_timestamp;
+    return ERR_NONE;
+  }
+  pid->dt = (current_timestamp - pid->timestamp) * 1e-6f; // us to s
+  if (pid->dt <= FLT_EPSILON || pid->dt > PID_DT_THRESHOLD) {
+    pid->dt = PID_DT_MAX;
+  }
+  pid->timestamp = current_timestamp;
+#endif
 
   float error = target - feedback;
   float P = param->kp * error;
 
   float D = 0.0f;
-  if (param->kd > FLT_EPSILON && pid->dt > FLT_EPSILON)
+  if (param->kd > FLT_EPSILON)
   {
-    float new_derivative = (error - pid->last_error) / pid->dt;
-
+#if USE_FIXED_PID_DT
+  float new_derivative = (error - pid->last_error) * pid->inv_dt;
+#else
+  float new_derivative = (error - pid->last_error) / pid->dt;
+#endif
     // 一阶低通滤波, 抑制尖峰噪声
     pid->d_state += param->d_filter * (new_derivative - pid->d_state);
     D = param->kd * pid->d_state;
@@ -76,7 +97,7 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
     ki_eff *= FOC_PID_CUR_KI_SCALE;
   }
   float I = pid->last_integral;
-  if (ki_eff != 0.0f && param->i_limit > 0.0f && pid->dt > 0.0f)
+  if (ki_eff != 0.0f && param->i_limit > FLT_EPSILON)
   {
     pid->last_integral += error * ki_eff * pid->dt;
     /* Enforce the integral contribution budget before using it in output. */
@@ -111,7 +132,7 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
   }
 
   // 7. 输出斜坡（限制相对上一拍的电压变化率）
-  if (param->ramp > 0.0f && pid->dt > 0.0f)
+  if (param->ramp > FLT_EPSILON)
   {
     float max_delta = param->ramp * pid->dt;
     float delta = *output - pid->last_output;

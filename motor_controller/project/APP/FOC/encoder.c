@@ -190,7 +190,7 @@ void encoder_update(motor_handle_t *m, bool outer_loop_skip)
 #ifndef USE_VEL_PERIOD
   s_sample_time_us += (uint16_t)(board_time_us() - s_sample_time_us);
 #else
-  s_sample_time_us = (uint32_t)FOC_VEL_MEAS_PERIOD_US;
+  s_sample_time_us = (uint32_t)FOC_VEL_PERIOD_US;
 #endif
   update_axis_position(m, ENCODER_ROLE_SHAFT, s_sample_time_us);
   m->state.theta_elec_rad = electrical_angle(m, m->state.shaft.angle_rad);
