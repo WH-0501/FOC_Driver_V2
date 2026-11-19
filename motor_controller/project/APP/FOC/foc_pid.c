@@ -61,7 +61,7 @@ error_t foc_pid_calc(pid_state_t *pid, const pid_param_t *param, float target, f
   }
 #if USE_FIXED_PID_DT
   /* The PID advances only when its loop executes. Timestamp units are microseconds. */
-  pid->timestamp += (uint32_t)(pid->dt * 1.0e6f + 0.5f);
+  pid->timestamp += (uint32_t)(pid->dt * 1.0e6f + 0.5f); // us
 #else
   uint32_t current_timestamp = dwt_get_ticks_us();
   if (pid->timestamp == 0) {
