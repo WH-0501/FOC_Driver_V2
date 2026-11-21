@@ -138,6 +138,38 @@ SweepPoint measureSweep(double hz, const std::vector<SweepSample> &s) {
       : "有效";
   return p;
 }
+QString sweepAbortMessage(const QJsonObject &o) {
+  const int flags=o["flags"].toInt(), reason=o["motion_reason"].toInt();
+  QString detail;
+  if(flags&0x10) {
+    if(reason==18 || reason==19) {
+      const double value=o["motion_value"].toDouble(), limit=o["motion_limit"].toDouble();
+      if(reason==18)
+        detail=QString("电机轴位移越界：相对起点 %1 rad（%2°），绝对值上限 %3 rad（%4°）")
+          .arg(value,0,'g',7).arg(value*180/std::numbers::pi,0,'f',2)
+          .arg(limit,0,'g',7).arg(limit*180/std::numbers::pi,0,'f',2);
+      else
+        detail=QString("电机轴速度越界：实际 %1 rad/s（%2 RPM），绝对值上限 %3 rad/s（%4 RPM）")
+          .arg(value,0,'g',7).arg(value*60/(2*std::numbers::pi),0,'f',2)
+          .arg(limit,0,'g',7).arg(limit*60/(2*std::numbers::pi),0,'f',2);
+      if(o["method"].toInt()==2)
+        detail+=QString(" · 触发频率 %1 Hz（第 %2/%3 点）").arg(o["motion_hz"].toDouble(),0,'g',7)
+          .arg(o["motion_index"].toInt()+1).arg(o["count"].toInt());
+      else detail+=" · 多正弦并行激励（无单一触发频率）";
+    } else detail=o["motion_diagnostic_invalid"].toBool()
+        ? "运动保护：诊断扩展数据无效，无法区分速度或位移越界"
+        : "运动保护：速度或位移越界（固件未提供详细诊断）";
+  } else if(flags&4) {
+    detail=o["timing_reason"].toInt()==1 ? "采样周期间隔异常"
+        : o["timing_reason"].toInt()==2 ? "FOC 执行耗时超限" : "采样时序或执行耗时异常";
+    if(o.contains("failure_sample"))detail+=QString(" · 时序异常采样计数 %1").arg(o["failure_sample"].toDouble(),0,'f',0);
+  } else if(flags&2) detail="电流、电压或温度限制介入";
+  else if(flags&8) detail="外部控制命令中止扫频";
+  else if(flags&32) detail="反馈出现非有限值";
+  else detail="停止或运行条件变化";
+  return QString("设备中止：%1 · flags=0x%2 · 中止前已执行 %3 个采样周期")
+      .arg(detail).arg(flags,0,16).arg(o["samples"].toDouble(),0,'f',0);
+}
 QString sweepBandwidth(const std::vector<SweepPoint> &p) {
   if (p.size() < 3 || !p[0].valid || !p[1].valid)
     return "未测得带宽：需要至少 3 个频点及有效低频基准";

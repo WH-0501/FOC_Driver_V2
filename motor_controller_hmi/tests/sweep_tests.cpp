@@ -4,10 +4,45 @@
 #include <cmath>
 #include <numbers>
 #include <random>
+#include <QtEndian>
+#include <cstring>
+#include <limits>
 using namespace mt;
 class SweepTests : public QObject {
   Q_OBJECT
 private slots:
+  void motionAbortDiagnostics() {
+    QByteArray p(62,0);p[0]=1;p[2]=3;p[3]=2;p[6]=16;p[15]=char(159);p[17]=16;
+    p[27]=char(0xa5);p[31]=char(159);p[38]=char(0xa6);p[39]=1;
+    p[40]=19;p[41]=char(0xa8);p[42]=1;p[43]=0;
+    auto put=[&](int offset,float value){quint32 bits;memcpy(&bits,&value,4);qToBigEndian<quint32>(bits,p.data()+offset);};
+    put(44,-5.25f);put(48,5);put(52,20);
+    auto o=response(0xbd,p,Version::V2);
+    QVERIFY(o["valid"].toBool());QCOMPARE(o["motion_reason"].toInt(),19);
+    QCOMPARE(o["motion_value"].toDouble(),-5.25);QCOMPARE(o["motion_limit"].toDouble(),5.0);
+    QCOMPARE(o["motion_hz"].toDouble(),20.0);
+    auto message=sweepAbortMessage(o);
+    QVERIFY(message.contains("速度越界"));QVERIFY(message.contains("-5.25 rad/s"));
+    QVERIFY(message.contains("20 Hz"));QVERIFY(message.contains("第 1/16 点"));
+    QVERIFY(message.contains("159 个采样周期"));QVERIFY(!message.contains("异常位置"));
+    p[40]=18;p[43]=2;put(44,-.5f);put(48,.5f);put(52,588.2353f);
+    o=response(0xbd,p,Version::V2);message=sweepAbortMessage(o);
+    QVERIFY(message.contains("位移越界"));QVERIFY(message.contains("相对起点 -0.5 rad"));
+    QVERIFY(message.contains("第 3/16 点"));QVERIFY(message.contains("588.235"));
+    p[3]=1;p[43]=char(255);put(52,0);
+    message=sweepAbortMessage(response(0xbd,p,Version::V2));
+    QVERIFY(message.contains("多正弦并行"));QVERIFY(!message.contains("触发频率 0"));
+    QVERIFY(!response(0xbd,p.left(40),Version::V2).contains("motion_reason"));
+    message=sweepAbortMessage(response(0xbd,p.left(40),Version::V2));
+    QVERIFY(message.contains("固件未提供详细诊断"));QVERIFY(!message.contains("异常位置"));
+    p[42]=2;QVERIFY(!response(0xbd,p,Version::V2).contains("motion_reason"));p[42]=1;
+    p[39]=5;QVERIFY(!response(0xbd,p,Version::V2).contains("motion_reason"));p[39]=1;
+    put(44,std::numeric_limits<float>::quiet_NaN());
+    o=response(0xbd,p,Version::V2);QVERIFY(o["valid"].toBool());
+    QVERIFY(o["motion_diagnostic_invalid"].toBool());QVERIFY(!o.contains("motion_value"));
+    QVERIFY(sweepAbortMessage(o).contains("诊断扩展数据无效"));
+    put(44,5.25f);p[2]=1;QVERIFY(!response(0xbd,p,Version::V2).contains("motion_reason"));
+  }
   void deviceStartRejectionDetail() {
     // 48 effective bytes plus CAN-FD padding, 75.25 C in big-endian binary32.
     QByteArray p(62,0);p[0]=1;p[1]=1;p[38]=char(0xa6);p[39]=1;

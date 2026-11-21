@@ -402,6 +402,19 @@ QJsonObject response(quint8 c, const QByteArray &p, Version) {
                     o["peak_cycles"]=double(qFromBigEndian<quint32>(p.constData()+50));
                 }}
         }
+        if(c!=0xbe && o["ok"].toBool() && o["state"].toInt()==3 && (o["flags"].toInt()&0x10) &&
+           p.size()>=56 && quint8(p[38])==0xa6 && p[39]==1 && quint8(p[41])==0xa8 && p[42]==1) {
+            const int reason=quint8(p[40]), index=quint8(p[43]);
+            float values[3];
+            for(int i=0;i<3;++i){quint32 bits=qFromBigEndian<quint32>(p.constData()+44+4*i);memcpy(&values[i],&bits,4);}
+            const bool pointValid=(o["method"].toInt()==2 && index<o["count"].toInt() && values[2]>0) ||
+                                  (o["method"].toInt()==1 && index==255 && values[2]==0);
+            if((reason==18 || reason==19) && std::isfinite(values[0]) && std::isfinite(values[1]) &&
+               std::isfinite(values[2]) && values[1]>0 && pointValid) {
+                o["motion_reason"]=reason;o["motion_index"]=index;
+                o["motion_value"]=values[0];o["motion_limit"]=values[1];o["motion_hz"]=values[2];
+            } else o["motion_diagnostic_invalid"]=true;
+        }
         o["valid"]=true;
         return o;
     }

@@ -18,7 +18,7 @@ static void write_float(uint8_t *p, float f)
 bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
                            uint8_t length, void (*reply)(uint8_t, const uint8_t *, uint8_t))
 {
-  uint8_t out[48] = {1u, 0u};
+  uint8_t out[56] = {1u, 0u};
   foc_sweep_rejection_t rejection = {0u, 0.0f};
   foc_sweep_status_t s;
   if (cmd < SWEEP_CMD_CONTROL || cmd > SWEEP_CMD_RESULT) return false;
@@ -63,6 +63,15 @@ bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
       out[40] = rejection.reason; out[41] = 0xa7; out[42] = 1;
       write_float(out + 44, rejection.value);
       reply(cmd, out, 48u); /* only failed starts; successful/status frames unchanged */
+    } else if (!out[1] && s.motion_reason) {
+      /* A8/1 extends the unchanged 40-byte A6/1 status. Only motion aborts
+       * carry it; old hosts ignore the tail. 56+2 bytes fit CAN-FD DLC 64. */
+      out[40] = s.motion_reason; out[41] = 0xa8; out[42] = 1;
+      out[43] = s.motion_index;
+      write_float(out + 44, s.motion_value);
+      write_float(out + 48, s.motion_limit);
+      write_float(out + 52, s.motion_hz);
+      reply(cmd, out, 56u);
     } else reply(cmd, out, 40u);
   }
   return true;

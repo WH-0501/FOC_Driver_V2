@@ -19,8 +19,10 @@ static float origin, peak;
 static struct {
   uint16_t interval_min_us, interval_max_us, interval_last_us;
   uint16_t sense_max_us, control_max_us, engine_max_us;
-  uint32_t failure_sample;
-  uint8_t timing_reason;
+  /* Aborted engine.samples already retains the failure sample count. Reuse
+   * that duplicate storage and structure padding: still 20 bytes total. */
+  float motion_value;
+  uint8_t timing_reason, motion_reason;
 } timing;
 static uint16_t bounded_us(uint32_t us) { return (uint16_t)(us > 65535u ? 65535u : us); }
 
@@ -61,6 +63,25 @@ static void finish(motor_handle_t *m, unsigned flags)
   m->ref.iq = 0.0f;
   if (m->fsm != STATE_FAULT && !m->fault.latched) foc_fsm_next_state(m, STATE_IDLE);
   motor_disarm(m);
+}
+/* Cold abort path only: snapshot BEFORE disarm; no work added to the normal
+ * measurement guard. Travel has precedence when both bounds are exceeded. */
+#if defined(__CC_ARM)
+__attribute__((noinline))
+#endif
+static void finish_guard(motor_handle_t *m, unsigned flags)
+{
+  if (flags == SWEEP_MOTION) {
+    float travel = m->state.shaft.position_rad - origin;
+    if (fabsf(travel) >= FOC_SWEEP_MAX_TRAVEL_RAD) {
+      timing.motion_reason = SWEEP_REJECT_TRAVEL;
+      timing.motion_value = travel;
+    } else {
+      timing.motion_reason = SWEEP_REJECT_SPEED;
+      timing.motion_value = m->state.shaft.velocity_rad_s;
+    }
+  }
+  finish(m, flags);
 }
 static int reject_start(foc_sweep_rejection_t *out, int code, unsigned reason, float value)
 {
@@ -202,13 +223,13 @@ void foc_sweep_run_isr(motor_handle_t *m, motor_runtime_t *rt, uint32_t start_ti
     if (!timing.interval_min_us || interval < timing.interval_min_us) timing.interval_min_us = bounded_us(interval);
     if (interval > timing.interval_max_us) timing.interval_max_us = bounded_us(interval);
     if (interval < period * 0.8f || interval > period * 1.2f) {
-      timing.timing_reason = 1; timing.failure_sample = engine.samples;
+      timing.timing_reason = 1;
       finish(m, SWEEP_TIMING); return;
     }
   }
   previous_ticks = start_ticks; have_previous = true;
   guard = measurement_guard(m);
-  if (guard) { finish(m, guard); return; }
+  if (guard) { finish_guard(m, guard); return; }
   engine_ticks = dwt_get_ticks();
   reference = sweep_engine_step(&engine, m->state.i_q);
   us = dwt_elapsed_us(engine_ticks, dwt_get_ticks());
@@ -232,7 +253,7 @@ void foc_sweep_run_isr(motor_handle_t *m, motor_runtime_t *rt, uint32_t start_ti
   us = dwt_elapsed_us(start_ticks, end_ticks);
   if (us > max_us) max_us = us;
   if (us > (1000000.0f / (float)FOC_CURRENT_LOOP_FS_HZ) * 0.9f) {
-    timing.timing_reason = 2; timing.failure_sample = engine.samples;
+    timing.timing_reason = 2;
     finish(m, SWEEP_TIMING);
   } else if (engine.state == SWEEP_DONE) finish(m, 0u);
 }
@@ -248,9 +269,21 @@ void foc_sweep_status(foc_sweep_status_t *out)
   out->sample_hz = (uint32_t)engine.sample_hz; out->samples = engine.samples;
   out->interval_min_us = timing.interval_min_us; out->interval_max_us = timing.interval_max_us;
   out->interval_last_us = timing.interval_last_us; out->timing_reason = timing.timing_reason;
-  out->failure_sample = timing.failure_sample; out->sense_max_us = timing.sense_max_us;
+  out->failure_sample = engine.state == SWEEP_ABORTED ? engine.samples : 0u;
+  out->sense_max_us = timing.sense_max_us;
   out->control_max_us = timing.control_max_us; out->engine_max_us = timing.engine_max_us;
+  out->motion_reason = engine.state == SWEEP_ABORTED && (engine.flags & SWEEP_MOTION)
+      ? timing.motion_reason : 0u;
+  out->motion_value = out->motion_reason ? timing.motion_value : 0.0f;
+  out->motion_index = out->motion_reason && engine.method == SWEEP_STEPPED_SINE
+      ? engine.index : 255u;
   __set_PRIMASK(irq);
+  /* No division under IRQ mask. A stopped engine is immutable until the next
+   * foreground start. Multisine has simultaneous tones, not one current Hz. */
+  out->motion_limit = out->motion_reason == SWEEP_REJECT_TRAVEL ? FOC_SWEEP_MAX_TRAVEL_RAD
+      : out->motion_reason == SWEEP_REJECT_SPEED ? FOC_SWEEP_MAX_SPEED_RAD_S : 0.0f;
+  out->motion_hz = out->motion_index < out->count
+      ? sweep_engine_frequency(&engine, out->motion_index) : 0.0f;
 }
 int foc_sweep_result(uint16_t run, unsigned index, sweep_result_t *out)
 {

@@ -107,6 +107,7 @@ class SweepDialog : public QDialog {
   quint64 firstToken = 0, lastToken = 0;
   bool running = false;
   QString source = "尚无数据";
+  QString deviceAbortDetail;
   double nextTick = 0;
   QByteArray deviceRequest(int action) {
     QByteArray p; p.append(char(1));p.append(char(action));p+=be16(runId);
@@ -119,7 +120,7 @@ class SweepDialog : public QDialog {
     }
     if(startHz->value()>=endHz->value() || (startHz->value()>40 && count->value()<4) || (methodChoice->currentIndex()==1 && std::floor(endHz->value()/20)-std::ceil(startHz->value()/20)+1<count->value())) {status->setText("频段过窄或频点过多：快速法使用 20 Hz 整数栅格");return;}
     runId=quint16(QRandomGenerator::global()->bounded(1,65536));
-    results.clear();raw.clear();deviceMode=deviceData=true;running=true;nextPoint=0;deviceCount=0;
+    results.clear();raw.clear();deviceAbortDetail.clear();deviceMode=deviceData=true;running=true;nextPoint=0;deviceCount=0;
     clock.start();start->setEnabled(false);import->setEnabled(false);methodChoice->setEnabled(false);
     startHz->setEnabled(false);endHz->setEnabled(false);count->setEnabled(false);amplitude->setEnabled(false);
     source="设备同步采样 · 闭环给定→实际 Iq · H1 频响 / 多段相干性 · 未收到结果";
@@ -149,8 +150,9 @@ class SweepDialog : public QDialog {
       if(o.contains("timing_reason") && o["interval_max_us"].toInt()==0)source+=QString(" · 周期间隔：尚无相邻样本");
       else if(o.contains("timing_reason"))source+=QString(" · 周期间隔 %1–%2 μs · 最后 %3 μs").arg(o["interval_min_us"].toInt()).arg(o["interval_max_us"].toInt()).arg(o["interval_last_us"].toInt());
       if(state==3 || o["flags"].toInt()) {
-        QString reason=o["timing_reason"].toInt()==1?"采样周期间隔异常":o["timing_reason"].toInt()==2?"FOC 执行耗时超限":"保护或停止";
-        finish(QString("设备中止：%1 · flags=0x%2 · 已采集 %3 点 · 异常位置 %4").arg(reason).arg(o["flags"].toInt(),0,16).arg(o["samples"].toInt()).arg(o["failure_sample"].toInt()));return;
+        deviceAbortDetail=sweepAbortMessage(o);
+        source+="\n"+deviceAbortDetail;
+        finish(deviceAbortDetail);return;
       }
       if(state!=2)return;
     }else{
@@ -393,7 +395,7 @@ class SweepDialog : public QDialog {
     render();
   }
   void save() {
-    if (results.empty()) {
+    if (results.empty() && !(deviceData && !deviceAbortDetail.isEmpty())) {
       status->setText("尚无扫频数据");
       return;
     }

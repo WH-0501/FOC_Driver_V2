@@ -16,7 +16,7 @@ static unsigned armed, disarms, applied, mask, force_limit, work_us;
 static unsigned dwt_reads, irq_masks;
 static uint32_t ticks;
 static float y, last_command;
-static uint8_t response[48], response_cmd, response_length;
+static uint8_t response[64], response_cmd, response_length;
 motor_handle_t *motor_get_handler(void) { return &motor; }
 motor_runtime_t *motor_runtime(motor_handle_t *m) { return m == &motor ? &runtime : NULL; }
 bool motor_is_armed(const motor_handle_t *m) { return m == &motor && armed != 0u; }
@@ -57,7 +57,13 @@ static void foc_speed_open_control(motor_handle_t *m, float target) { (void)m; (
 #include "sweep_foc.inc"
 
 static void reply(uint8_t cmd, const uint8_t *data, uint8_t length)
-{ response_cmd = cmd; response_length = length; memcpy(response, data, length); }
+{ assert(length <= sizeof(response)); response_cmd = cmd; response_length = length; memcpy(response, data, length); }
+static float wire_float(unsigned offset)
+{
+  uint32_t bits = ((uint32_t)response[offset] << 24) | ((uint32_t)response[offset+1] << 16)
+      | ((uint32_t)response[offset+2] << 8) | response[offset+3];
+  float value; memcpy(&value, &bits, 4); return value;
+}
 static foc_sweep_status_t status(void)
 { foc_sweep_status_t s; foc_sweep_status(&s); return s; }
 static void reset_motor(void)
@@ -87,6 +93,52 @@ static void aborted(unsigned flags)
   assert(s.state == SWEEP_ABORTED && (s.flags & flags));
   assert(!armed && motor.ref.iq == 0 && mask == 0);
   tick(); assert(!armed); /* no FSM re-arm */
+}
+static void motion_diagnostics(void)
+{
+  sweep_config_t cfg = {SWEEP_STEPPED_SINE, 16, 600, 1600, .1f, FOC_CURRENT_LOOP_FS_HZ};
+  foc_sweep_status_t s;
+  unsigned i;
+  reset_motor(); assert(!foc_sweep_start(&motor, &cfg, 0x4567));
+  for (i=0; i<159; ++i) tick();
+  motor.state.shaft.velocity_rad_s = -5.25f; tick(); aborted(SWEEP_MOTION);
+  s=status(); assert(s.motion_reason == SWEEP_REJECT_SPEED);
+  assert(s.motion_value == -5.25f && s.motion_limit == 5.0f);
+  assert(s.motion_hz == 20 && s.motion_index == 0 && s.failure_sample == 159);
+  /* Feedback after disarm must not overwrite the latched trigger value. */
+  motor.state.shaft.velocity_rad_s = 0; motor.state.shaft.position_rad = 0;
+  assert(sweep_protocol_handle(&motor, 0xbd, NULL, 0, reply));
+  assert(response_length == 56 && response[1] == 0 && response[2] == SWEEP_ABORTED);
+  assert(response[40] == SWEEP_REJECT_SPEED && response[41] == 0xa8 && response[42] == 1 && response[43] == 0);
+  assert(wire_float(44) == -5.25f && wire_float(48) == 5 && wire_float(52) == 20);
+  foc_sweep_stop(&motor, SWEEP_STOP); assert(status().motion_value == -5.25f);
+
+  reset_motor(); motor.state.shaft.position_rad = 10;
+  assert(!foc_sweep_start(&motor, &cfg, 0x4568));
+  assert(status().motion_reason == 0 && status().failure_sample == 0);
+  assert(sweep_protocol_handle(&motor, 0xbd, NULL, 0, reply) && response_length == 40);
+  /* First two low-frequency anchors still consume 30000 samples; no window change. */
+  for (i=0; i<30000; ++i) tick();
+  motor.state.shaft.position_rad = 9.5f;
+  motor.state.shaft.velocity_rad_s = 6; /* both exceed: travel takes precedence */
+  tick(); aborted(SWEEP_MOTION); s=status();
+  assert(s.motion_reason == SWEEP_REJECT_TRAVEL && s.motion_value == -.5f && s.motion_limit == .5f);
+  assert(s.motion_index == 2 && fabsf(s.motion_hz - 20000.0f/34) < .001f && s.failure_sample == 30000);
+
+  reset_motor(); start(); tick(); motor.state.shaft.velocity_rad_s = 5; tick(); aborted(SWEEP_MOTION);
+  assert(sweep_protocol_handle(&motor, 0xbd, NULL, 0, reply));
+  assert(response_length == 56 && response[43] == 255 && wire_float(52) == 0);
+  assert(status().motion_reason == SWEEP_REJECT_SPEED);
+
+  reset_motor(); start(); tick();
+  motor.state.shaft.position_rad = .499f; motor.state.shaft.velocity_rad_s = 4.999f; tick();
+  assert(status().state == SWEEP_RUNNING && !status().motion_reason && armed);
+  motor.state.shaft.position_rad = .5f; tick(); aborted(SWEEP_MOTION);
+  assert(status().motion_reason == SWEEP_REJECT_TRAVEL);
+  reset_motor(); start(); tick(); ticks += 9000; tick(); aborted(SWEEP_TIMING);
+  assert(status().motion_reason == 0 && status().failure_sample == 1);
+  assert(sweep_protocol_handle(&motor, 0xbd, NULL, 0, reply) && response_length == 40);
+  puts("PASS motion snapshot: signed value, relative travel, exact bounds, first/high-frequency point, multisine, reset and legacy timing");
 }
 int main(void)
 {
@@ -171,5 +223,6 @@ int main(void)
   /* Inactive diagnostic build: normal reference and no sweep timer reads/IRQ work. */
   assert(mask == 0);
   puts("PASS real FOC dispatch, guard/limits, cancellation, final-sample rejection, wrap, wire v1, session IDs and passive status");
+  motion_diagnostics();
   return 0;
 }

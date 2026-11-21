@@ -1,5 +1,6 @@
 #pragma once
 #include <QString>
+#include <QJsonObject>
 #include <vector>
 namespace mt {
 struct SweepSample {
@@ -16,4 +17,5 @@ SweepPoint measureSweep(double hz, const std::vector<SweepSample> &samples);
 // Relative to the mean of the first two valid, flat low-frequency points.
 // Never bridge rejected points or extrapolate an unmeasured crossing.
 QString sweepBandwidth(const std::vector<SweepPoint> &points);
+QString sweepAbortMessage(const QJsonObject &status);
 } // namespace mt

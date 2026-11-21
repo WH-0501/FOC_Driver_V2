@@ -27,7 +27,8 @@ typedef struct {
   uint16_t sense_max_us, control_max_us, engine_max_us;
   uint32_t failure_sample;
   uint8_t timing_reason;
-
+  uint8_t motion_reason, motion_index; /* 18 travel / 19 speed; 255 = multisine */
+  float motion_value, motion_limit, motion_hz;
 } foc_sweep_status_t;
 
 #if FOC_SWEEP_ENABLED
