@@ -1,5 +1,6 @@
 #include <math.h>
 #include "can_fd_custom.h"
+#include "sweep/sweep_protocol.h"
 #include "comm.h"
 #include "can_fd_custom_codec.h"
 #include "can_fd_custom_iap.h"
@@ -197,6 +198,7 @@ static void can_fd_custom_apply_vel(motor_handle_t *m, int16_t vel_raw)
 static void can_fd_custom_apply_curr(motor_handle_t *m, int16_t curr_ma)
 {
   /// TODO: 根据上层传递的参数类型,当前为电流,直接赋值 iq,若为 扭矩值, 则赋值 torque_nm
+  foc_sweep_stop(m, SWEEP_COMMAND);
   m->ref.iq = (float)curr_ma / 1000.0f;
 }
 
@@ -594,6 +596,8 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
   {
     return;
   }
+
+  if (s_request_unicast && sweep_protocol_handle(m, cmd, payload, payload_len, can_fd_custom_reply)) return;
 
   switch (cmd)
   {
@@ -1113,6 +1117,7 @@ static void can_fd_custom_on_rx(const comm_frame_t *frame)
   {
     if (cmd >= CAN_FD_CMD_IAP_ENTER)
     {
+      foc_sweep_stop(s_motor, SWEEP_STOP);
       can_fd_iap_on_rx(frame);
     }
     return;
@@ -1120,12 +1125,14 @@ static void can_fd_custom_on_rx(const comm_frame_t *frame)
 
   if (cmd >= CAN_FD_CMD_IAP_ENTER)
   {
+    foc_sweep_stop(s_motor, SWEEP_STOP);
     can_fd_iap_on_rx(frame);
     return;
   }
 
   if (cmd == CAN_FD_CMD_VERIFY_ELECTRICAL && frame->id != s_node_id) return;
   if ((cmd == CAN_FD_CMD_GET_SPEED_LIMITS || cmd == CAN_FD_CMD_SET_CURRENT_SOFT_SPEED) && frame->id != s_node_id) return;
+  if (cmd >= SWEEP_CMD_CONTROL && cmd <= SWEEP_CMD_RESULT && frame->id != s_node_id) return;
   s_request_unicast = (frame->id == s_node_id);
   if (cmd == CAN_FD_CMD_COMMAND_ACK) return; /* response-only; no ACK loops */
   can_fd_custom_handle_command(cmd, payload, payload_len);

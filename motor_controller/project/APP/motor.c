@@ -1,4 +1,5 @@
 #include "motor.h"
+#include "sweep/foc_sweep.h"
 #include "control_mode.h"
 #include "encoder.h"
 #include "foc_fault.h"
@@ -72,6 +73,7 @@ void motor_disarm(motor_handle_t *m)
     return;
   }
 
+  foc_sweep_on_disarm(m);
   m->out.pwm_enable = 0u;
   motor_driver_disarm(&s_motor_driver);
 }
@@ -83,6 +85,7 @@ void motor_shutdown(motor_handle_t *m)
     return;
   }
 
+  foc_sweep_on_disarm(m);
   m->out.pwm_enable = 0u;
   motor_driver_shutdown(&s_motor_driver);
 }

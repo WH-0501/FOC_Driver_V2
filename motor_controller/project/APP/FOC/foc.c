@@ -1,4 +1,5 @@
 #include "foc.h"
+#include "sweep/foc_sweep.h"
 #include "common.h"
 #include "foc_modulation.h"
 #include "board.h"
@@ -442,7 +443,9 @@ void foc_control_loop(motor_handle_t *m)
   if (m->fsm == STATE_RUNNING)
   {
     uint32_t ctrl_start_ticks = profile_cst ? dwt_get_ticks() : 0u;
-    foc_control_run(m, rt, outer_loop_skip);
+    /* Single optional dispatch gate; normal PID/modulation contain no test hooks. */
+    if (foc_sweep_is_active(m)) foc_sweep_run_isr(m, rt, loop_start_ticks, foc_current);
+    else foc_control_run(m, rt, outer_loop_skip);
     if (rt != NULL && profile_cst)
     {
       ctrl_ticks = dwt_get_ticks() - ctrl_start_ticks;

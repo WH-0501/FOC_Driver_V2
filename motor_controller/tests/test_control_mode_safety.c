@@ -6,6 +6,10 @@
 #include "foc_fsm.h"
 #include "foc_fault.h"
 #include "common.h"
+/* This suite checks the original control behavior with the optional feature
+ * compiled out. run_sweep_tests.py covers the enabled real FOC dispatch. */
+#define FOC_SWEEP_ENABLED 0
+#include "sweep/foc_sweep.h"
 
 static motor_handle_t motor;
 static motor_runtime_t runtime;
@@ -39,12 +43,7 @@ void foc_sense_update(motor_handle_t *m) {
 }
 uint32_t foc_sense_update_timed(motor_handle_t *m, foc_sense_marks_t *marks, bool outer_tick) {
   sensed_outer=outer_tick;
-  if (marks && FOC_PROFILE_CST_OUTER == 2) {
-    assert(outer_tick);
-    marks->joint_position_ticks = 37u;
-    marks->velocity_ticks = 211u;
-  }
-  if (!marks || FOC_PROFILE_CST_OUTER == 2) {
+  if (!marks) {
     uint32_t start = test_ticks;
     foc_sense_update(m);
     test_ticks += 100u;
@@ -213,24 +212,15 @@ int main(void) {
     reset(); motor.ctrl_mode=CTRL_MODE_CST; motor.fsm=STATE_RUNNING; armed=1;
     runtime.current_soft_speed_rad_s=100.0f; motor.config.limits.iq_limit=1.0f;
   }
-  else if (FOC_PROFILE_CST_OUTER == 2)
-  {
-    assert(sensed_outer && runtime.foc_pos_loop_us == 37u && runtime.foc_vel_loop_us == 211u);
-    for (unsigned i = 1; i <= FW_FOC_OUTER_LOOP_DIV; ++i) {
-      foc_control_loop(&motor);
-      assert(sensed_outer == (i == FW_FOC_OUTER_LOOP_DIV));
-      assert(runtime.foc_pos_loop_us == (sensed_outer ? 37u : 0u));
-      assert(runtime.foc_vel_loop_us == (sensed_outer ? 211u : 0u));
-    }
-  }
   else
   {
-    assert(runtime.foc_ctrl_loop_us == 5u && runtime.foc_control_loop_us == 10u);
-    assert(runtime.foc_sense_update_us == 2u && runtime.foc_vel_loop_us == 2u);
-    assert(sensed_outer && runtime.foc_pos_loop_us == 1u);
+    /* Profiling disabled in current firmware: no control-stage clock reads. */
+    assert(runtime.foc_ctrl_loop_us == 0u && runtime.foc_control_loop_us == 8u);
+    assert(runtime.foc_sense_update_us == 2u && runtime.foc_vel_loop_us == 0u);
+    assert(sensed_outer && runtime.foc_pos_loop_us == 0u);
     foc_control_loop(&motor);
-    assert(runtime.foc_pos_loop_us == (uint32_t)sensed_outer && sensed_outer == (FW_FOC_OUTER_LOOP_DIV == 1u));
-    assert(runtime.foc_vel_loop_us == 2u);
+    assert(runtime.foc_pos_loop_us == 0u && sensed_outer == (FW_FOC_OUTER_LOOP_DIV == 1u));
+    assert(runtime.foc_vel_loop_us == 0u);
   }
   can_fd_custom_apply_curr(&motor,-300);foc_control_loop(&motor);assert(applied_iq==-.3f);
   foc_control_loop(&motor);assert(applied_iq==-.3f);

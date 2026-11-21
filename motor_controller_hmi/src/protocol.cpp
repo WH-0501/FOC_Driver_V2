@@ -342,6 +342,33 @@ bool hasResult(int c) {
     return c == 0x39 || c == 0x40 || requiresDisabled(c) || c == 0x4f || c == 0xb8 || c == 0xad ||
            c == 0xaf || c == 0xb0 || (c>=0xbc && c<=0xbe);
 }
+static QString sweepRejectionMessage(unsigned reason, float value) {
+    const QString v = std::isfinite(value) ? QString::number(value, 'g', 7) : QString("非有限值");
+    switch (reason) {
+    case 1: return "已有扫频正在运行";
+    case 2: return "电机句柄不匹配";
+    case 3: return QString("电机未处于运行状态（FSM=%1）").arg(v);
+    case 4: return QString("控制模式不是 CST（mode=%1）").arg(v);
+    case 5: return "硬件未使能或 PWM 未开启";
+    case 6: return "电流零偏校准未完成";
+    case 7: return QString("存在故障或锁存故障（bits=%1）").arg(v);
+    case 8: return QString("电流目标未清零（Iq_ref=%1 A）").arg(v);
+    case 9: return "请求、会话号或采样率不合法";
+    case 10: return QString("Iq 限值无效或激励超过限值的 80%（Iq_limit=%1 A）").arg(v);
+    case 11: return QString("启动轴速超过 1 rad/s（实际 %1 rad/s）").arg(v);
+    case 12: return QString("q 轴 PID 电压限值无效（%1 V）").arg(v);
+    case 13: return QString("d 轴 PID 电压限值无效（%1 V）").arg(v);
+    case 14: return QString("q 轴 PID 输出斜率限制未关闭（ramp=%1）").arg(v);
+    case 15: return QString("d 轴 PID 输出斜率限制未关闭（ramp=%1）").arg(v);
+    case 16: return "扫频参数或量化后的独立频点不合法";
+    case 17: return "位置、速度、电流或温度反馈含非有限值";
+    case 18: return QString("轴位移达到扫频边界（%1 rad）").arg(v);
+    case 19: return QString("轴速度达到扫频边界（%1 rad/s）").arg(v);
+    case 20: return QString("板载温度达到扫频上限（%1 °C）").arg(v);
+    case 21: return QString("电机温度达到扫频上限（%1 °C，非右侧 MCU 温度）").arg(v);
+    default: return QString("未知启动拒绝原因 %1（值 %2）").arg(reason).arg(v);
+    }
+}
 QJsonObject response(quint8 c, const QByteArray &p, Version) {
     QJsonObject o;
     o["command"] = c;
@@ -352,7 +379,15 @@ QJsonObject response(quint8 c, const QByteArray &p, Version) {
         const int size=c==0xbe?34:20;
         if(p.size()<size || p[0]!=1)return {{"valid",false}};
         o["ok"]=p[1]==0;o["error"]=quint8(p[1]);
-        o["message"]=p[1]==0?"设备辨识应答":"设备拒绝辨识：检查 CST/使能/零给定/幅值/频点参数";
+        o["message"]=p[1]==0?"设备辨识应答":p[1]==3?"固件未编译扫频功能（FOC_SWEEP_ENABLED=0），请使用启用扫频的诊断固件":"设备拒绝辨识：检查 CST/使能/零给定/幅值/频点参数";
+        if(p[1]!=0 && p[1]!=3) o["message"]=QString("设备拒绝辨识（error=%1）：检查 CST/使能/零给定/幅值/频点参数").arg(quint8(p[1]));
+        if(c==0xbc && p[1]!=0 && p.size()>=48 && quint8(p[38])==0xa6 && p[39]==1 && quint8(p[41])==0xa7 && p[42]==1) {
+            const unsigned reason=quint8(p[40]);
+            quint32 bits=qFromBigEndian<quint32>(p.constData()+44);float value;memcpy(&value,&bits,4);
+            o["reject_reason"]=int(reason);
+            if(std::isfinite(value))o["reject_value"]=value;
+            o["message"]=QString("设备拒绝辨识：%1（error=%2 / reason=%3）").arg(sweepRejectionMessage(reason,value)).arg(quint8(p[1])).arg(reason);
+        }
         if(c==0xbe) {
             o["run"]=u16(p,2);o["index"]=quint8(p[4]);o["state"]=quint8(p[5]);o["flags"]=u16(p,6);o["blocks"]=u16(p,32);
             QStringList keys={"hz","input","output","real","imag","coherence"};

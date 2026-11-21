@@ -33,6 +33,12 @@ code = r'''
 #define CAN_FD_CMD_GET_SPEED_LIMITS 0xB5u
 #define CAN_FD_CMD_SET_CURRENT_SOFT_SPEED 0xB6u
 #define CAN_FD_CMD_COMMAND_ACK 0x7Eu
+#define SWEEP_CMD_CONTROL 0xBCu
+#define SWEEP_CMD_RESULT 0xBEu
+#define SWEEP_STOP 1u
+static void *s_motor;
+static unsigned sweep_stops;
+static void foc_sweep_stop(void *m, unsigned reason) {(void)m;assert(reason==SWEEP_STOP);++sweep_stops;}
 typedef struct { uint32_t id; uint8_t len; const uint8_t *data; } comm_frame_t;
 static uint16_t s_node_id=3;
 static unsigned blocked, sent, handled;
@@ -65,6 +71,14 @@ int main(void) {
  assert(s_reply_count==REPLY_QUEUE_DEPTH&&s_reply_drops==1);
  blocked=0;while(s_reply_count)can_fd_custom_flush_reply();
  assert(sent==REPLY_QUEUE_DEPTH+1);
+ for(unsigned cmd=0xbc;cmd<=0xbe;++cmd) {
+   unsigned before=handled;
+   payload[1]=(uint8_t)cmd;f.id=0;can_fd_custom_on_rx(&f);assert(handled==before);
+   f.id=3;can_fd_custom_on_rx(&f);assert(handled==before+1);
+ }
+ payload[1]=CAN_FD_CMD_IAP_ENTER;f.id=CAN_FD_IAP_ID;
+ can_fd_custom_on_rx(&f);assert(sweep_stops==1);
+ f.id=3;can_fd_custom_on_rx(&f);assert(sweep_stops==2);
  puts("PASS command ACK: unicast identity, broadcast suppression, busy retry, copied payload, bounded queue, no ACK loop");
  return 0;
 }

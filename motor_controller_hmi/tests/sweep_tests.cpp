@@ -8,6 +8,38 @@ using namespace mt;
 class SweepTests : public QObject {
   Q_OBJECT
 private slots:
+  void deviceStartRejectionDetail() {
+    // 48 effective bytes plus CAN-FD padding, 75.25 C in big-endian binary32.
+    QByteArray p(62,0);p[0]=1;p[1]=1;p[38]=char(0xa6);p[39]=1;
+    p[40]=21;p[41]=char(0xa7);p[42]=1;p[44]=0x42;p[45]=char(0x96);p[46]=char(0x80);
+    auto o=response(0xbc,p,Version::V2);
+    QVERIFY(o["valid"].toBool());QVERIFY(!o["ok"].toBool());
+    QCOMPARE(o["reject_reason"].toInt(),21);QCOMPARE(o["reject_value"].toDouble(),75.25);
+    QVERIFY(o["message"].toString().contains("电机温度"));
+    QVERIFY(o["message"].toString().contains("75.25"));
+    QVERIFY(!o.contains("encoder_us"));
+    p[40]=char(250);o=response(0xbc,p,Version::V2);
+    QVERIFY(o["message"].toString().contains("未知启动拒绝原因"));
+    QVERIFY(!response(0xbc,p.left(40),Version::V2).contains("reject_reason"));
+    p[39]=5;QVERIFY(!response(0xbc,p,Version::V2).contains("reject_reason"));
+    p[39]=1;p[42]=2;QVERIFY(!response(0xbc,p,Version::V2).contains("reject_reason"));
+  }
+  void deviceFeatureDisabledReply() {
+    QByteArray p(22,0);p[0]=1;p[1]=3;p[4]=0x12;p[5]=0x34;
+    const auto o=response(0xbc,p,Version::V2);
+    QVERIFY(o["valid"].toBool());QVERIFY(!o["ok"].toBool());
+    QCOMPARE(o["run"].toInt(),0x1234);
+    QVERIFY(o["message"].toString().contains("未编译扫频"));
+  }
+  void compactTimingRevisionDecode() {
+    QByteArray p(46,0);p[0]=1;p[2]=2;p[21]=49;p[23]=51;p[25]=50;p[27]=char(0xa5);
+    p[33]=8;p[35]=17;p[37]=4;p[38]=char(0xa6);p[39]=1;
+    const auto o=response(0xbd,p,Version::V2);
+    QVERIFY(o["valid"].toBool());QCOMPARE(o["interval_min_us"].toInt(),49);
+    QCOMPARE(o["interval_max_us"].toInt(),51);QCOMPARE(o["fra_us"].toInt(),4);
+    QCOMPARE(o["control_us"].toInt(),17);QCOMPARE(o["timing_revision"].toInt(),1);
+    QVERIFY(!o.contains("encoder_us"));
+  }
   void timingDiagnosticsDecodeAfterAbort() {
     QByteArray p(46,0);p[0]=1;p[2]=3;p[6]=16;p[15]=1;p[17]=4;p[19]=35;p[21]=75;p[23]=75;p[25]=75;p[26]=1;p[27]=char(0xa5);p[31]=1;
     auto o=response(0xbd,p,Version::V2);QVERIFY(o["valid"].toBool());QCOMPARE(o["max_us"].toInt(),35);QCOMPARE(o["interval_last_us"].toInt(),75);QCOMPARE(o["failure_sample"].toInt(),1);QCOMPARE(o["timing_reason"].toInt(),1);

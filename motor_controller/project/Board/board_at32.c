@@ -365,8 +365,9 @@ void board_get_vbus_and_temp(motor_handle_t *m)
 
   /* ADC2 抢占序列末通道：与电流环解耦，由 foc_sense_poll_vbus 周期调用 */
   s->motor_temp.adc_raw = adc_preempt_conversion_data_get(ADC2, ADC_PREEMPT_CHANNEL_4);
-  s->motor_temp.value =
-      FOC_TEMP_ADC_TO_CELSIUS(s->motor_temp.adc_raw, m->config.temp_adc, m->config.temp);
+  // s->motor_temp.value =
+  //     FOC_TEMP_ADC_TO_CELSIUS(s->motor_temp.adc_raw, m->config.temp_adc, m->config.temp);
+  s->motor_temp.value = 25.0f; // 当前电机未接 NTC. 暂且固定为 25℃
 }
 
 void board_current_loop_irq_handler(void *adc_handle)
