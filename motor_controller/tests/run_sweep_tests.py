@@ -50,8 +50,8 @@ assert 'if (foc_sweep_is_active(m)) foc_sweep_run_isr' in foc
 
 includes = [tests/'sweep_support', tests/'c06_support', app, app/'FOC', root/'project/Board', sweep, work]
 for name, sources in (
-    ('engine', [tests/'test_sweep_engine.c', sweep/'sweep_engine.c']),
-    ('integration', [tests/'test_sweep_integration.c', sweep/'sweep_engine.c',
+    ('engine', [tests/'test_sweep_engine.c', sweep/'sweep_engine.c', sweep/'sweep_chirp.c']),
+    ('integration', [tests/'test_sweep_integration.c', sweep/'sweep_engine.c', sweep/'sweep_chirp.c',
                      sweep/'foc_sweep.c', sweep/'sweep_protocol.c', app/'FOC/foc_fsm.c']),
     ('disabled', [tests/'test_sweep_disabled.c', sweep/'sweep_protocol.c']),
 ):

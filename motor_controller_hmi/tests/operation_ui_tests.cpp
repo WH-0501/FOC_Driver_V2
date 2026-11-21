@@ -74,8 +74,8 @@ class OperationUiTests : public QObject {
         QCOMPARE(rows,3);QVERIFY(hasAmplitude);
         QTRY_VERIFY(!w.session.latest(1)->enabled);
     }
-    void deviceFraCompletesBothMethods() {
-        for(int method:{1,2}) {
+    void deviceFraCompletesAllMethods() {
+        for(int method:{1,2,3}) {
             Window w(false,false,true);w.startDemo();
             QTRY_VERIFY(w.session.telemetryFresh(1));
             w.session.command(1,0x41,QByteArray(1,6));QTRY_COMPARE(w.session.latest(1)->mode,6);
@@ -84,12 +84,18 @@ class OperationUiTests : public QObject {
             QTimer::singleShot(50,&w,[&]{
                 auto d=w.findChild<QDialog*>("sweepDialog");if(!d){QApplication::closeAllWindows();return;}
                 d->findChild<QComboBox*>("sweepMethod")->setCurrentIndex(method);
-                if(method==2){d->findChild<QDoubleSpinBox*>("sweepStartHz")->setValue(300);d->findChild<QDoubleSpinBox*>("sweepEndHz")->setValue(1200);}
+                if(method>=2){d->findChild<QDoubleSpinBox*>("sweepStartHz")->setValue(300);d->findChild<QDoubleSpinBox*>("sweepEndHz")->setValue(1200);}
                 d->findChild<QCheckBox*>("sweepSafe")->setChecked(true);
                 d->findChild<QPushButton*>("startSweep")->click();
                 QTimer::singleShot(method==1?1500:5000,d,[&,d]{
                     auto t=d->findChild<QTableWidget*>();rows=t->rowCount();
                     for(auto label:d->findChildren<QLabel*>())if(label->text().contains("带宽 ≈"))bandwidth=true;
+                    if(method==3 && rows>0) {
+                        QCOMPARE(t->item(0,0)->text().toDouble(),20.0);
+                        QCOMPARE(t->item(1,0)->text().toDouble(),40.0);
+                        QCOMPARE(t->item(0,6)->text().toDouble(),3.0);
+                        QVERIFY(t->item(0,8)->text().contains("Chirp"));
+                    }
                     auto path=qEnvironmentVariable("MOTORTUNE_FRA_PREVIEW");
                     if(!path.isEmpty())d->grab().save(path+QString::number(method)+".png");
                     d->reject();

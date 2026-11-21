@@ -282,7 +282,9 @@ void foc_sweep_status(foc_sweep_status_t *out)
    * foreground start. Multisine has simultaneous tones, not one current Hz. */
   out->motion_limit = out->motion_reason == SWEEP_REJECT_TRAVEL ? FOC_SWEEP_MAX_TRAVEL_RAD
       : out->motion_reason == SWEEP_REJECT_SPEED ? FOC_SWEEP_MAX_SPEED_RAD_S : 0.0f;
-  out->motion_hz = out->motion_index < out->count
+  out->motion_hz = out->motion_reason && engine.method == SWEEP_CHIRP
+      ? sweep_chirp_frequency(&engine.chirp, engine.sample_hz)
+      : out->motion_index < out->count
       ? sweep_engine_frequency(&engine, out->motion_index) : 0.0f;
 }
 int foc_sweep_result(uint16_t run, unsigned index, sweep_result_t *out)

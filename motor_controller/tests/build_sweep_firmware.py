@@ -63,7 +63,7 @@ for entry in target.findall('.//Groups/Group/Files/File'):
 run([a.tool_dir/'armlink.exe', '--cpu=Cortex-M4.fp.sp', '--strict', '--scatter',
      (mdk / target.findtext('.//LDads/ScatterFile')).resolve(), '--map', '--info=sizes,totals',
      '--list', out/'motor_controller.map', '-o', out/'motor_controller.axf', *objects])
-for name in ('foc', 'sweep_engine', 'foc_sweep'):
+for name in ('foc', 'sweep_engine', 'sweep_chirp', 'foc_sweep'):
     if (out/(name+'.o')).exists():
         run([a.tool_dir/'fromelf.exe', '--text', '-c', '--output', out/(name+'.disasm.txt'), out/(name+'.o')])
 for option, suffix in (('--i32combined', 'hex'), ('--bin', 'bin')):

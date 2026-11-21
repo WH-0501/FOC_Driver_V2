@@ -408,7 +408,8 @@ QJsonObject response(quint8 c, const QByteArray &p, Version) {
             float values[3];
             for(int i=0;i<3;++i){quint32 bits=qFromBigEndian<quint32>(p.constData()+44+4*i);memcpy(&values[i],&bits,4);}
             const bool pointValid=(o["method"].toInt()==2 && index<o["count"].toInt() && values[2]>0) ||
-                                  (o["method"].toInt()==1 && index==255 && values[2]==0);
+                                  (o["method"].toInt()==1 && index==255 && values[2]==0) ||
+                                  (o["method"].toInt()==3 && index==255 && values[2]>0);
             if((reason==18 || reason==19) && std::isfinite(values[0]) && std::isfinite(values[1]) &&
                std::isfinite(values[2]) && values[1]>0 && pointValid) {
                 o["motion_reason"]=reason;o["motion_index"]=index;

@@ -51,7 +51,17 @@ print('PASS default FOC object has no sweep references')
 
 disasm = (a.enabled_build / 'sweep_engine.disasm.txt').read_text()
 sections = re.split(r"\*\* Section #\d+ '([^']+)'[^\n]*\n", disasm)
-for section in ('i.sweep_engine_step', 'i.reset_phase'):
+for section in ('i.sweep_engine_step', 'i.reset_phase', 'i.step_chirp'):
+    if section not in sections: continue  # compiler may inline the helper
     body = sections[sections.index(section) + 1]
     assert not re.search(r'VDIV|__aeabi_|__hardfp_|\b(?:sinf|cosf|powf|sqrtf)\b', body), section
 print('PASS engine ISR step/phase reset: no division, software double, or libm calls')
+
+chirp = (a.enabled_build / 'sweep_chirp.disasm.txt').read_text()
+parts = re.split(r"\*\* Section #\d+ '([^']+)'[^\n]*\n", chirp)
+for section in ('i.sweep_chirp_step', 'i.sweep_chirp_reset', 'i.sine_phase'):
+    if section not in parts:  # helper may be inlined by ARMCC
+        continue
+    body = parts[parts.index(section)+1]
+    assert not re.search(r'VDIV|__aeabi_|__hardfp_|\b(?:sinf|cosf|powf|sqrtf)\b', body), section
+print('PASS chirp ISR DDS/envelope/reset: no division, software double, or libm calls')

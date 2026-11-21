@@ -32,6 +32,11 @@ private slots:
     p[3]=1;p[43]=char(255);put(52,0);
     message=sweepAbortMessage(response(0xbd,p,Version::V2));
     QVERIFY(message.contains("多正弦并行"));QVERIFY(!message.contains("触发频率 0"));
+    p[3]=3;put(52,333.25f);
+    o=response(0xbd,p,Version::V2);
+    QVERIFY(o["valid"].toBool());QCOMPARE(o["motion_hz"].toDouble(),333.25);
+    message=sweepAbortMessage(o);QVERIFY(message.contains("Chirp 瞬时激励频率 333.25 Hz"));
+    p[3]=1;put(52,0);
     QVERIFY(!response(0xbd,p.left(40),Version::V2).contains("motion_reason"));
     message=sweepAbortMessage(response(0xbd,p.left(40),Version::V2));
     QVERIFY(message.contains("固件未提供详细诊断"));QVERIFY(!message.contains("异常位置"));

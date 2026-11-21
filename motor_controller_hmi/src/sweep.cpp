@@ -155,6 +155,7 @@ QString sweepAbortMessage(const QJsonObject &o) {
       if(o["method"].toInt()==2)
         detail+=QString(" · 触发频率 %1 Hz（第 %2/%3 点）").arg(o["motion_hz"].toDouble(),0,'g',7)
           .arg(o["motion_index"].toInt()+1).arg(o["count"].toInt());
+      else if(o["method"].toInt()==3) detail+=QString(" · Chirp 瞬时激励频率 %1 Hz").arg(o["motion_hz"].toDouble(),0,'g',7);
       else detail+=" · 多正弦并行激励（无单一触发频率）";
     } else detail=o["motion_diagnostic_invalid"].toBool()
         ? "运动保护：诊断扩展数据无效，无法区分速度或位移越界"

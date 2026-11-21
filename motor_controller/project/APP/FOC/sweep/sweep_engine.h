@@ -2,10 +2,11 @@
 #define FOC_SWEEP_ENGINE_H
 
 #include <stdint.h>
+#include "sweep_chirp.h"
 
 #define SWEEP_MAX_POINTS 16u
 enum { SWEEP_IDLE, SWEEP_RUNNING, SWEEP_DONE, SWEEP_ABORTED };
-enum { SWEEP_MULTISINE = 1, SWEEP_STEPPED_SINE = 2 };
+enum { SWEEP_MULTISINE = 1, SWEEP_STEPPED_SINE = 2, SWEEP_CHIRP = 3 };
 enum {
   SWEEP_STOP = 1u, SWEEP_LIMIT = 2u, SWEEP_TIMING = 4u,
   SWEEP_COMMAND = 8u, SWEEP_MOTION = 16u, SWEEP_NONFINITE = 32u
@@ -36,6 +37,7 @@ typedef struct {
   uint16_t remaining, length, block_remaining;
   uint8_t state, flags, method, count, index, progress, blocks;
   sweep_tone_t tone[SWEEP_MAX_POINTS];
+  sweep_chirp_t chirp; /* used only by mode 3; other modes unchanged */
 } sweep_engine_t;
 
 float sweep_engine_frequency(const sweep_engine_t *e, unsigned index);

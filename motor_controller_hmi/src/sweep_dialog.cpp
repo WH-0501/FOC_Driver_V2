@@ -124,6 +124,7 @@ class SweepDialog : public QDialog {
     clock.start();start->setEnabled(false);import->setEnabled(false);methodChoice->setEnabled(false);
     startHz->setEnabled(false);endHz->setEnabled(false);count->setEnabled(false);amplitude->setEnabled(false);
     source="设备同步采样 · 闭环给定→实际 Iq · H1 频响 / 多段相干性 · 未收到结果";
+    if(methodChoice->currentIndex()==3) source+=" · 周期线性 Chirp，4 s 采集";
     deviceToken=session.command(node,0xbc,deviceRequest(methodChoice->currentIndex()),-1,"启动设备电流环辨识（一次配置，无续租）");
     timer.start(100);status->setText("等待固件确认（不支持的固件将超时，不回退到主机发波）");render();
   }
@@ -133,11 +134,12 @@ class SweepDialog : public QDialog {
     if(!o["ok"].toBool()){finish(o["message"].toString("设备辨识应答无效"));return;}
     if(o["run"].toInt()!=runId){finish("辨识会话编号不匹配");return;}
     int state=o["state"].toInt();
+    if(cmd!=0xbe && o["method"].toInt()!=methodChoice->currentIndex()){finish("固件返回的激励模式不匹配");return;}
 
     if(cmd!=0xbe){
       deviceCount=o["count"].toInt();
       if(deviceCount<3 || deviceCount>16){finish("固件返回频点数量无效");return;}
-      source=QString("设备采样 %1 Hz · 采集 %2 ms · 最长 FOC 回调 %3 μs · %4 · 同步给定/实际 Iq，H1 频响").arg(o["fs"].toDouble()).arg(o["samples"].toDouble()/std::max(1.,o["fs"].toDouble())*1000,0,'f',1).arg(o["max_us"].toInt()).arg(methodChoice->currentIndex()==1?"快速多正弦":"逐频正弦");
+      source=QString("设备采样 %1 Hz · 采集 %2 ms · 最长 FOC 回调 %3 μs · %4 · 同步给定/实际 Iq，H1 频响").arg(o["fs"].toDouble()).arg(o["samples"].toDouble()/std::max(1.,o["fs"].toDouble())*1000,0,'f',1).arg(o["max_us"].toInt()).arg(methodChoice->currentIndex()==1?"快速多正弦":methodChoice->currentIndex()==3?"周期线性 Chirp（1 s 稳定 + 3 × 1 s 估计）":"逐频正弦");
       status->setText(QString("设备进度 %1/%2 · 主机经过 %3 ms").arg(o["progress"].toInt()).arg(deviceCount).arg(clock.elapsed()));
       if(o.contains("timing_revision"))source+=QString(" · 诊断 A6/%1 · 分段峰值：采样/编码器 %2 μs，控制 %3 μs（含 FRA %4 μs）").arg(o["timing_revision"].toInt()).arg(o["sense_us"].toInt()).arg(o["control_us"].toInt()).arg(o["fra_us"].toInt());
       if(o.contains("peak_cycles")) {
@@ -162,14 +164,14 @@ class SweepDialog : public QDialog {
       p.gainDb=g>0?20*std::log10(g):0;p.phaseDeg=std::atan2(im,re)*180/std::numbers::pi;
       p.inputFit=o["coherence"].toDouble();p.outputFit=o["blocks"].toInt();p.count=o["blocks"].toInt();
       p.valid=p.hz>0 && p.input>1e-6 && g>1e-6 && p.inputFit>=.9 && p.outputFit>=3;
-      p.status=p.valid?(methodChoice->currentIndex()==1?"有效·快速估计，建议逐频确认交点":"有效·逐频测量"):"相干性/幅值不足，请逐频复测或检查信噪比";
+      p.status=p.valid?(methodChoice->currentIndex()==1?"有效·快速估计，建议逐频确认交点":methodChoice->currentIndex()==3?"有效·周期 Chirp，建议逐频复核交点":"有效·逐频测量"):"相干性/幅值不足，请逐频复测或检查信噪比";
       results.push_back(p);++nextPoint;render();
     }
     if(nextPoint<deviceCount){deviceToken=session.command(node,0xbe,be16(runId)+QByteArray(1,char(nextPoint)),-1,"读取设备辨识频点");}
     else {running=false;timer.stop();start->setEnabled(true);import->setEnabled(true);methodChoice->setEnabled(true);startHz->setEnabled(true);endHz->setEnabled(true);amplitude->setEnabled(true);count->setEnabled(true);status->setText(QString("设备辨识完成并失能 · 含传输与显示 %1 ms").arg(clock.elapsed()));render();}
   }
   void render() {
-    table->setHorizontalHeaderLabels(deviceData?QStringList{"Hz","输入基波 A","反馈基波 A","H1 增益 dB","相位 °","相干性 γ²","平均段数","段数","质量"}:QStringList{"Hz","输入幅值","反馈幅值","增益 dB","相位 °","输入 R²","反馈 R²","点数","质量"});
+    table->setHorizontalHeaderLabels(deviceData?QStringList{"Hz","输入谱线 A","反馈谱线 A","H1 增益 dB","相位 °","相干性 γ²","平均段数","段数","质量"}:QStringList{"Hz","输入幅值","反馈幅值","增益 dB","相位 °","输入 R²","反馈 R²","点数","质量"});
     table->setColumnHidden(7,deviceData);
     table->setRowCount(int(results.size()));
     for (int r = 0; r < int(results.size()); ++r) {
@@ -464,7 +466,7 @@ public:
     setObjectName("sweepDialog");
     auto l = new QVBoxLayout(this);
     methodChoice=new QComboBox;methodChoice->setObjectName("sweepMethod");
-    methodChoice->addItems({"主机低频（兼容 0.2–4 Hz）","设备快速多正弦（200 ms 采集）","设备逐频正弦（精测）"});l->addWidget(methodChoice);
+    methodChoice->addItems({"主机低频（兼容 0.2–4 Hz）","设备快速多正弦（200 ms 采集）","设备逐频正弦（精测）","设备线性 Chirp（4 s 采集）"});l->addWidget(methodChoice);
     auto help = new QLabel("设备辨识：CST / 零给定开始 · 快速法 20 Hz 栅格 · 逐频法整周期平均 · 完成自动失能\n需要配套 FRA 固件。幅值为总峰值上限；起始 >40 Hz 时保留 20/40 Hz 基准点。低相干性频点需复测。",this);
     help->setWordWrap(true);
     l->addWidget(help);
@@ -530,7 +532,11 @@ public:
         QHeaderView::ResizeToContents);
     table->horizontalHeader()->setStretchLastSection(true);
     l->addWidget(table, 1);
-    connect(methodChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this](int mode){
+    connect(methodChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this,help](int mode){
+      help->setText(mode==3
+        ? "设备 Chirp：CST / 零给定开始 · 连续线性扫频，1 s 稳定 + 3 × 1 s 同步 H1 估计 · 完成自动失能\n起始 >40 Hz 时实际从 20 Hz 扫至结束频率，保留 20/40 Hz 基准；结果为 1 Hz 栅格的选定谱线。幅值为总峰值上限，每条谱线能量低于逐频法；低相干性及交点需逐频复核。"
+        : "设备辨识：CST / 零给定开始 · 快速法 20 Hz 栅格 · 逐频法整周期平均 · 完成自动失能\n需要配套 FRA 固件。幅值为总峰值上限；起始 >40 Hz 时保留 20/40 Hz 基准点。低相干性频点需复测。");
+      start->setText(mode==3?"开始 Chirp 测试":"开始逐频点测试");
       startHz->setRange(mode?20:.2,mode?2000:4);endHz->setRange(mode?20:.2,mode?2000:4);
       startHz->setValue(mode?20:.5);endHz->setValue(mode?2000:4);count->setRange(3,mode?16:30);count->setValue(mode?16:10);
     });

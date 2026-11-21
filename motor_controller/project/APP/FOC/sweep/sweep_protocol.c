@@ -24,7 +24,7 @@ bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
   if (cmd < SWEEP_CMD_CONTROL || cmd > SWEEP_CMD_RESULT) return false;
   if (!reply) return true;
   if (cmd == SWEEP_CMD_CONTROL) {
-    if (!p || length < 11u || p[0] != 1u || p[1] > SWEEP_STEPPED_SINE) out[1] = 2u;
+    if (!p || length < 11u || p[0] != 1u || p[1] > SWEEP_CHIRP) out[1] = 2u;
     else if (!p[1]) foc_sweep_stop(m, SWEEP_STOP); /* stop never depends on a stale run id */
     else {
       sweep_config_t cfg;

@@ -80,7 +80,7 @@ class DemoBackend final : public CanBackend {
                     fraMethod=quint8(p[1]);fraRun=u16(p,2);fraN=quint8(p[8]);fraPeak=u16(p,9)/1000.;fraHz.clear();
                     double lo=u16(p,4),hi=u16(p,6),last=0;
                     if(fraN<3||(lo>40&&fraN<4)||fraN>16||lo<20||hi<=lo||hi>2000||fraPeak<=0||fraPeak>.5)error=2;
-                    else {for(int i=0;i<fraN;++i){double f=lo>40?(i<2?(i==0?20.:40.):lo*std::pow(hi/lo,double(i-2)/(fraN-3))):lo*std::pow(hi/lo,double(i)/(fraN-1));f=fraMethod==1?std::max(last+20,20*std::round(f/20)):20000/std::ceil(20000/f);fraHz.push_back(f);last=f;}fraState=1;fraAt=timer.nsecsElapsed()/1e9;}
+                    else {for(int i=0;i<fraN;++i){double f=lo>40?(i<2?(i==0?20.:40.):lo*std::pow(hi/lo,double(i-2)/(fraN-3))):lo*std::pow(hi/lo,double(i)/(fraN-1));f=fraMethod==1?std::max(last+20,20*std::round(f/20)):fraMethod==3?std::max(last+1,std::round(f)):20000/std::ceil(20000/f);fraHz.push_back(f);last=f;}fraState=1;fraAt=timer.nsecsElapsed()/1e9;}
                 }
             }
             double duration=fraMethod==1?.2:4.;
@@ -90,7 +90,7 @@ class DemoBackend final : public CanBackend {
                 int i=p.size()>=3?quint8(p[2]):255;
                 if(p.size()<3||u16(p,0)!=fraRun||i>=int(fraHz.size())||fraState!=2)error=2;
                 result[1]=char(error);qToBigEndian<quint16>(fraRun,result.data()+2);result[4]=char(i);result[5]=char(fraState);
-                if(!error){double f=fraHz[i],q=f/800.,g=1/std::sqrt(1+q*q);putFloat(result,8,f);putFloat(result,12,fraPeak/4);putFloat(result,16,fraPeak/4*g);putFloat(result,20,1/(1+q*q));putFloat(result,24,-q/(1+q*q));putFloat(result,28,.999);qToBigEndian<quint16>(fraMethod==1?3:4,result.data()+32);}
+                if(!error){double f=fraHz[i],q=f/800.,g=1/std::sqrt(1+q*q);putFloat(result,8,f);putFloat(result,12,fraPeak/4);putFloat(result,16,fraPeak/4*g);putFloat(result,20,1/(1+q*q));putFloat(result,24,-q/(1+q*q));putFloat(result,28,.999);qToBigEndian<quint16>(fraMethod==2?4:3,result.data()+32);}
             }else{
                 result=QByteArray(20,0);result[0]=1;result[1]=char(error);result[2]=char(fraState);result[3]=char(fraMethod);qToBigEndian<quint16>(fraRun,result.data()+4);result[6]=char(fraN);result[7]=char(fraState==2?fraN:0);qToBigEndian<quint32>(20000,result.data()+8);qToBigEndian<quint32>(quint32(std::min(duration,std::max(0.,timer.nsecsElapsed()/1e9-fraAt))*20000),result.data()+12);qToBigEndian<quint16>(20,result.data()+18);
             }

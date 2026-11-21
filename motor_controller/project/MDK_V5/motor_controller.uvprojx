@@ -564,6 +564,11 @@
               <FilePath>..\APP\motor.c</FilePath>
             </File>
             <File>
+              <FileName>sweep_chirp.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\FOC\sweep\sweep_chirp.c</FilePath>
+            </File>
+            <File>
               <FileName>sweep_engine.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\FOC\sweep\sweep_engine.c</FilePath>

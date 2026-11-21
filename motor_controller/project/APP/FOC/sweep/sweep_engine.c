@@ -9,7 +9,7 @@ static int finite_float(float f) { return f >= -FLT_MAX && f <= FLT_MAX; }
 static void reset_phase(sweep_engine_t *e, unsigned i)
 {
   sweep_tone_t *t = &e->tone[i];
-  if (e->method == SWEEP_STEPPED_SINE || i < 2u) { t->s = 0.0f; t->c = 1.0f; }
+  if (e->method != SWEEP_MULTISINE || i < 2u) { t->s = 0.0f; t->c = 1.0f; }
   else {
     unsigned seed = (e->count - 3u) * (e->count - 2u) / 2u + i - 2u;
     t->s = sweep_phase_seeds[seed][0]; t->c = sweep_phase_seeds[seed][1];
@@ -25,6 +25,7 @@ float sweep_engine_frequency(const sweep_engine_t *e, unsigned index)
 {
   if (!e || index >= e->count) return 0.0f;
   if (e->method == SWEEP_STEPPED_SINE) return e->sample_hz / e->tone[index].bin_or_period;
+  if (e->method == SWEEP_CHIRP) return e->tone[index].bin_or_period * (e->sample_hz / e->length);
   return e->tone[index].bin_or_period * (e->sample_hz / (unsigned)(e->sample_hz * 0.05f + 0.5f));
 }
 static void select_point(sweep_engine_t *e)
@@ -43,7 +44,7 @@ int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *cfg)
   unsigned i, j, period_samples;
   if (!e || !cfg) return 2;
   if (e->state == SWEEP_RUNNING) return 1;
-  if ((cfg->method != SWEEP_MULTISINE && cfg->method != SWEEP_STEPPED_SINE) ||
+  if ((cfg->method != SWEEP_MULTISINE && cfg->method != SWEEP_STEPPED_SINE && cfg->method != SWEEP_CHIRP) ||
       cfg->count < 3u || cfg->count > SWEEP_MAX_POINTS ||
       !finite_float(cfg->low_hz) || !finite_float(cfg->high_hz) ||
       !finite_float(cfg->peak) || !finite_float(cfg->sample_hz) ||
@@ -53,7 +54,7 @@ int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *cfg)
       cfg->peak < 0.005f || cfg->peak > 0.5f ||
       (cfg->low_hz > 40.0f && cfg->count < 4u)) return 2;
 
-  period_samples = (unsigned)(cfg->sample_hz * 0.05f + 0.5f);
+  period_samples = (unsigned)(cfg->sample_hz * (cfg->method == SWEEP_CHIRP ? 1.0f : 0.05f) + 0.5f);
   /* Validate all quantized frequencies before overwriting an earlier result. */
   for (i = 0u; i < cfg->count; ++i) {
     float f;
@@ -61,7 +62,7 @@ int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *cfg)
     else if (cfg->low_hz > 40.0f)
       f = cfg->low_hz * powf(cfg->high_hz / cfg->low_hz, (float)(i - 2u) / (cfg->count - 3u));
     else f = cfg->low_hz * powf(cfg->high_hz / cfg->low_hz, (float)i / (cfg->count - 1u));
-    if (cfg->method == SWEEP_MULTISINE) {
+    if (cfg->method != SWEEP_STEPPED_SINE) {
       float grid = cfg->sample_hz / period_samples;
       unsigned bin = (unsigned)floorf(f / grid + 0.5f);
       if (i && bin <= bins[i-1u]) bin = bins[i-1u] + 1u;
@@ -84,7 +85,7 @@ int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *cfg)
     sweep_tone_t *t = &e->tone[i];
     float f;
     t->bin_or_period = bins[i];
-    if (e->method == SWEEP_MULTISINE) t->settle = (uint16_t)period_samples;
+    if (e->method != SWEEP_STEPPED_SINE) t->settle = (uint16_t)period_samples;
     else {
       unsigned period = bins[i], length = period * 4u;
       unsigned settling = (unsigned)(cfg->sample_hz * 0.02f);
@@ -106,6 +107,25 @@ int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *cfg)
     }
     e->scale = cfg->peak / (maxsum * 1.001f);
     for (i = 0u; i < e->count; ++i) reset_phase(e, i);
+  }
+  if (e->method == SWEEP_CHIRP) {
+    float maximum = sweep_chirp_prepare(&e->chirp, cfg->low_hz > 40.0f ? 20.0f : cfg->low_hz,
+                        cfg->high_hz, cfg->sample_hz, e->length);
+    e->scale = cfg->peak / (maximum * 1.001f);
+    for (j = 0u; j < e->length; ++j) {
+      float x = sweep_chirp_step(&e->chirp, e->length, j) * e->scale;
+      for (i = 0u; i < e->count; ++i) {
+        sweep_tone_t *t = &e->tone[i];
+        t->xr += x * t->c; t->xi -= x * t->s; rotate(t);
+      }
+    }
+    for (i = 0u; i < e->count; ++i) {
+      e->tone[i].xr *= 2.0f / e->length; e->tone[i].xi *= 2.0f / e->length;
+      reset_phase(e, i);
+    }
+    sweep_chirp_reset(&e->chirp);
+    select_point(e);
+    return 0;
   }
   /* X is identical in all coherent blocks. Precompute it from the exact
    * finite-precision waveform/basis, including cross-tone leakage; not X=-j*A.
@@ -142,6 +162,38 @@ void sweep_engine_start(sweep_engine_t *e)
 {
   if (e && e->state == SWEEP_IDLE && e->count >= 3u) e->state = SWEEP_RUNNING;
 }
+/* Separate mode-specific ISR path: original multisine/stepped loops do not
+ * acquire an extra per-tone chirp branch. All modes share the same statistics
+ * layout and foreground H1 reduction. */
+static float step_chirp(sweep_engine_t *e, float y)
+{
+  unsigned i;
+  int measuring = e->remaining == 0u;
+  int block_end = measuring && e->block_remaining == 1u;
+  int phase_reset = block_end || e->remaining == 1u;
+  unsigned n = e->length - (measuring ? e->block_remaining : e->remaining);
+  float x = e->scale * sweep_chirp_step(&e->chirp, e->length, n);
+  if (phase_reset) sweep_chirp_reset(&e->chirp);
+  for (i = 0u; i < e->count; ++i) {
+    sweep_tone_t *t = &e->tone[i];
+    if (measuring) { t->yr += y*t->c; t->yi -= y*t->s; }
+    if (block_end) {
+      float yr=t->yr, yi=t->yi;
+      t->yy += yr*yr + yi*yi;
+      t->sum_r += yr; t->sum_i += yi;
+      t->yr = t->yi = 0.0f;
+    }
+    if (phase_reset) { t->s=0.0f; t->c=1.0f; }
+    else rotate(t);
+  }
+  ++e->samples;
+  if (e->remaining) --e->remaining;
+  else if (--e->block_remaining == 0u) {
+    e->block_remaining=e->length;
+    if (++e->blocks == 3u) { e->progress=e->count; e->state=SWEEP_DONE; }
+  }
+  return x;
+}
 float sweep_engine_step(sweep_engine_t *e, float y)
 {
   unsigned i, begin, end;
@@ -149,6 +201,7 @@ float sweep_engine_step(sweep_engine_t *e, float y)
   float x = 0.0f;
   if (!e || e->state != SWEEP_RUNNING) return 0.0f;
   if (!finite_float(y)) { sweep_engine_abort(e, SWEEP_NONFINITE); return 0.0f; }
+  if (e->method == SWEEP_CHIRP) return step_chirp(e, y);
   begin = e->method == SWEEP_MULTISINE ? 0u : e->index;
   end = e->method == SWEEP_MULTISINE ? e->count : e->index + 1u;
   measuring = e->remaining == 0u;
@@ -200,12 +253,12 @@ int sweep_engine_result(const sweep_engine_t *e, unsigned index, sweep_result_t 
   t = &e->tone[index];
   memset(out, 0, sizeof(*out));
   out->hz = sweep_engine_frequency(e, index);
-  out->blocks = e->method == SWEEP_MULTISINE ? 3u : 4u;
+  out->blocks = e->method != SWEEP_STEPPED_SINE ? 3u : 4u;
   blocks = (float)out->blocks;
   xx = t->xr * t->xr + t->xi * t->xi;
   if (!(xx > 1e-15f) || !finite_float(xx) || !finite_float(t->yy) ||
       !finite_float(t->sum_r) || !finite_float(t->sum_i)) return 2;
-  norm = 2.0 / (e->method == SWEEP_MULTISINE ? e->length : 4u * t->bin_or_period);
+  norm = 2.0 / (e->method != SWEEP_STEPPED_SINE ? e->length : 4u * t->bin_or_period);
   den = (double)blocks * xx;
   out->input = sqrtf(xx); out->output = (float)(sqrt((double)t->yy / blocks) * norm);
   out->real = (float)(((double)t->sum_r * t->xr + (double)t->sum_i * t->xi) * norm / den);

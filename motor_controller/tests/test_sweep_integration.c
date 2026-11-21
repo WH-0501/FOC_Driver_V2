@@ -140,6 +140,36 @@ static void motion_diagnostics(void)
   assert(sweep_protocol_handle(&motor, 0xbd, NULL, 0, reply) && response_length == 40);
   puts("PASS motion snapshot: signed value, relative travel, exact bounds, first/high-frequency point, multisine, reset and legacy timing");
 }
+static void chirp_integration(void)
+{
+  unsigned i;
+  uint8_t request[11]={1,SWEEP_CHIRP,0x67,0x89,2,88,6,64,16,0,50}; /* 600..1600, .05 A */
+  sweep_result_t result;
+  foc_sweep_status_t s;
+  reset_motor();
+  assert(sweep_protocol_handle(&motor,SWEEP_CMD_CONTROL,request,11,reply));
+  assert(response[1]==0 && response[3]==SWEEP_CHIRP && status().state==SWEEP_RUNNING);
+  for(i=0;i<80000;++i)tick();
+  s=status();assert(s.state==SWEEP_DONE && s.samples==80000 && s.flags==0);
+  assert(!armed && motor.ref.iq==0 && mask==0);
+  assert(!foc_sweep_result(0x6789,0,&result) && result.blocks==3 && result.coherence>.99f);
+  reset_motor();assert(sweep_protocol_handle(&motor,SWEEP_CMD_CONTROL,request,11,reply));
+  for(i=0;i<1000;++i)tick();
+  motor.state.shaft.velocity_rad_s=-5.25f;tick();aborted(SWEEP_MOTION);
+  s=status();assert(s.motion_index==255 && s.motion_reason==SWEEP_REJECT_SPEED);
+  assert(fabsf(s.motion_hz-(20.0f+1580.0f*1000.0f/19999.0f))<.001f);
+  assert(sweep_protocol_handle(&motor,SWEEP_CMD_STATUS,0,0,reply));
+  assert(response_length==56 && response[43]==255 && fabsf(wire_float(52)-s.motion_hz)<.001f);
+  /* Timing, explicit stop and final-sample saturation retain existing behavior. */
+  reset_motor();assert(sweep_protocol_handle(&motor,SWEEP_CMD_CONTROL,request,11,reply));
+  work_us=46;tick();aborted(SWEEP_TIMING);
+  reset_motor();assert(sweep_protocol_handle(&motor,SWEEP_CMD_CONTROL,request,11,reply));
+  tick();foc_sweep_stop(&motor,SWEEP_COMMAND);aborted(SWEEP_COMMAND);
+  reset_motor();assert(sweep_protocol_handle(&motor,SWEEP_CMD_CONTROL,request,11,reply));
+  for(i=0;i<79999;++i)tick();force_limit=1;tick();aborted(SWEEP_LIMIT);
+  assert(foc_sweep_result(0x6789,0,&result)==1);
+  puts("PASS chirp dispatch/wire: completion/disarm, instantaneous motion diagnostic, timing, command, final-sample guard");
+}
 int main(void)
 {
   unsigned i;
@@ -224,5 +254,6 @@ int main(void)
   assert(mask == 0);
   puts("PASS real FOC dispatch, guard/limits, cancellation, final-sample rejection, wrap, wire v1, session IDs and passive status");
   motion_diagnostics();
+  chirp_integration();
   return 0;
 }
