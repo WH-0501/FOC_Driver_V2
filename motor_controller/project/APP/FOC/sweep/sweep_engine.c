@@ -37,11 +37,26 @@ static void select_point(sweep_engine_t *e)
   e->blocks = 0u;
   reset_phase(e, e->index);
 }
+/* Foreground only: the grid needs positive integer roots (degree <= 15),
+ * not general powf. Bisection retains double precision and removes its library.
+ * Endpoints below are explicit, independent of root rounding. */
+static double geometric_step(float low, float high, unsigned degree)
+{
+  double target = (double)high / low, lo = 1.0, hi = target;
+  unsigned iter, k;
+  for (iter = 0u; iter < 48u; ++iter) {
+    double mid = (lo + hi) * 0.5, power = 1.0;
+    for (k = 0u; k < degree; ++k) power *= mid;
+    if (power < target) lo = mid; else hi = mid;
+  }
+  return (lo + hi) * 0.5;
+}
 int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *cfg)
 {
   uint16_t bins[SWEEP_MAX_POINTS];
   float last = 0.0f, maxsum = 0.0f;
-  unsigned i, j, period_samples;
+  unsigned i, j, period_samples, anchors;
+  double step, next;
   if (!e || !cfg) return 2;
   if (e->state == SWEEP_RUNNING) return 1;
   if ((cfg->method != SWEEP_MULTISINE && cfg->method != SWEEP_STEPPED_SINE && cfg->method != SWEEP_CHIRP) ||
@@ -54,14 +69,18 @@ int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *cfg)
       cfg->peak < 0.005f || cfg->peak > 0.5f ||
       (cfg->low_hz > 40.0f && cfg->count < 4u)) return 2;
 
+  anchors = cfg->low_hz > 40.0f ? 2u : 0u;
+  step = geometric_step(cfg->low_hz, cfg->high_hz, cfg->count - anchors - 1u);
+  next = cfg->low_hz;
   period_samples = (unsigned)(cfg->sample_hz * (cfg->method == SWEEP_CHIRP ? 1.0f : 0.05f) + 0.5f);
   /* Validate all quantized frequencies before overwriting an earlier result. */
   for (i = 0u; i < cfg->count; ++i) {
     float f;
-    if (cfg->low_hz > 40.0f && i < 2u) f = i ? 40.0f : 20.0f;
-    else if (cfg->low_hz > 40.0f)
-      f = cfg->low_hz * powf(cfg->high_hz / cfg->low_hz, (float)(i - 2u) / (cfg->count - 3u));
-    else f = cfg->low_hz * powf(cfg->high_hz / cfg->low_hz, (float)i / (cfg->count - 1u));
+    if (i < anchors) f = i ? 40.0f : 20.0f;
+    else {
+      f = i == cfg->count - 1u ? cfg->high_hz : (float)next;
+      next *= step;
+    }
     if (cfg->method != SWEEP_STEPPED_SINE) {
       float grid = cfg->sample_hz / period_samples;
       unsigned bin = (unsigned)floorf(f / grid + 0.5f);
@@ -260,7 +279,7 @@ int sweep_engine_result(const sweep_engine_t *e, unsigned index, sweep_result_t 
       !finite_float(t->sum_r) || !finite_float(t->sum_i)) return 2;
   norm = 2.0 / (e->method != SWEEP_STEPPED_SINE ? e->length : 4u * t->bin_or_period);
   den = (double)blocks * xx;
-  out->input = sqrtf(xx); out->output = (float)(sqrt((double)t->yy / blocks) * norm);
+  out->input = sqrtf(xx); out->output = (float)(sqrtf(t->yy / blocks) * norm);
   out->real = (float)(((double)t->sum_r * t->xr + (double)t->sum_i * t->xi) * norm / den);
   out->imag = (float)(((double)t->sum_i * t->xr - (double)t->sum_r * t->xi) * norm / den);
   /* Identical X: gamma squared = |sum(Y)| squared / (N*sum(|Y| squared)). */

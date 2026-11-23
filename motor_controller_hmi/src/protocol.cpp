@@ -579,8 +579,11 @@ quint32 checksum(const QByteArray &b) {
     return sum;
 }
 QByteArray firmwareImage(const QByteArray &b) {
-    if (b.size() <= 32 || b.size() > 61 * 1024 || b.left(4) != "ASIX")
-        throw std::invalid_argument("需要有效 ASIX .efw，大小 33..62464 字节");
+    if (b.size() > 0xD800 + 32)
+        throw std::invalid_argument(QString("升级失败：非法操作。APP 程序 %1 B 超过 54 KiB（55296 B），会覆盖参数区；未发送升级数据。")
+                                        .arg(b.size() - 32).toStdString());
+    if (b.size() <= 32 || b.left(4) != "ASIX")
+        throw std::invalid_argument("升级失败：非法操作。需要有效 ASIX .efw（32 B 头 + APP 程序）。");
     if ((quint8(b.at(4)) | (quint16(quint8(b.at(5))) << 8)) != 3 ||
         (quint8(b.at(6)) | (quint16(quint8(b.at(7))) << 8)) != 0 ||
         qFromBigEndian<quint32>(b.constData() + 12) != quint32(b.size()))

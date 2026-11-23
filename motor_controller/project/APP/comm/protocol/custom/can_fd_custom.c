@@ -1,3 +1,7 @@
+/* Foreground CAN parser/reporting; FOC ISR is compiled separately. */
+#if defined(__CC_ARM)
+#pragma Ospace
+#endif
 #include <math.h>
 #include "can_fd_custom.h"
 #include "sweep/sweep_protocol.h"

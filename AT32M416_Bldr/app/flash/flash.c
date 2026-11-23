@@ -14,6 +14,7 @@ typedef struct _UPGRADE_RUNTIME_HEADER
 } UPGRADE_RT_HEAD;
 
 #define APPLICATION_ADDRESS 0x08001000
+#define APPLICATION_MAX_BYTES 0xD800u /* Factory parameters start at 0x0800E800. */
 #define FIRMWARE_UPDATE_BASE_ADDR 0x08010400
 #define FIRMWARE_UPDATE_MAX_PAGE_NUMBER	61
 #define H2NL(x) ((x>>24 & 0x000000FF) | (x>>8 & 0x0000FF00) | (x<<24 & 0xFF000000) | (x<<8 & 0x00FF0000))
@@ -126,6 +127,15 @@ void AT32M416Flash_UpdateApplication(void)
     
     /* Check the file size */
     firmwareHeader.FileLen = H2NL(firmwareHeader.FileLen);
+    /* Reject malformed/oversized staging images before checksum reads or APP erase.
+       App-side IAP reports 0x90; this bootloader has no CAN status channel. */
+    if ((firmwareHeader.ImageType != 3u) || (firmwareHeader.Compress != 0u) ||
+        (H2NL(firmwareHeader.ContentOffset) != sizeof(UPGRADE_RT_HEAD)) ||
+        (firmwareHeader.FileLen <= sizeof(UPGRADE_RT_HEAD)) ||
+        (firmwareHeader.FileLen > APPLICATION_MAX_BYTES + sizeof(UPGRADE_RT_HEAD)))
+    {
+        return;
+    }
     if (FirmwareChecksum32(firmwareHeader.FileLen-sizeof(UPGRADE_RT_HEAD)) != ~firmwareHeader.Checksum32)
     {
         flash_unlock();

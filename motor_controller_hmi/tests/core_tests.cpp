@@ -468,6 +468,31 @@ class CoreTests : public QObject {
         QVERIFY_EXCEPTION_THROWN(firmwareImage(b), std::invalid_argument);
         QCOMPARE(checksum(QByteArray::fromHex("ffffffff01000000")), quint32(1));
     }
+    void firmwarePartitionBoundary() {
+        // Valid checksum cannot make an oversized image safe to flash.
+        auto make = [](int bodySize) {
+            QByteArray body(bodySize, char(0xab));
+            QByteArray b(32, 0);
+            b.replace(0, 4, "ASIX");
+            qToLittleEndian<quint16>(3, b.data() + 4);
+            qToBigEndian<quint32>(32 + bodySize, b.data() + 12);
+            qToLittleEndian<quint32>(~checksum(body), b.data() + 20);
+            return b + body;
+        };
+        const auto boundary = make(0xD800);
+        QCOMPARE(firmwareImage(boundary), boundary);
+        QVERIFY_EXCEPTION_THROWN(firmwareImage(make(0xD800 + 1)), std::invalid_argument);
+        QVERIFY_EXCEPTION_THROWN(firmwareImage(make(58000)), std::invalid_argument);
+        try {
+            firmwareImage(make(58000));
+            QFAIL("oversized image accepted");
+        } catch (const std::invalid_argument &e) {
+            const QString message = QString::fromUtf8(e.what());
+            QVERIFY(message.contains("升级失败"));
+            QVERIFY(message.contains("非法操作"));
+            QVERIFY(message.contains("55296"));
+        }
+    }
     void archiveVersions() {
         QTemporaryDir dir;
         Archive a;

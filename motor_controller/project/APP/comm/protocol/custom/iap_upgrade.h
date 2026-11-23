@@ -57,6 +57,7 @@ typedef enum
   ERROR_IAP_MALLOC_FAILED,
   ERROR_IAP_FLASH_SWITCH,
   ERROR_IAP_LOST_FRAME,
+  ERROR_IAP_IMAGE_TOO_LARGE = 0x90, /* APP overlaps reserved parameters */
 } IAPError_t;
 
 typedef enum

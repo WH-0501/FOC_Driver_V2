@@ -1,4 +1,5 @@
 #include "iap_upgrade.h"
+#include "motor_config_storage_ops.h"
 #include "at32m412_416_flash.h"
 #include "at32m412_416_misc.h"
 #include "dwt_profile_delay.h"
@@ -120,16 +121,27 @@ static IAPError_t IAP_StartUpdate(void)
     return ERROR_IAP_INVALID_PARAM;
   }
 
-  if (firmwareHeader.ImageType != 0x3u)
+  if ((firmwareHeader.ImageType != 0x3u) || (firmwareHeader.Compress != 0u) ||
+      (H2NL(firmwareHeader.ContentOffset) != sizeof(UPGRADE_RT_HEAD)))
   {
     return ERROR_IAP_INVALID_PARAM;
   }
 
   firmwareHeader.FileLen = H2NL(firmwareHeader.FileLen);
-  if ((firmwareHeader.FileLen == 0u) ||
-      (firmwareHeader.FileLen > (IAP_STAGING_MAX_SECTORS * IAP_FLASH_SECTOR_SIZE)))
+  if (firmwareHeader.FileLen <= sizeof(UPGRADE_RT_HEAD))
   {
     return ERROR_IAP_INVALID_PARAM;
+  }
+  if ((firmwareHeader.FileLen > (IAP_STAGING_MAX_SECTORS * IAP_FLASH_SECTOR_SIZE)) ||
+      /* Total file includes the 32-byte ASIX header. Protect all parameter pages. */
+      (firmwareHeader.FileLen - sizeof(UPGRADE_RT_HEAD) >
+       MOTOR_CFG_FLASH_FACTORY_ADDR - IAP_APPLICATION_ADDRESS) ||
+      (firmwareHeader.FileLen - sizeof(UPGRADE_RT_HEAD) >
+       MOTOR_CFG_FLASH_PRIMARY_ADDR - IAP_APPLICATION_ADDRESS) ||
+      (firmwareHeader.FileLen - sizeof(UPGRADE_RT_HEAD) >
+       MOTOR_CFG_FLASH_BACKUP_ADDR - IAP_APPLICATION_ADDRESS))
+  {
+    return ERROR_IAP_IMAGE_TOO_LARGE;
   }
 
   iap_private.status.total_size = firmwareHeader.FileLen;

@@ -1747,6 +1747,8 @@ QWidget *Window::iapPage() {
         } catch (std::exception &e) {
             bytes->clear();
             metadata->setText(QString::fromUtf8(e.what()));
+            iapLabel_->setText(QString::fromUtf8(e.what()));
+            log("ERROR", QString::fromUtf8(e.what()));
         }
     });
     button(row, "查询设备版本", [this, metadata] {

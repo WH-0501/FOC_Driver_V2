@@ -2,14 +2,15 @@
 #include <QElapsedTimer>
 #include <QSignalSpy>
 #include <QtTest>
+#include <QtEndian>
 #include <cmath>
 #include <mutex>
 using namespace mt;
-enum class Scenario { NoResult, AcceptedButEnabled, HoldEnable, NoTelemetry, Occupied, LateLimits };
+enum class Scenario { NoResult, AcceptedButEnabled, HoldEnable, NoTelemetry, Occupied, LateLimits, IapReject };
 struct ScriptState {
     Scenario scenario = Scenario::NoResult;
     std::atomic<int> sentEnable{0}, sentDisable{0};
-    std::atomic<int> sentLimits{0};
+    std::atomic<int> sentLimits{0}, sentIapData{0}, sentIapReset{0};
 };
 class ScriptBackend final : public CanBackend {
     std::shared_ptr<ScriptState> state_;
@@ -28,12 +29,21 @@ class ScriptBackend final : public CanBackend {
         if (state_->scenario == Scenario::Occupied)
             throw std::runtime_error("设备已被其他进程占用（模拟）");
         version_ = c.version;
-        enabled_ = state_->scenario != Scenario::HoldEnable;
+        enabled_ = state_->scenario != Scenario::HoldEnable && state_->scenario != Scenario::IapReject;
         clock_.start();
     }
     void close() override {}
     void send(const Frame &f) override {
         int cmd = quint8(f.bytes[1]);
+        if (state_->scenario == Scenario::IapReject) {
+            if (cmd == 0xfa) ++state_->sentIapData;
+            if (cmd == 0xff) ++state_->sentIapReset;
+            if (cmd == 0xf8 || cmd == 0xfc)
+                replies_.push_back({1, pack(seq_++, 0xfc, QByteArray::fromHex("0180")), 0});
+            if (cmd == 0xf9)
+                replies_.push_back({1, pack(seq_++, 0xfc, QByteArray::fromHex("0690")), 0});
+            return;
+        }
         if (state_->scenario == Scenario::LateLimits && cmd == 0xb5) {
             if (++state_->sentLimits == 1) {
                 oldRequest_ = quint8(f.bytes[0]);
@@ -108,6 +118,30 @@ class SessionStateTests : public QObject {
         return {};
     }
   private slots:
+    void oversizedDeviceReplyStopsUpgrade() {
+        auto state = std::make_shared<ScriptState>();
+        state->scenario = Scenario::IapReject;
+        Session s(nullptr, factory(state));
+        QSignalSpy finished(&s, &Session::iapFinished);
+        s.open({});
+        QTRY_VERIFY(s.telemetryFresh(1));
+        QByteArray body(100, char(0xab)), image(32, 0);
+        image.replace(0, 4, "ASIX");
+        qToLittleEndian<quint16>(3, image.data()+4);
+        qToBigEndian<quint32>(32, image.data()+8);
+        qToBigEndian<quint32>(132, image.data()+12);
+        qToLittleEndian<quint32>(~checksum(body), image.data()+20);
+        s.upgrade(1, image+body);
+        QTRY_VERIFY(!finished.empty());
+        QVERIFY(!finished[0][0].toBool());
+        QVERIFY(finished[0][1].toString().contains("非法操作"));
+        QVERIFY(finished[0][1].toString().contains("0x90"));
+        QTest::qWait(200);
+        QCOMPARE(state->sentIapData.load(), 0);
+        QCOMPARE(state->sentIapReset.load(), 0);
+        s.shutdown(); QVERIFY(s.wait(3000));
+    }
+
     void onlySubmittedTargetsAreRecorded() {
         auto state = std::make_shared<ScriptState>();
         Session s(nullptr, factory(state));

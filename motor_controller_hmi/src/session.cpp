@@ -730,6 +730,10 @@ void Session::run() {
                     emit replied(0, f.node, c, data);
                 if (phase && c == 0xfc && f.node == iapNode_ && payload.size() >= 2) {
                     int state = quint8(payload[0]), err = quint8(payload[1]);
+                    if (err == 0x90) {
+                        iapFinish(false, "升级失败：非法操作。设备拒绝超过 APP 54 KiB 分区的固件，未执行本次擦写（错误 0x90）。");
+                        continue;
+                    }
                     if (err != 0x80) {
                         iapFinish(false, QString("IAP 状态 %1 / 错误 0x%2；当前整包引擎要求 ASIX "
                                                  "0x80 状态格式")

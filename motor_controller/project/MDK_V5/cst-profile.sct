@@ -2,8 +2,8 @@
 ; *** AT32M416: SRAM execution for encoder update and voltage modulation ***
 ; *************************************************************
 
-LR_IROM1 0x08001000 0x00020000  {    ; load region size_region
-  ER_IROM1 0x08001000 0x00020000  {  ; load address = execution address
+LR_IROM1 0x08001000 0x0000D800  {    ; APP ends before factory parameters at 0x0800E800
+  ER_IROM1 0x08001000 0x0000D800  {  ; load address = execution address
    *.o (RESET, +First)
    *(InRoot$$Sections)
    .ANY (+RO)
