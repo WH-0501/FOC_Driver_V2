@@ -78,6 +78,14 @@ static float step_chirp(sweep_engine_t *e, float y)
   }
   return x;
 }
+
+/**
+ * @brief 该函数是扫频引擎的步函数，用于执行扫频操作。
+ * 
+ * @param e 
+ * @param y 
+ * @return float 
+ */
 float sweep_engine_step(sweep_engine_t *e, float y)
 {
   unsigned i, begin, end;

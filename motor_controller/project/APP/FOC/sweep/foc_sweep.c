@@ -24,10 +24,26 @@ static struct {
   float motion_value;
   uint8_t timing_reason, motion_reason;
 } timing;
+
 static uint16_t bounded_us(uint32_t us) { return (uint16_t)(us > 65535u ? 65535u : us); }
 
 static bool finite_value(float f) { return f >= -FLT_MAX && f <= FLT_MAX; }
-/* Keep ARM ISR layout stable when foreground diagnostic callers change. */
+
+/**
+ * @brief Keep ARM ISR layout stable when foreground diagnostic callers change.
+ * 该函数用于检查是否允许执行 FOC扫频操作，允许的条件包括：
+ * 1. 电机句柄不为空
+ * 2. 电机句柄等于当前电机句柄
+ * 3. 电机状态为RUNNING
+ * 4. 电机控制模式为CST
+ * 5. 电机已上电
+ * 6. 电机输出PWM使能
+ * 7. 电机当前偏移量校准完成
+ * 8. 电机故障标志位为0
+ * @param m 电机句柄
+ * @return true 允许执行 FOC扫频操作
+ * @return false 不允许执行 FOC扫频操作
+ */
 #if defined(__CC_ARM)
 __attribute__((noinline))
 #endif
@@ -38,6 +54,13 @@ static bool allowed(const motor_handle_t *m)
       m->current_offset_cal_done && !m->fault.latched && !m->fault.status &&
       m->ref.iq == 0.0f;
 }
+
+/**
+ * @brief Measurement guard. 运动过程中保护机制
+ * 
+ * @param m 电机句柄
+ * @return unsigned 测量保护标志
+ */
 static unsigned measurement_guard(const motor_handle_t *m)
 {
   float position = m->state.shaft.position_rad, speed = m->state.shaft.velocity_rad_s;
@@ -207,6 +230,15 @@ static bool voltage_limited(const motor_handle_t *m)
       pid_limited(&m->iq_pid, &m->config.pid.iq, vq) ||
       pid_limited(&m->id_pid, &m->config.pid.id, vd);
 }
+
+/**
+ * @brief ISR for the FOC sweep engine.
+ * 该函数是FOC扫频引擎的 ISR，用于执行 FOC扫频操作。
+ * @param m 
+ * @param rt 
+ * @param start_ticks 起始时间戳
+ * @param current_step 当前步函数
+ */
 void foc_sweep_run_isr(motor_handle_t *m, motor_runtime_t *rt, uint32_t start_ticks,
                        foc_sweep_current_fn current_step)
 {
@@ -216,6 +248,13 @@ void foc_sweep_run_isr(motor_handle_t *m, motor_runtime_t *rt, uint32_t start_ti
   if (!m || owner != m) return;
   if (!rt || !current_step || !allowed(m)) { finish(m, SWEEP_STOP); return; }
   control_ticks = dwt_get_ticks();
+  /**
+   * 周期间隔监测(初次进入时不会执行)
+   *   - 测的是相邻两次进入该 ISR 时 start_ticks 的间隔（即电流环抖动）
+   *   - 初次跳过检查，之后要求 ∈ [0.8, 1.2]，否则 timing_reason=1，SWEEP_TIMING 中止
+   *   - 维护 interval_min/max/last，供 0xBD 状态帧诊断
+   * 原理：频响估计假设均匀采样；若 NVIC 抢占、外环拖链导致周期失配，H1/相干性不可信，应 Fail-fast
+   */
   if (have_previous) {
     uint32_t interval = dwt_elapsed_us(previous_ticks, start_ticks);
     float period = 1000000.0f / (float)FOC_CURRENT_LOOP_FS_HZ;
