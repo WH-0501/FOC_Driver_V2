@@ -574,6 +574,11 @@
               <FilePath>..\APP\FOC\sweep\sweep_engine.c</FilePath>
             </File>
             <File>
+              <FileName>sweep_prepare.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\FOC\sweep\sweep_prepare.c</FilePath>
+            </File>
+            <File>
               <FileName>foc_sweep.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\FOC\sweep\foc_sweep.c</FilePath>

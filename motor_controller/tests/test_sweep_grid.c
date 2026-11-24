@@ -1,5 +1,5 @@
 /* Test the actual private foreground helper, with libm as independent oracle. */
-#include "../project/APP/FOC/sweep/sweep_engine.c"
+#include "../project/APP/FOC/sweep/sweep_prepare.c"
 #include <assert.h>
 #include <stdio.h>
 int main(void) {

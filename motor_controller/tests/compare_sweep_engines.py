@@ -14,6 +14,7 @@ import numpy as np
 p = argparse.ArgumentParser()
 p.add_argument('--baseline-root', type=Path, required=True, help='Previous motor_controller directory')
 p.add_argument('--current-root', type=Path, default=Path(__file__).resolve().parents[1])
+p.add_argument('--compare-chirp-revision', action='store_true', help='Bound chirp generator changes; other modes remain exact')
 p.add_argument('--build-dir', type=Path, required=True)
 a = p.parse_args()
 current = a.current_root.resolve()
@@ -57,7 +58,7 @@ for name, root in [('before',a.baseline_root.resolve()),('after',current)]:
     folder.mkdir(exist_ok=True)
     sweep=root/'project/APP/FOC/sweep'
     dll=folder/(name+'.dll')
-    cmd=['cl','/nologo','/LD','/TC','/std:c11','/O2','/fp:precise','/I'+str(sweep),str(wrapper),str(sweep/'sweep_engine.c'),str(sweep/'sweep_chirp.c'),'/Fe:'+str(dll)]
+    cmd=['cl','/nologo','/LD','/TC','/std:c11','/O2','/fp:precise','/I'+str(sweep),str(wrapper),str(sweep/'sweep_engine.c'),str(sweep/'sweep_chirp.c'),*([str(sweep/'sweep_prepare.c')] if (sweep/'sweep_prepare.c').exists() else []),'/Fe:'+str(dll)]
     batch=folder/'build.cmd'
     batch.write_text('@echo off\ncall "'+str(vc)+'" >nul\n'+subprocess.list2cmdline(cmd)+'\nexit /b %errorlevel%\n',encoding='utf-8')
     subprocess.run(['cmd','/d','/c',str(batch)],cwd=folder,check=True)
@@ -65,7 +66,7 @@ for name, root in [('before',a.baseline_root.resolve()),('after',current)]:
     lib.simulate.argtypes=[ct.POINTER(Config),ct.c_uint,ct.c_float,ct.POINTER(ct.c_float),ct.POINTER(Result)]
     libraries.append(lib)
 summary=dict(before_bytes=libraries[0].engine_bytes(),after_bytes=libraries[1].engine_bytes(),cases=0,
-             exact_fields=True, rejected_cases=0, max_waveform_delta_a=0.0,max_gain_delta_db=0.0,max_phase_delta_deg=0.0,max_coherence_delta=0.0)
+             exact_fields=not a.compare_chirp_revision, exact_nonchirp_fields=True, rejected_cases=0, max_waveform_delta_a=0.0,max_gain_delta_db=0.0,max_phase_delta_deg=0.0,max_coherence_delta=0.0)
 for fs in (10000,20000,40000):
     for method in (1,2,3):
         for count in range(3,17):
@@ -80,10 +81,11 @@ for fs in (10000,20000,40000):
                     summary['rejected_cases']+=1
                     continue
                 wave=float(np.max(np.abs(traces[0][:counts[0]]-traces[1][:counts[0]])))
-                assert wave==0.0,(cfg.method,count,wave)
+                assert wave < 3e-6 if method==3 and a.compare_chirp_revision else wave==0.0,(cfg.method,count,wave)
                 summary['max_waveform_delta_a']=max(summary['max_waveform_delta_a'],wave)
                 for old,new in zip(*results):
-                    for field,_ in Result._fields_:
+                    fields=('hz','blocks') if method==3 and a.compare_chirp_revision else tuple(f for f,_ in Result._fields_)
+                    for field in fields:
                         assert getattr(old,field)==getattr(new,field),(fs,method,count,low,peak,field,getattr(old,field),getattr(new,field))
                     ratio=complex(new.real,new.imag)/complex(old.real,old.imag)
                     gain=abs(20*np.log10(abs(ratio)))
