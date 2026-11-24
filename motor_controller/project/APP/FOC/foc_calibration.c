@@ -1,3 +1,14 @@
+/* Foreground-only module: preserve arithmetic, optimize code size. */
+#if defined(__CC_ARM)
+#pragma Ospace
+#endif
+/* Share foreground calibration helpers instead of duplicating their bodies.
+ * This module is not called by the FOC interrupt. */
+#if defined(__CC_ARM)
+#define CAL_SHARED __attribute__((noinline))
+#else
+#define CAL_SHARED
+#endif
 #include "foc_calibration.h"
 #include "foc.h"
 #include "board.h"
@@ -62,7 +73,7 @@ void cal_elec_align_cfg_default(cal_elec_align_cfg_t *cfg)
 }
 
 /** 与旧 foc_align_raw_elec_rad / encoder 一致：angle_rad × pole_pairs，未减 offset */
-static float cal_encoder_raw_elec_rad(const motor_handle_t *m)
+static CAL_SHARED float cal_encoder_raw_elec_rad(const motor_handle_t *m)
 {
   float pole_pairs;
 
@@ -75,7 +86,7 @@ static float cal_encoder_raw_elec_rad(const motor_handle_t *m)
   return m->state.shaft.angle_rad * pole_pairs; // 电机轴单圈机械角度 × pole_pairs = 电机单圈电角度
 }
 
-static void cal_flip_direction(cal_ctx_t *ctx)
+static CAL_SHARED void cal_flip_direction(cal_ctx_t *ctx)
 {
   if ((ctx == NULL) || (ctx->m == NULL) || (ctx->rt == NULL))
   {
@@ -113,7 +124,7 @@ static bool cal_polarity_probe_needs_flip(float iq_probe, float iq_min_a)
   return (iq_probe < 0.0f);
 }
 
-static bool cal_polarity_probe_aligned(float iq_probe, float iq_min_a)
+static CAL_SHARED bool cal_polarity_probe_aligned(float iq_probe, float iq_min_a)
 {
   if (fabsf(iq_probe) < iq_min_a)
   {
@@ -167,7 +178,7 @@ static bool cal_theta_matches_expected(const cal_ctx_t *ctx, float tol_rad)
   return err <= tol_rad;
 }
 
-static void cal_hold_voltage(cal_ctx_t *ctx, float ud, float uq, float angle_el, uint32_t hold_ms)
+static CAL_SHARED void cal_hold_voltage(cal_ctx_t *ctx, float ud, float uq, float angle_el, uint32_t hold_ms)
 {
   uint32_t elapsed = 0u;
 
@@ -269,7 +280,7 @@ static cal_lock_axis_t cal_ctx_lock_axis(const cal_ctx_t *ctx)
  * @brief 开环 Park 角 θ_open 下，转子 d 轴期望电角（编码器 raw 电角系）。
  * Ud 锁定：θ_d ≈ θ_open；Uq 锁定：θ_d ≈ θ_open + uq_d_axis_offset_rad。
  */
-static float cal_rotor_d_axis_ref_rad(const cal_ctx_t *ctx, float open_loop_rad)
+static CAL_SHARED float cal_rotor_d_axis_ref_rad(const cal_ctx_t *ctx, float open_loop_rad)
 {
   if (cal_ctx_lock_axis(ctx) == CAL_LOCK_AXIS_UQ)
   {
@@ -304,7 +315,7 @@ static float cal_offset_dual_friction_avg(const cal_ctx_t *ctx,
   return cal_offset_friction_avg(off0, off1);
 }
 
-static void cal_setup_lock_axes(cal_ctx_t *ctx)
+static CAL_SHARED void cal_setup_lock_axes(cal_ctx_t *ctx)
 {
   if (ctx == NULL)
   {

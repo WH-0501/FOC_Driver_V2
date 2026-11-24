@@ -1,3 +1,7 @@
+/* Foreground-only module: preserve arithmetic, optimize code size. */
+#if defined(__CC_ARM)
+#pragma Ospace
+#endif
 #include "can_fd_custom_codec.h"
 #include "can_fd_custom.h"
 #include "common.h"

@@ -664,59 +664,42 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
     case CAN_FD_CMD_FAULT_RESET:
       result = mc_reset_from_exception();
       reply_payload[0] = (uint8_t)result;
-      can_fd_custom_reply(CAN_FD_CMD_FAULT_RESET, reply_payload, 1u);
+      can_fd_custom_reply(cmd, reply_payload, 1u);
       break;
 
     case CAN_FD_CMD_ENABLE:
       result = (payload_len >= 1u && payload[0] <= 1u)
           ? (payload[0] ? mc_enable() : mc_disable()) : ERR_PARAM;
       reply_payload[0] = (uint8_t)result;
-      can_fd_custom_reply(CAN_FD_CMD_ENABLE, reply_payload, 1u);
+      can_fd_custom_reply(cmd, reply_payload, 1u);
       break;
 
     case CAN_FD_CMD_CONTROL_MODE:
       result = (payload_len >= 1u)
           ? mc_set_ctrl_mode(can_fd_custom_wire_mode_to_ctrl(payload[0])) : ERR_PARAM;
       reply_payload[0] = (uint8_t)result;
-      can_fd_custom_reply(CAN_FD_CMD_CONTROL_MODE, reply_payload, 1u);
+      can_fd_custom_reply(cmd, reply_payload, 1u);
       break;
 
     case CAN_FD_CMD_SET_POS_PID:
-      if (payload_len >= 6u)
-      {
-        if (can_fd_custom_require_disabled())
-        {
-          can_fd_codec_unpack_pid(payload, &m->config.pid.position.kp, &m->config.pid.position.ki,
-                                  &m->config.pid.position.kd);
-          mc_clear_pid_state();
-          can_fd_custom_reply_pid(CAN_FD_CMD_GET_POS_PID, &m->config.pid.position);
-        }
-      }
-      break;
-
     case CAN_FD_CMD_SET_VEL_PID:
-      if (payload_len >= 6u)
-      {
-        if (can_fd_custom_require_disabled())
-        {
-          can_fd_codec_unpack_pid(payload, &m->config.pid.velocity.kp, &m->config.pid.velocity.ki,
-                                  &m->config.pid.velocity.kd);
-          mc_clear_pid_state();
-          can_fd_custom_reply_pid(CAN_FD_CMD_GET_VEL_PID, &m->config.pid.velocity);
-        }
-      }
-      break;
-
     case CAN_FD_CMD_SET_CUR_PID:
-      if (payload_len >= 6u)
+      if (payload_len >= 6u && can_fd_custom_require_disabled())
       {
-        if (can_fd_custom_require_disabled())
+        pid_param_t *pid = cmd == CAN_FD_CMD_SET_POS_PID ? &m->config.pid.position :
+                           cmd == CAN_FD_CMD_SET_VEL_PID ? &m->config.pid.velocity : &m->config.pid.iq;
+        uint8_t reply = cmd == CAN_FD_CMD_SET_POS_PID ? CAN_FD_CMD_GET_POS_PID :
+                        cmd == CAN_FD_CMD_SET_VEL_PID ? CAN_FD_CMD_GET_VEL_PID : CAN_FD_CMD_GET_CUR_PID;
+        can_fd_codec_unpack_pid(payload, &pid->kp, &pid->ki, &pid->kd);
+        if (cmd == CAN_FD_CMD_SET_CUR_PID)
         {
-          can_fd_codec_unpack_pid(payload, &m->config.pid.iq.kp, &m->config.pid.iq.ki, &m->config.pid.iq.kd);
-          can_fd_codec_unpack_pid(payload, &m->config.pid.id.kp, &m->config.pid.id.ki, &m->config.pid.id.kd);
-          mc_clear_pid_state();
-          can_fd_custom_reply_pid(CAN_FD_CMD_GET_CUR_PID, &m->config.pid.iq);
+          /* Only gains are shared: retain independent d/q limits and state. */
+          m->config.pid.id.kp = pid->kp;
+          m->config.pid.id.ki = pid->ki;
+          m->config.pid.id.kd = pid->kd;
         }
+        mc_clear_pid_state();
+        can_fd_custom_reply_pid(reply, pid);
       }
       break;
 
@@ -747,15 +730,10 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       break;
 
     case CAN_FD_CMD_GET_POS_PID:
-      can_fd_custom_reply_pid(CAN_FD_CMD_GET_POS_PID, &m->config.pid.position);
-      break;
-
     case CAN_FD_CMD_GET_VEL_PID:
-      can_fd_custom_reply_pid(CAN_FD_CMD_GET_VEL_PID, &m->config.pid.velocity);
-      break;
-
     case CAN_FD_CMD_GET_CUR_PID:
-      can_fd_custom_reply_pid(CAN_FD_CMD_GET_CUR_PID, &m->config.pid.iq);
+      can_fd_custom_reply_pid(cmd, cmd == CAN_FD_CMD_GET_POS_PID ? &m->config.pid.position :
+                             cmd == CAN_FD_CMD_GET_VEL_PID ? &m->config.pid.velocity : &m->config.pid.iq);
       break;
 
     case CAN_FD_CMD_GET_STIFF_DAMP:
@@ -780,7 +758,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
           s_node_id = new_id;
           (void)comm_set_node_id_filter(new_id);
           can_fd_codec_write_u16_be(node_id_be, new_id);
-          can_fd_custom_reply(CAN_FD_CMD_SET_NODE_ID, node_id_be, 2u);
+          can_fd_custom_reply(cmd, node_id_be, 2u);
         }
       }
       break;
@@ -789,7 +767,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       if (can_fd_custom_require_disabled())
       {
         reply_payload[0] = motor_config_save(&m->config) ? 1u : 0u;
-        can_fd_custom_reply(CAN_FD_CMD_SAVE_PARAMS, reply_payload, 1u);
+        can_fd_custom_reply(cmd, reply_payload, 1u);
       }
       break;
 
@@ -801,7 +779,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         {
           s_node_id = m->config.comm.can_id;
         }
-        can_fd_custom_reply(CAN_FD_CMD_RESET_TO_FACTORY, reply_payload, 1u);
+        can_fd_custom_reply(cmd, reply_payload, 1u);
       }
       break;
 
@@ -813,14 +791,14 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         {
           (void)mc_clear_pid_state();
         }
-        can_fd_custom_reply(CAN_FD_CMD_RESET_PID_TO_FACTORY, reply_payload, 1u);
+        can_fd_custom_reply(cmd, reply_payload, 1u);
       }
       break;
 
     case CAN_FD_CMD_CLEAR_FAULT:
       result = mc_try_recover_from_fault();
       reply_payload[0] = (uint8_t)result;
-      can_fd_custom_reply(CAN_FD_CMD_CLEAR_FAULT, reply_payload, 1u);
+      can_fd_custom_reply(cmd, reply_payload, 1u);
       break;
 
     case CAN_FD_CMD_SET_ORIGIN:
@@ -832,7 +810,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
 
     case CAN_FD_CMD_GET_MOTOR_TYPE:
       reply_payload[0] = 0u;
-      can_fd_custom_reply(CAN_FD_CMD_GET_MOTOR_TYPE, reply_payload, 1u);
+      can_fd_custom_reply(cmd, reply_payload, 1u);
       break;
 
     case CAN_FD_CMD_GET_MOTOR_PARAM:
@@ -870,7 +848,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       {
         mp_reply[14] |= CAN_FD_MOTOR_PARAM_FLAG_ALIGN_DONE;
       }
-      can_fd_custom_reply(CAN_FD_CMD_GET_MOTOR_PARAM, mp_reply, CAN_FD_MOTOR_PARAM_REPLY_LEN);
+      can_fd_custom_reply(cmd, mp_reply, CAN_FD_MOTOR_PARAM_REPLY_LEN);
       break;
     }
 
@@ -962,7 +940,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
         temp_cal_raw = can_fd_codec_read_i16_be(payload);
         s_mcu_temp_cal_c = (float)temp_cal_raw / 100.0f;
         reply_payload[0] = 1u;
-        can_fd_custom_reply(CAN_FD_CMD_MCU_TEMP_CALIB, reply_payload, 1u);
+        can_fd_custom_reply(cmd, reply_payload, 1u);
       }
       break;
 
@@ -970,18 +948,18 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
       if (!mc_kth71_cal_active())
       {
         reply_payload[0] = (uint8_t)mc_kth71_cal_start();
-        can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_START, reply_payload, 1u);
+        can_fd_custom_reply(cmd, reply_payload, 1u);
       }
       break;
 
     case CAN_FD_CMD_KTH71_CAL_STOP:
       reply_payload[0] = (uint8_t)mc_kth71_cal_stop();
-      can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_STOP, reply_payload, 1u);
+      can_fd_custom_reply(cmd, reply_payload, 1u);
       break;
 
     case CAN_FD_CMD_KTH71_CAL_TRIGGER:
       reply_payload[0] = (uint8_t)mc_kth71_cal_trigger();
-      can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_TRIGGER, reply_payload, 1u);
+      can_fd_custom_reply(cmd, reply_payload, 1u);
       break;
 
     case CAN_FD_CMD_KTH71_CAL_STATUS:
@@ -990,7 +968,7 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
 
       (void)mc_kth71_cal_get_status(&anlc_status);
       reply_payload[0] = anlc_status;
-      can_fd_custom_reply(CAN_FD_CMD_KTH71_CAL_STATUS, reply_payload, 1u);
+      can_fd_custom_reply(cmd, reply_payload, 1u);
       break;
     }
 

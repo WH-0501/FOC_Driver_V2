@@ -1,3 +1,7 @@
+/* Foreground-only module: reduce code size without changing floating-point mode. */
+#if defined(__CC_ARM)
+#pragma Ospace
+#endif
 #include "sweep_protocol.h"
 #if FOC_SWEEP_ENABLED
 #include "common.h"

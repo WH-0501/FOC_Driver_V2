@@ -1,3 +1,7 @@
+/* Foreground-only module: reduce code size without changing floating-point mode. */
+#if defined(__CC_ARM)
+#pragma Ospace
+#endif
 #include "motor_config.h"
 #include "common.h"
 #include "foc_pid.h"

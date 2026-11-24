@@ -6,6 +6,10 @@
 
 #define SWEEP_PI 3.14159265358979323846f
 static int finite_float(float f) { return f >= -FLT_MAX && f <= FLT_MAX; }
+/* Keep the existing shared call in the ISR when foreground callers change. */
+#if defined(__CC_ARM)
+__attribute__((noinline))
+#endif
 static void reset_phase(sweep_engine_t *e, unsigned i)
 {
   sweep_tone_t *t = &e->tone[i];
@@ -83,12 +87,15 @@ int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *cfg)
     }
     if (cfg->method != SWEEP_STEPPED_SINE) {
       float grid = cfg->sample_hz / period_samples;
-      unsigned bin = (unsigned)floorf(f / grid + 0.5f);
+      unsigned bin = (unsigned)(f / grid + 0.5f);
       if (i && bin <= bins[i-1u]) bin = bins[i-1u] + 1u;
       bins[i] = (uint16_t)bin;
       f = bin * grid;
     } else {
-      bins[i] = (uint16_t)ceilf(cfg->sample_hz / f);
+      /* Positive finite quotient: exact integer ceil, without a math call. */
+      float samples = cfg->sample_hz / f;
+      bins[i] = (uint16_t)samples;
+      if ((float)bins[i] < samples) ++bins[i];
       f = cfg->sample_hz / bins[i];
     }
     if (f <= last || f > cfg->high_hz + 0.001f) return 2;
@@ -131,49 +138,40 @@ int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *cfg)
     float maximum = sweep_chirp_prepare(&e->chirp, cfg->low_hz > 40.0f ? 20.0f : cfg->low_hz,
                         cfg->high_hz, cfg->sample_hz, e->length);
     e->scale = cfg->peak / (maximum * 1.001f);
-    for (j = 0u; j < e->length; ++j) {
-      float x = sweep_chirp_step(&e->chirp, e->length, j) * e->scale;
-      for (i = 0u; i < e->count; ++i) {
-        sweep_tone_t *t = &e->tone[i];
-        t->xr += x * t->c; t->xi -= x * t->s; rotate(t);
-      }
-    }
-    for (i = 0u; i < e->count; ++i) {
-      e->tone[i].xr *= 2.0f / e->length; e->tone[i].xi *= 2.0f / e->length;
-      reset_phase(e, i);
-    }
-    sweep_chirp_reset(&e->chirp);
-    select_point(e);
-    return 0;
   }
-  /* X is identical in all coherent blocks. Precompute it from the exact
-   * finite-precision waveform/basis, including cross-tone leakage; not X=-j*A.
-   * All this work is foreground, with interrupts enabled. */
-  if (e->method == SWEEP_MULTISINE) {
-    for (j = 0u; j < period_samples; ++j) {
-      float x = 0.0f;
-      for (i = 0u; i < e->count; ++i) x += e->tone[i].s * e->scale;
-      for (i = 0u; i < e->count; ++i) {
-        sweep_tone_t *t = &e->tone[i];
-        t->xr += x * t->c; t->xi -= x * t->s; rotate(t);
-      }
-    }
-    for (i = 0u; i < e->count; ++i) {
-      e->tone[i].xr *= 2.0f / period_samples; e->tone[i].xi *= 2.0f / period_samples;
-      reset_phase(e, i);
-    }
-  } else {
-    for (i = 0u; i < e->count; ++i) {
-      sweep_tone_t *t = &e->tone[i];
-      unsigned length = 4u * t->bin_or_period;
+  /* All modes collect the exact generated input against the same recurrence.
+   * Share foreground DFT code; preserve each mode's loop order and scaling.
+   * Stepped sine has one tone per group; multisine/chirp share one group. */
+  {
+    unsigned group, groups = e->method == SWEEP_STEPPED_SINE ? e->count : 1u;
+    for (group = 0u; group < groups; ++group) {
+      unsigned first = e->method == SWEEP_STEPPED_SINE ? group : 0u;
+      unsigned end = e->method == SWEEP_STEPPED_SINE ? group + 1u : e->count;
+      unsigned length = e->method == SWEEP_STEPPED_SINE ?
+          4u * e->tone[group].bin_or_period : period_samples;
       for (j = 0u; j < length; ++j) {
-        float x = t->s * e->scale;
-        t->xr += x * t->c; t->xi -= x * t->s; rotate(t);
+        float x;
+        if (e->method == SWEEP_CHIRP)
+          x = sweep_chirp_step(&e->chirp, e->length, j) * e->scale;
+        else if (e->method == SWEEP_STEPPED_SINE)
+          x = e->tone[group].s * e->scale;
+        else {
+          x = 0.0f;
+          for (i = first; i < end; ++i) x += e->tone[i].s * e->scale;
+        }
+        for (i = first; i < end; ++i) {
+          sweep_tone_t *t = &e->tone[i];
+          t->xr += x * t->c; t->xi -= x * t->s; rotate(t);
+        }
       }
-      t->xr *= 2.0f / length; t->xi *= 2.0f / length;
-      reset_phase(e, i);
+      for (i = first; i < end; ++i) {
+        e->tone[i].xr *= 2.0f / length;
+        e->tone[i].xi *= 2.0f / length;
+        reset_phase(e, i);
+      }
     }
   }
+  if (e->method == SWEEP_CHIRP) sweep_chirp_reset(&e->chirp);
   select_point(e);
   return 0;
 }

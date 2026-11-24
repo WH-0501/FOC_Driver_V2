@@ -1,3 +1,7 @@
+/* Foreground-only module: reduce code size without changing floating-point mode. */
+#if defined(__CC_ARM)
+#pragma Ospace
+#endif
 #include "comm.h"
 #include "comm_transport.h"
 #include "comm_protocol.h"
