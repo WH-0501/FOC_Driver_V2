@@ -584,6 +584,11 @@
               <FilePath>..\APP\FOC\sweep\foc_sweep.c</FilePath>
             </File>
             <File>
+              <FileName>sweep_record.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\FOC\sweep\sweep_record.c</FilePath>
+            </File>
+            <File>
               <FileName>sweep_protocol.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\FOC\sweep\sweep_protocol.c</FilePath>

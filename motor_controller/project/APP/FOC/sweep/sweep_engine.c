@@ -58,17 +58,33 @@ static float step_chirp(sweep_engine_t *e, float y)
   unsigned n = e->length - (measuring ? e->block_remaining : e->remaining);
   float x = e->scale * sweep_chirp_step(&e->chirp, e->length, n);
   if (phase_reset) sweep_chirp_reset(&e->chirp);
-  for (i = 0u; i < e->count; ++i) {
-    sweep_tone_t *t = &e->tone[i];
-    if (measuring) { t->yr += y*t->c; t->yi -= y*t->s; }
-    if (block_end) {
-      float yr=t->yr, yi=t->yi;
+  /* Settle produces the identical chirp but no spectrum is consumed. Keep
+   * oscillators at the phase required by the first measurement sample. */
+  if (!measuring) {
+    if (phase_reset) for (i=0; i<e->count; ++i) { e->tone[i].s=0; e->tone[i].c=1; }
+  } else if (!block_end) {
+    /* Hot path: hoist all stage tests out of the per-frequency loop.
+     * Preserve each float operation and its accumulation order. */
+    sweep_tone_t *t=e->tone, *end=t+e->count;
+    /* Cache the original phase and walk by pointer: avoid per-bin index
+     * multiplication, repeated count loads and reloading phase after stores.
+     * Same binary32 operations/order within each accumulator and oscillator. */
+    for (; t!=end; ++t) {
+      float s=t->s, c=t->c, ds=t->ds, dc=t->dc;
+      float yr=t->yr + y*c, yi=t->yi - y*s;
+      float sn=s*dc + c*ds, cn=c*dc - s*ds;
+      t->yr=yr; t->yi=yi; t->s=sn; t->c=cn;
+    }
+  } else {
+    for (i=0; i<e->count; ++i) {
+      sweep_tone_t *t=&e->tone[i];
+      float yr,yi;
+      t->yr += y*t->c; t->yi -= y*t->s;
+      yr=t->yr; yi=t->yi;
       t->yy += yr*yr + yi*yi;
       t->sum_r += yr; t->sum_i += yi;
-      t->yr = t->yi = 0.0f;
+      t->yr=t->yi=t->s=0; t->c=1;
     }
-    if (phase_reset) { t->s=0.0f; t->c=1.0f; }
-    else rotate(t);
   }
   ++e->samples;
   if (e->remaining) --e->remaining;

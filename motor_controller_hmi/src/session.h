@@ -1,6 +1,7 @@
 #pragma once
 #include "backend.h"
 #include "sampling.h"
+#include "sweep_recording.h"
 #include <QJsonObject>
 #include <QMutex>
 #include <QThread>
@@ -41,6 +42,8 @@ class Session : public QThread {
     bool motorEnabled(quint32 node) const;
     QJsonObject parameters(quint32 node) const;
     QJsonObject faultSnapshot() const;
+    void beginSweepRecording(quint32 node, quint16 run);
+    SweepRecording sweepRecording() const;
     Sampling sampling;
     std::array<Sampling, 3> debugSampling{Sampling(120000), Sampling(120000), Sampling(120000)};
     std::atomic<quint64> rxCount{0}, txCount{0};
@@ -58,6 +61,7 @@ class Session : public QThread {
     void run() override;
 
   private:
+    SweepRecording sweepRecording_;
     Connection config_;
     BackendFactory backendFactory_;
     mutable QMutex mutex_;

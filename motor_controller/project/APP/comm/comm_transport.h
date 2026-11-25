@@ -15,6 +15,7 @@ typedef struct
 {
   uint32_t id;
   uint8_t len;
+  bool bulk; /* Low-priority streaming; occupies existing structure padding. RX=false. */
   const uint8_t *data;
 } comm_frame_t;
 
@@ -26,6 +27,8 @@ struct comm_transport_ops
   bool (*init)(void *ctx);
   void (*deinit)(void *ctx);
   bool (*send)(void *ctx, const comm_frame_t *frame);
+  /* Optional nonblocking hint, checked before serialization. send still validates. */
+  bool (*tx_ready)(void *ctx, bool bulk);
   /** RX 中断服务（平台 CAN 驱动在 RIF 等事件中调用 comm_can_rx_isr 间接进入）。 */
   void (*rx_isr)(void);
   unsigned int (*poll_rx)(void *ctx,

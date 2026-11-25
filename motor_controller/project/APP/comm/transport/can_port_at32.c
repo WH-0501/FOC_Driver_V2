@@ -35,20 +35,10 @@ static uint8_t can_port_dlc_to_bytes(can_data_length_type dlc)
 
 static can_data_length_type can_port_bytes_to_dlc(uint8_t len)
 {
-  static const uint8_t lengths[16] = {
-      0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64
-  };
-  uint8_t i;
-
-  for (i = 0u; i < 16u; ++i)
-  {
-    if (len <= lengths[i])
-    {
-      return (can_data_length_type)i;
-    }
-  }
-
-  return CAN_DLC_BYTES_64;
+  /* Same CAN-FD DLC table, constant-time including the 64-byte stream path. */
+  if (len <= 8u) return (can_data_length_type)len;
+  if (len <= 24u) return (can_data_length_type)(((len + 3u) >> 2) + 6u);
+  return (can_data_length_type)(len <= 32u ? 13u : len <= 48u ? 14u : 15u);
 }
 
 static void can_port_frame_from_rxbuf(const can_rxbuf_type *rx, comm_frame_t *out)
@@ -60,6 +50,7 @@ static void can_port_frame_from_rxbuf(const can_rxbuf_type *rx, comm_frame_t *ou
 
   out->id = rx->id;
   out->len = can_port_dlc_to_bytes(rx->data_length);
+  out->bulk = false;
   out->data = rx->data;
 }
 
@@ -226,50 +217,74 @@ static void can_port_at32_deinit(void *ctx)
   s_rx_q.drop_count = 0u;
 }
 
+/* Foreground only. Revisit pending commits even after the last software slot
+ * has been released: TSNEXT may still be high immediately after enqueue. */
+static void can_port_at32_kick_bulk(void)
+{
+  if (!CAN1->ctrlstat_bit.tsnext && !CAN1->ctrlstat_bit.tsall &&
+      !CAN1->ctrlstat_bit.tsone && !CAN1->ctrlstat_bit.tsa &&
+      CAN1->ctrlstat_bit.tsstat != CAN_STB_STATUS_EMPTY)
+    (void)can_txbuf_transmit(CAN1, CAN_TRANSMIT_STB_ALL);
+}
+static bool can_port_at32_tx_ready(void *ctx, bool bulk)
+{
+  (void)ctx;
+  if (CAN1->ctrlstat_bit.stby) return false;
+  if (bulk) return !CAN1->ctrlstat_bit.tsa && !CAN1->ctrlstat_bit.tsnext &&
+                   CAN1->ctrlstat_bit.tsstat != CAN_STB_STATUS_FULL;
+  return !CAN1->ctrlstat_bit.tpe && !CAN1->ctrlstat_bit.tpa;
+}
+
+/* This port sends standard data frames only. Follow the vendor TBSEL/TSNEXT
+ * byte-write sequence, but copy the already serialized bytes directly to CAN
+ * RAM. No temporary can_txbuf_type, full-struct memset, or byte repacking.
+ * memcpy into a word is defined for unaligned sources (no aliasing casts).
+ * Tail/DLC padding is explicitly zero; no read beyond frame->len. */
+static void can_port_at32_write(const comm_frame_t *frame)
+{
+  uint8_t len = frame->len;
+  can_data_length_type dlc = can_port_bytes_to_dlc(len);
+  uint8_t padded = can_port_dlc_to_bytes(dlc);
+  volatile uint8_t *reg = (volatile uint8_t *)&CAN1->ctrlstat + 1;
+  const uint8_t *data = frame->data;
+  volatile uint32_t *dest = CAN1->tbdat;
+  unsigned words = len >> 2;
+  uint32_t format = (uint32_t)dlc;
+  *reg = (uint8_t)((*reg & 0x60u) | (frame->bulk ? 0x80u : 0u));
+  CAN1->tbid = (frame->id & 0x7ffu) << 18;
+#ifdef SUPPORT_CAN_FD
+  format |= (1u << 17) | (1u << 18); /* FDF + BRS */
+#endif
+  CAN1->tbfmt = format;
+  while (words--) {
+    uint32_t word;
+    memcpy(&word, data, 4); *dest++ = word; data += 4;
+  }
+  if (len & 3u) {
+    uint32_t tail = 0u;
+    memcpy(&tail, data, len & 3u); *dest++ = tail;
+  }
+  while (dest < CAN1->tbdat + ((padded + 3u) >> 2)) *dest++ = 0u;
+  CAN1->tbtyp = 0u;
+  CAN1->reserved8 = 0u;
+  if (frame->bulk) {
+    reg = (volatile uint8_t *)&CAN1->ctrlstat + 2;
+    *reg = (uint8_t)(*reg | 0x40u); /* Commit once; hardware owns the slot. */
+  }
+}
 static bool can_port_at32_send(void *ctx, const comm_frame_t *frame)
 {
-  can_txbuf_type tx;
-  uint8_t len;
-  uint8_t i;
-
-  (void)ctx;
-
-  if (frame == NULL)
-  {
+  if (!frame || frame->len > COMM_FRAME_MAX_LEN ||
+      (frame->len && !frame->data) || !can_port_at32_tx_ready(ctx, frame->bulk))
     return false;
-  }
-
-  len = frame->len;
-  if (len > COMM_FRAME_MAX_LEN)
+  can_port_at32_write(frame);
+  if (frame->bulk)
   {
-    len = COMM_FRAME_MAX_LEN;
+    /* A pending TSALL/TSNEXT is NOT a failed enqueue. poll_rx retries the kick. */
+    can_port_at32_kick_bulk();
+    return true;
   }
-
-  memset(&tx, 0, sizeof(tx));
-  tx.id = frame->id;
-  tx.id_type = CAN_ID_STANDARD;
-  tx.frame_type = CAN_FRAME_DATA;
-  tx.data_length = can_port_bytes_to_dlc(len);
-#ifdef SUPPORT_CAN_FD
-  tx.fd_format = CAN_FORMAT_FD;
-  tx.fd_rate_switch = CAN_BRS_ON;
-#endif
-  for (i = 0u; i < len; ++i)
-  {
-    tx.data[i] = frame->data[i];
-  }
-
-  if (can_txbuf_write(CAN1, CAN_TXBUF_PTB, &tx) != SUCCESS)
-  {
-    return false;
-  }
-
-  if (can_txbuf_transmit(CAN1, CAN_TRANSMIT_PTB) != SUCCESS)
-  {
-    return false;
-  }
-
-  return true;
+  return can_txbuf_transmit(CAN1, CAN_TRANSMIT_PTB) == SUCCESS;
 }
 
 static unsigned int can_port_at32_poll_rx(void *ctx,
@@ -281,6 +296,7 @@ static unsigned int can_port_at32_poll_rx(void *ctx,
 
   (void)ctx;
 
+  can_port_at32_kick_bulk();
   while (s_rx_q.tail != s_rx_q.head)
   {
     const can_rxbuf_type *rx = &s_rx_pool[s_rx_q.tail];
@@ -295,6 +311,7 @@ static unsigned int can_port_at32_poll_rx(void *ctx,
 
     frame.id = rx->id;
     frame.len = len;
+    frame.bulk = false;
     frame.data = s_rx_scratch;
     if (handler != NULL)
     {
@@ -314,6 +331,7 @@ static const comm_transport_ops_t s_can_port_at32_ops = {
     .init = can_port_at32_init,
     .deinit = can_port_at32_deinit,
     .send = can_port_at32_send,
+    .tx_ready = can_port_at32_tx_ready,
     .rx_isr = can_port_at32_rx_irq_handler,
     .poll_rx = can_port_at32_poll_rx,
     .set_rx_filter = can_port_at32_set_rx_filter,

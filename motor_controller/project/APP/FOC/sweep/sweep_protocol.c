@@ -5,6 +5,7 @@
 #include "sweep_protocol.h"
 #if FOC_SWEEP_ENABLED
 #include "common.h"
+#include "sweep_record.h"
 #include <string.h>
 /* Wire v1 retained for the existing MotorTune device-sweep UI. Big-endian. */
 static uint16_t read16(const uint8_t *p) { return (uint16_t)(((uint16_t)p[0] << 8) | p[1]); }
@@ -36,7 +37,8 @@ bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
       cfg.low_hz = (float)read16(p + 4); cfg.high_hz = (float)read16(p + 6);
       cfg.peak = (float)read16(p + 9) * 0.001f;
       cfg.sample_hz = (float)FOC_CURRENT_LOOP_FS_HZ;
-      out[1] = (uint8_t)foc_sweep_start_checked(m, &cfg, read16(p + 2), &rejection);
+      out[1] = (uint8_t)foc_sweep_start_recorded(m, &cfg, read16(p + 2), &rejection,
+                                length >= 13u && p[11] == 0xa9u && p[12] == 1u);
     }
   }
   foc_sweep_status(&s);
@@ -76,7 +78,15 @@ bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
       write_float(out + 48, s.motion_limit);
       write_float(out + 52, s.motion_hz);
       reply(cmd, out, 56u);
-    } else reply(cmd, out, 40u);
+    } else {
+      out[40]=0xa9u; out[41]=1u; out[42]=(uint8_t)sweep_record_enabled();
+      /* AA marker distinguishes diagnostics from old zero DLC padding. Counts
+       * are a status snapshot; submitted means CAN-owned, not host-received. */
+      out[43]=0xaau;
+      write32(out+44, sweep_record_dropped());
+      write32(out+48, sweep_record_submitted());
+      reply(cmd, out, 52u);
+    }
   }
   return true;
 }

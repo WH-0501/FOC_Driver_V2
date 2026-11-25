@@ -46,7 +46,7 @@ code = r'''
 #define CAN1_RX_IRQn 30
 typedef unsigned can_data_length_type;
 typedef struct { uint32_t id; can_data_length_type data_length; uint8_t data[64]; } can_rxbuf_type;
-typedef struct { uint32_t id; uint8_t len; const uint8_t *data; } comm_frame_t;
+typedef struct { uint32_t id; uint8_t len; bool bulk; const uint8_t *data; } comm_frame_t;
 typedef struct { unsigned flags; } fake_can;
 static fake_can hardware;
 #define CAN1 (&hardware)
@@ -70,6 +70,7 @@ static int can_rxbuf_read(fake_can *c,can_rxbuf_type *out) {
 static int can_interrupt_flag_get(fake_can *c,unsigned flag) {return (c->flags&flag)!=0;}
 static void can_flag_clear(fake_can *c,unsigned flags) {c->flags &= ~flags;}
 static void NVIC_SetPendingIRQ(int irq) {assert(irq==CAN1_RX_IRQn);pending_irq=1;}
+static void can_port_at32_kick_bulk(void) {}
 static bool consume(const comm_frame_t *f,void *user) {
   (void)user; assert(f->id==1&&f->len==3); delivered[delivered_count++]=f->data[0]; return true;
 }

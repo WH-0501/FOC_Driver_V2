@@ -39,7 +39,7 @@ code = r'''
 static void *s_motor;
 static unsigned sweep_stops;
 static void foc_sweep_stop(void *m, unsigned reason) {(void)m;assert(reason==SWEEP_STOP);++sweep_stops;}
-typedef struct { uint32_t id; uint8_t len; const uint8_t *data; } comm_frame_t;
+typedef struct { uint32_t id; uint8_t len; bool bulk; const uint8_t *data; } comm_frame_t;
 static uint16_t s_node_id=3;
 static unsigned blocked, sent, handled;
 static uint8_t last_cmd,last_data[64];
@@ -58,7 +58,7 @@ code += src[start:end]
 code += function('can_fd_custom_flush_reply')+function('can_fd_custom_reply')+function('can_fd_custom_on_rx')
 code += r'''
 int main(void) {
- uint8_t payload[3]={23,0x40,1}; comm_frame_t f={3,3,payload};
+ uint8_t payload[3]={23,0x40,1}; comm_frame_t f={3,3,false,payload};
  blocked=1;can_fd_custom_on_rx(&f);assert(handled==1&&sent==0&&s_reply_count==1);
  payload[0]=99; /* queued payload must be copied, not a pointer to RX scratch */
  blocked=0;can_fd_custom_flush_reply();assert(sent==1&&last_cmd==0x7E&&last_data[0]==23&&last_data[1]==0x40);

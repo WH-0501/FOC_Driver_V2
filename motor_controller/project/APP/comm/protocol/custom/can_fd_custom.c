@@ -5,6 +5,9 @@
 #include <math.h>
 #include "can_fd_custom.h"
 #include "sweep/sweep_protocol.h"
+#if FOC_SWEEP_ENABLED
+#include "sweep/sweep_record.h"
+#endif
 #include "comm.h"
 #include "can_fd_custom_codec.h"
 #include "can_fd_custom_iap.h"
@@ -56,9 +59,8 @@ static bool can_fd_custom_send_frame(uint32_t id, uint8_t cmd, const uint8_t *pa
   comm_frame_t frame;
   uint8_t total_len;
   uint8_t padded_len;
-  uint8_t i;
 
-  if (s_send == NULL)
+  if (s_send == NULL || !comm_tx_ready(cmd == 0xBFu))
   {
     return false;
   }
@@ -72,17 +74,12 @@ static bool can_fd_custom_send_frame(uint32_t id, uint8_t cmd, const uint8_t *pa
 
   s_tx_buf[0] = s_tx_cnt++;
   s_tx_buf[1] = cmd;
-  for (i = 0u; i < payload_len; ++i)
-  {
-    s_tx_buf[2u + i] = payload[i];
-  }
-  for (i = total_len; i < padded_len; ++i)
-  {
-    s_tx_buf[i] = 0u;
-  }
+  if (payload_len) memcpy(s_tx_buf + 2u, payload, payload_len);
+  memset(s_tx_buf + total_len, 0, padded_len - total_len);
 
   frame.id = id;
   frame.len = padded_len;
+  frame.bulk = cmd == 0xBFu;
   frame.data = s_tx_buf;
 
   return s_send(&frame);
@@ -1130,6 +1127,14 @@ static void can_fd_custom_on_rx(const comm_frame_t *frame)
 static void can_fd_custom_poll(void)
 {
   uint32_t report_interval;
+#if FOC_SWEEP_ENABLED
+  unsigned budget;
+#endif
+#if FOC_SWEEP_ENABLED
+  bool recording = foc_sweep_is_active(s_motor) && sweep_record_enabled();
+#else
+  const bool recording = false;
+#endif
   uint16_t now = (uint16_t)board_time_us();
   uint16_t delta = (uint16_t)(now - s_report_clock);
   s_report_clock = now;
@@ -1144,9 +1149,15 @@ static void can_fd_custom_poll(void)
 
   /* Debug owns high-rate reporting; retain 5 Hz status for fault/enable supervision. */
   report_interval = s_debug_mask ? 200000u : s_report_interval_us;
+  /* Keep 20 Hz supervision, suspend competing debug streams only while
+   * collecting. No persistent rate/config changes; queued replies stay first. */
+  if (recording && report_interval && report_interval < 50000u) report_interval = 50000u;
   if (report_interval == 0u)
   {
-    can_fd_debug_poll();
+    if (!recording) can_fd_debug_poll();
+#if FOC_SWEEP_ENABLED
+    for (budget=0; budget<3u && sweep_record_poll(s_node_id, can_fd_custom_send_frame); ++budget) {}
+#endif
     return;
   }
 
@@ -1155,7 +1166,11 @@ static void can_fd_custom_poll(void)
     s_report_elapsed = 0u;
     can_fd_custom_period_report();
   }
-  can_fd_debug_poll();
+  if (!recording) can_fd_debug_poll();
+#if FOC_SWEEP_ENABLED
+  /* Bounded FIFO fill; always return to protection/command polling. */
+  for (budget=0; budget<3u && sweep_record_poll(s_node_id, can_fd_custom_send_frame); ++budget) {}
+#endif
 }
 
 static void can_fd_custom_bind_transport(bool (*send_fn)(const comm_frame_t *frame))

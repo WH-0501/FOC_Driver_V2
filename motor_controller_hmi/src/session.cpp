@@ -5,6 +5,13 @@
 #include <QSet>
 #include <cmath>
 namespace mt {
+void Session::beginSweepRecording(quint32 node, quint16 run) {
+    QMutexLocker lock(&mutex_); sweepRecording_.reset(node,run);
+}
+SweepRecording Session::sweepRecording() const {
+    QMutexLocker lock(&mutex_); return sweepRecording_;
+}
+
 Session::Session(QObject *p, BackendFactory factory) : QThread(p), backendFactory_(std::move(factory)) {
     connect(
         this, &Session::log, this,
@@ -540,6 +547,11 @@ void Session::run() {
                             sampling.append(s);
                     }
                     continue;
+                }
+                if (c == 0xbf && config_.version == Version::V2) {
+                    QMutexLocker lock(&mutex_);
+                    sweepRecording_.append(f.node,payload);
+                    continue; // bulk data: no per-frame logging, JSON or UI signals
                 }
                 auto data = response(quint8(c), payload, config_.version);
                 if (!data["valid"].toBool()) {

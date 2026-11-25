@@ -1,5 +1,7 @@
 #include "sweep_dialog.h"
 #include "sweep.h"
+#include "scope.h"
+#include "sweep_recording.h"
 #include <QtWidgets>
 #include <cmath>
 #include <map>
@@ -9,7 +11,7 @@ namespace {
 class BodePlot : public QWidget {
 public:
   std::vector<SweepPoint> points;
-  BodePlot() { setMinimumHeight(230); }
+  BodePlot() { setMinimumHeight(300); }
   void paintEvent(QPaintEvent *) override {
     QPainter p(this);
     p.fillRect(rect(), QColor("#0b0e10"));
@@ -29,10 +31,10 @@ public:
         minGain = std::min(minGain, v.gainDb - 2);
         maxGain = std::max(maxGain, v.gainDb + 2);
       }
-    for (int panel = 0; panel < 2; ++panel) {
-      QRectF r(65, 20 + panel * (height() / 2.), width() - 110,
-               height() / 2. - 48);
-      double low = panel ? -180 : minGain, high = panel ? 180 : maxGain;
+    for (int panel = 0; panel < 3; ++panel) {
+      QRectF r(65, 20 + panel * (height() / 3.), width() - 110,
+               height() / 3. - 48);
+      double low = panel==2?0:panel ? -180 : minGain, high = panel==2?1:panel ? 180 : maxGain;
       auto pos = [&](double hz, double v) {
         return QPointF(r.left() + (std::log10(hz) - lo) / (hi - lo) * r.width(),
                        r.bottom() - (v - low) / (high - low) * r.height());
@@ -48,7 +50,7 @@ public:
       }
       p.setPen(Qt::lightGray);
       p.drawText(QPointF(r.left(), r.top() - 5),
-                 panel ? "相位 / °（主值）" : "增益 / dB");
+                 panel==2 ? "相干性 γ²" : panel ? "相位 / °（主值）" : "增益 / dB");
       for (int j = 0; j <= 4; ++j) {
         double hz = std::pow(10., lo + (hi - lo) * j / 4);
         double x = pos(hz, 0).x();
@@ -64,11 +66,11 @@ public:
       QPainterPath path;
       bool pen = false;
       for (auto &v : points) {
-        if (!v.valid) {
+        if (!v.valid && panel!=2) {
           pen = false;
           continue;
         }
-        auto pt = pos(v.hz, panel ? v.phaseDeg : v.gainDb);
+        auto pt = pos(v.hz, panel==2 ? v.inputFit : panel ? v.phaseDeg : v.gainDb);
         if (pen)
           path.lineTo(pt);
         else
@@ -96,6 +98,47 @@ class SweepDialog : public QDialog {
   QLabel *status, *bandwidth;
   QTableWidget *table;
   BodePlot *plot;
+  Scope *wave;
+  QLabel *recordStatus;
+  QComboBox *resultChoice;
+  SweepRecording recording;
+  std::vector<SweepPoint> recordedResults;
+  double recordFs=0;
+  quint32 recordExpected=0;
+  int recordMethod=0;
+  bool recordSupported=false, resultsReady=false, deviceCompleted=false;
+  qint64 drainDeadline=0, lastWaveDraw=0;
+  void refreshRecording(bool draw=false) {
+    auto snapshot=session.sweepRecording();
+    if(snapshot.node==node && snapshot.run==runId) recording=std::move(snapshot);
+    recordStatus->setText(recording.summary(recordExpected,recordSupported));
+    if(draw || (running && clock.elapsed()-lastWaveDraw>=300)) {
+      drawRecording();lastWaveDraw=clock.elapsed();
+    }
+  }
+  void drawRecording() {
+    std::vector<Sample> data;
+    if(recordFs>0) {
+      data.reserve(recording.samples.size());
+      quint32 next=0;
+      for(const auto &v:recording.samples) {
+        if(v.index!=next) {Sample gap;gap.time=(next+.5)/recordFs;gap.values.fill(std::numeric_limits<double>::quiet_NaN());data.push_back(gap);}
+        Sample point;point.time=v.index/recordFs;point.node=node;
+        point.values[0]=v.input;point.values[1]=v.output;data.push_back(point);next=v.index+1;
+      }
+    }
+    wave->setSamples(std::move(data));
+    if(!running || resultsReady)wave->fitHistory();
+  }
+  void completeDevice() {
+    refreshRecording(true);
+    recordedResults=deviceCompleted?recordingH1(recording,recordMethod,recordFs,results,recordExpected):std::vector<SweepPoint>{};
+    running=false;timer.stop();deviceToken=0;
+    start->setEnabled(true);import->setEnabled(true);methodChoice->setEnabled(true);
+    startHz->setEnabled(true);endHz->setEnabled(true);amplitude->setEnabled(true);count->setEnabled(true);
+    resultChoice->setEnabled(!recordedResults.empty());
+    status->setText(QString("设备辨识完成并失能 · 含录波传输与显示 %1 ms").arg(clock.elapsed()));render();
+  }
   QPushButton *start, *import;
   QCheckBox *safe;
   QTimer timer;
@@ -111,7 +154,8 @@ class SweepDialog : public QDialog {
   double nextTick = 0;
   QByteArray deviceRequest(int action) {
     QByteArray p; p.append(char(1));p.append(char(action));p+=be16(runId);
-    p+=be16(int(startHz->value()));p+=be16(int(endHz->value()));p.append(char(count->value()));p+=be16(int(amplitude->value()*1000));return p;
+    p+=be16(int(startHz->value()));p+=be16(int(endHz->value()));p.append(char(count->value()));p+=be16(int(amplitude->value()*1000));
+    if(action) {p.append(char(0xa9));p.append(char(1));}return p;
   }
   void beginDevice() {
     auto s=session.latest(node);
@@ -121,6 +165,11 @@ class SweepDialog : public QDialog {
     if(startHz->value()>=endHz->value() || (startHz->value()>40 && count->value()<4) || (methodChoice->currentIndex()==1 && std::floor(endHz->value()/20)-std::ceil(startHz->value()/20)+1<count->value())) {status->setText("频段过窄或频点过多：快速法使用 20 Hz 整数栅格");return;}
     runId=quint16(QRandomGenerator::global()->bounded(1,65536));
     results.clear();raw.clear();deviceAbortDetail.clear();deviceMode=deviceData=true;running=true;nextPoint=0;deviceCount=0;
+    session.beginSweepRecording(node,runId);recording.reset(node,runId);
+    recordFs=0;recordExpected=0;recordMethod=methodChoice->currentIndex();
+    recordSupported=resultsReady=deviceCompleted=false;lastWaveDraw=0;recordedResults.clear();
+    resultChoice->setCurrentIndex(0);resultChoice->setEnabled(false);wave->clearDisplay();
+    wave->follow=true;
     clock.start();start->setEnabled(false);import->setEnabled(false);methodChoice->setEnabled(false);
     startHz->setEnabled(false);endHz->setEnabled(false);count->setEnabled(false);amplitude->setEnabled(false);
     source="设备同步采样 · 闭环给定→实际 Iq · H1 频响 / 多段相干性 · 未收到结果";
@@ -137,9 +186,13 @@ class SweepDialog : public QDialog {
     if(cmd!=0xbe && o["method"].toInt()!=methodChoice->currentIndex()){finish("固件返回的激励模式不匹配");return;}
 
     if(cmd!=0xbe){
+      recordFs=o["fs"].toDouble();recordExpected=quint32(o["samples"].toDouble());
+      recordSupported=recordSupported || o["recording"].toBool();
+      refreshRecording();
       deviceCount=o["count"].toInt();
       if(deviceCount<3 || deviceCount>16){finish("固件返回频点数量无效");return;}
       source=QString("设备采样 %1 Hz · 采集 %2 ms · 最长 FOC 回调 %3 μs · %4 · 同步给定/实际 Iq，H1 频响").arg(o["fs"].toDouble()).arg(o["samples"].toDouble()/std::max(1.,o["fs"].toDouble())*1000,0,'f',1).arg(o["max_us"].toInt()).arg(methodChoice->currentIndex()==1?"快速多正弦":methodChoice->currentIndex()==3?"周期线性 Chirp（1 s 稳定 + 3 × 1 s 估计）":"逐频正弦");
+      if(o.contains("record_dropped")) source+=QString(" · 上传状态快照：设备缓冲丢样 %1 点，已提交 CAN %2 点（非主机收妥）").arg(o["record_dropped"].toDouble(),0,'f',0).arg(o["record_submitted"].toDouble(),0,'f',0);
       status->setText(QString("设备进度 %1/%2 · 主机经过 %3 ms").arg(o["progress"].toInt()).arg(deviceCount).arg(clock.elapsed()));
       if(o.contains("timing_revision"))source+=QString(" · 诊断 A6/%1 · 分段峰值：采样/编码器 %2 μs，控制 %3 μs（含 FRA %4 μs）").arg(o["timing_revision"].toInt()).arg(o["sense_us"].toInt()).arg(o["control_us"].toInt()).arg(o["fra_us"].toInt());
       if(o.contains("peak_cycles")) {
@@ -157,6 +210,7 @@ class SweepDialog : public QDialog {
         finish(deviceAbortDetail);return;
       }
       if(state!=2)return;
+      deviceCompleted=true;
     }else{
       if(o["index"].toInt()!=nextPoint || state!=2 || o["flags"].toInt()){finish("设备频点索引或状态不匹配");return;}
       SweepPoint p;p.hz=o["hz"].toDouble();p.input=o["input"].toDouble();p.output=o["output"].toDouble();
@@ -168,14 +222,19 @@ class SweepDialog : public QDialog {
       results.push_back(p);++nextPoint;render();
     }
     if(nextPoint<deviceCount){deviceToken=session.command(node,0xbe,be16(runId)+QByteArray(1,char(nextPoint)),-1,"读取设备辨识频点");}
-    else {running=false;timer.stop();start->setEnabled(true);import->setEnabled(true);methodChoice->setEnabled(true);startHz->setEnabled(true);endHz->setEnabled(true);amplitude->setEnabled(true);count->setEnabled(true);status->setText(QString("设备辨识完成并失能 · 含传输与显示 %1 ms").arg(clock.elapsed()));render();}
+    else {resultsReady=true;drainDeadline=clock.elapsed()+1500;
+      refreshRecording();
+      if(!recordSupported || recording.complete(recordExpected))completeDevice();
+      else status->setText("设备已失能，等待录波尾帧；频响结果已保留");
+    }
   }
   void render() {
+    const auto &shown=resultChoice->currentIndex()==1 && !recordedResults.empty()?recordedResults:results;
     table->setHorizontalHeaderLabels(deviceData?QStringList{"Hz","输入谱线 A","反馈谱线 A","H1 增益 dB","相位 °","相干性 γ²","平均段数","段数","质量"}:QStringList{"Hz","输入幅值","反馈幅值","增益 dB","相位 °","输入 R²","反馈 R²","点数","质量"});
     table->setColumnHidden(7,deviceData);
-    table->setRowCount(int(results.size()));
-    for (int r = 0; r < int(results.size()); ++r) {
-      auto &p = results[r];
+    table->setRowCount(int(shown.size()));
+    for (int r = 0; r < int(shown.size()); ++r) {
+      auto &p = shown[r];
       QStringList cells = {QString::number(p.hz, 'g', 6),
                            QString::number(p.input, 'g', 6),
                            QString::number(p.output, 'g', 6),
@@ -188,12 +247,13 @@ class SweepDialog : public QDialog {
       for (int c = 0; c < cells.size(); ++c)
         table->setItem(r, c, new QTableWidgetItem(cells[c]));
     }
-    plot->points = results;
+    plot->points = shown;
     plot->update();
-    bandwidth->setText(sweepBandwidth(results) + "\n" + source);
+    bandwidth->setText(sweepBandwidth(shown) + "\n" + source);
   }
   void finish(QString text) {
     bool was = running;
+    if(was && deviceMode) { refreshRecording(true); wave->fitHistory(); }
     if(was && deviceMode && session.connected())session.command(node,0xbc,deviceRequest(0),-1,"停止设备辨识");
     deviceToken=0;methodChoice->setEnabled(true);
     running = false;
@@ -214,6 +274,11 @@ class SweepDialog : public QDialog {
       return;
     if(deviceMode) {
       if(!session.connected() || session.selectedNode()!=node || !safe->isChecked() || clock.elapsed()>60000){finish("设备辨识中止：连接/节点/确认条件变化或超过 60 s");return;}
+      refreshRecording();
+      if(resultsReady) {
+        if(recording.complete(recordExpected)||clock.elapsed()>=drainDeadline)completeDevice();
+        return;
+      }
       if(!deviceToken) deviceToken=session.command(node,0xbd,{},-1,"查询设备辨识进度（不续租）");
       return;
     }
@@ -303,6 +368,8 @@ class SweepDialog : public QDialog {
   void begin() {
     if(methodChoice->currentIndex()>0){beginDevice();return;}
     deviceMode=deviceData=false;
+    resultChoice->setCurrentIndex(0);resultChoice->setEnabled(false);recordedResults.clear();
+    recording={};wave->clearDisplay();recordStatus->setText("主机低频模式：无设备同步录波");
     if (!safe->isChecked()) {
       status->setText("请确认空载和工作区安全");
       return;
@@ -342,6 +409,18 @@ class SweepDialog : public QDialog {
     timer.start(20);
     tick();
   }
+  void loadRecording(QIODevice &f,const QByteArray &metadata) {
+    SweepCapture capture;QString error;
+    if(!readSweepCapture(f,metadata,capture,error)){status->setText(error);return;}
+    recording=std::move(capture.recording);recordMethod=capture.method;recordFs=capture.fs;
+    recordExpected=capture.expected;deviceCompleted=capture.completed;
+    deviceData=true;deviceMode=false;recordSupported=true;results=std::move(capture.points);
+    source="导入设备录波 · "+capture.diagnostic;
+    recordedResults=deviceCompleted?recordingH1(recording,recordMethod,recordFs,results,recordExpected):std::vector<SweepPoint>{};
+    resultChoice->setCurrentIndex(0);resultChoice->setEnabled(!recordedResults.empty());
+    recordStatus->setText(recording.summary(recordExpected,true));
+    drawRecording();render();status->setText("已导入录波及同次设备频响，可选择完整录波复算 H1");
+  }
   void load() {
     QString path = QFileDialog::getOpenFileName(this, "导入逐频点稳态数据", {},
                                                 "CSV (*.csv)");
@@ -352,7 +431,10 @@ class SweepDialog : public QDialog {
       status->setText(f.errorString());
       return;
     }
-    if (f.readLine().trimmed() != "frequency_hz,time_s,input,output") {
+    auto firstLine=f.readLine().trimmed();
+    const QByteArray recordingPrefix="# motortune_sweep ";
+    if(firstLine.startsWith(recordingPrefix)) {loadRecording(f,firstLine.mid(recordingPrefix.size()));return;}
+    if (firstLine != "frequency_hz,time_s,input,output") {
       status->setText("表头必须为 "
                       "frequency_hz,time_s,input,"
                       "output；输入与反馈必须同单位、同一时钟，且已去除过渡段");
@@ -385,6 +467,8 @@ class SweepDialog : public QDialog {
       }
     }
     deviceMode=deviceData=false;
+    resultChoice->setCurrentIndex(0);resultChoice->setEnabled(false);recordedResults.clear();
+    wave->clearDisplay();recordStatus->setText("导入逐点稳态 CSV；无完整设备时序");
     results.clear();
     raw.clear();
     for (auto &[hz, data] : grouped) {
@@ -397,7 +481,7 @@ class SweepDialog : public QDialog {
     render();
   }
   void save() {
-    if (results.empty() && !(deviceData && !deviceAbortDetail.isEmpty())) {
+    if (results.empty() && recording.samples.empty() && !(deviceData && !deviceAbortDetail.isEmpty())) {
       status->setText("尚无扫频数据");
       return;
     }
@@ -433,7 +517,14 @@ class SweepDialog : public QDialog {
       return;
     }
     if(deviceData) {
-      QSaveFile note(path+".txt");if(note.open(QIODevice::WriteOnly)){note.write((source+"\n"+sweepBandwidth(results)+"\n设备数据 CSV 标注相干性和平均段数；设备只返回频域统计，无原始时序文件。\n").toUtf8());if(!note.commit())status->setText(note.errorString());}else status->setText(note.errorString());return;
+      QSaveFile samples(path+".samples.csv"),note(path+".txt");
+      if(!samples.open(QIODevice::WriteOnly)||!note.open(QIODevice::WriteOnly)) {status->setText("频响已保存，录波/说明文件打开失败");return;}
+      SweepCapture capture{recording,recordMethod,recordFs,recordExpected,deviceCompleted,source,results};
+      if(!writeSweepCapture(samples,capture)){status->setText("频响已保存，录波写入失败");return;}
+      note.write((source+"\n"+sweepBandwidth(results)+"\n"+recording.summary(recordExpected,recordSupported)+
+        "\n时间轴=设备采样序号/采样率；x[n] 为本周期施加的给定，y[n] 在施加前采样，保留真实控制延迟。缺样不插值，设备 H1 与录波复算分开。\n").toUtf8());
+      bool a=samples.commit(),b=note.commit();
+      status->setText(a&&b?"已导出设备频响、同步录波和诊断说明":"频响已保存，但录波/说明保存失败");return;
     }
     QSaveFile samples(path + ".samples.csv"), note(path + ".txt");
     if (!samples.open(QIODevice::WriteOnly) ||
@@ -521,8 +612,22 @@ public:
     bandwidth = new QLabel;
     bandwidth->setWordWrap(true);
     l->addWidget(bandwidth);
-    plot = new BodePlot;
-    l->addWidget(plot, 1);
+    auto traceRow=new QHBoxLayout;
+    recordStatus=new QLabel("等待设备同步录波");recordStatus->setWordWrap(true);traceRow->addWidget(recordStatus,1);
+    resultChoice=new QComboBox;resultChoice->setObjectName("sweepResultSource");
+    resultChoice->addItems({"设备 H1","完整录波复算 H1"});resultChoice->setEnabled(false);traceRow->addWidget(resultChoice);
+    auto fit=new QPushButton("录波全览");traceRow->addWidget(fit);l->addLayout(traceRow);
+    auto plots=new QSplitter(Qt::Horizontal);
+    auto wavePanel=new QWidget;auto waveLayout=new QVBoxLayout(wavePanel);waveLayout->setContentsMargins(0,0,0,0);
+    waveLayout->addWidget(new QLabel("设备时域 / A · 蓝：给定 · 绿：Iq反馈 · 滚轮缩放，拖动平移"));
+    wave=new Scope;wave->setObjectName("sweepWaveform");wave->setMinimumSize(280,300);
+    wave->timeAxisLabel="设备采样时间 / s · 采样序号 ÷ 采样率";
+    wave->aliases=channelNames;wave->aliases[0]="同步给定 / A";wave->aliases[1]="Iq 反馈 / A";
+    waveLayout->addWidget(wave,1);plots->addWidget(wavePanel);
+    plot = new BodePlot;plot->setObjectName("sweepBode");plot->setMinimumWidth(350);plots->addWidget(plot);
+    plots->setSizes({500,500});l->addWidget(plots,2);
+    connect(fit,&QPushButton::clicked,wave,&Scope::fitHistory);
+    connect(resultChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{render();});
     table = new QTableWidget(0, 9);
     table->setHorizontalHeaderLabels({"Hz", "输入幅值", "反馈幅值", "增益 dB",
                                       "相位 °", "输入 R²", "反馈 R²", "点数",

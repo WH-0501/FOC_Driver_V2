@@ -402,6 +402,14 @@ QJsonObject response(quint8 c, const QByteArray &p, Version) {
                     o["peak_cycles"]=double(qFromBigEndian<quint32>(p.constData()+50));
                 }}
         }
+        if(c!=0xbe && p.size()>=43 && quint8(p[40])==0xa9 && p[41]==1)
+        {
+            o["recording"]=p[42]==1;
+            if(p.size()>=52 && quint8(p[43])==0xaa) {
+                o["record_dropped"]=double(qFromBigEndian<quint32>(p.constData()+44));
+                o["record_submitted"]=double(qFromBigEndian<quint32>(p.constData()+48));
+            }
+        }
         if(c!=0xbe && o["ok"].toBool() && o["state"].toInt()==3 && (o["flags"].toInt()&0x10) &&
            p.size()>=56 && quint8(p[38])==0xa6 && p[39]==1 && quint8(p[41])==0xa8 && p[42]==1) {
             const int reason=quint8(p[40]), index=quint8(p[43]);

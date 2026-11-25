@@ -44,6 +44,7 @@ typedef struct
 bool comm_init(const comm_config_t *cfg);
 void comm_deinit(void);
 void comm_poll(void);
+bool comm_tx_ready(bool bulk);
 
 /** CAN RX 中断入口：委托当前传输层完成收帧入队。 */
 void comm_can_rx_isr(void);

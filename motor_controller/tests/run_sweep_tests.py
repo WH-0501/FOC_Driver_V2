@@ -19,9 +19,9 @@ work.mkdir(parents=True, exist_ok=True)
 env = os.environ.copy()
 env['PATH'] = str(Path(a.cc).parent) + os.pathsep + env['PATH']
 
-def function(src, name):
-    src = re.sub(r'^#.*\n', '', src, flags=re.M)
-    match = re.search(r'^(?:static )?(?:void|float) ' + name + r'\([^;]*?\)\s*\{', src, re.M)
+def function(src, name, keep_directives=False):
+    if not keep_directives: src = re.sub(r'^#.*\n', '', src, flags=re.M)
+    match = re.search(r'^(?:static )?(?:void|float|bool|uint8_t|can_data_length_type|error_status) ' + name + r'\([^;]*?\)\s*\{', src, re.M)
     assert match, name
     start = match.start()
     end = src.index('{', start) + 1
@@ -48,13 +48,29 @@ assert 'cmd <= SWEEP_CMD_RESULT && frame->id != s_node_id' in protocol
 assert 'foc_sweep_check_voltage' not in foc and 'foc_sweep_inject' not in foc
 assert 'if (foc_sweep_is_active(m)) foc_sweep_run_isr' in foc
 
-includes = [tests/'sweep_support', tests/'c06_support', app, app/'FOC', root/'project/Board', sweep, work]
+schedule = function((app/'comm/comm.c').read_text(encoding='utf-8'), 'comm_tx_ready')
+schedule += function(protocol, 'can_fd_custom_send_frame')
+schedule += function(protocol, 'can_fd_custom_poll', keep_directives=True)
+(work/'schedule_protocol.inc').write_text(schedule, encoding='utf-8')
+
+port = (app/'comm/transport/can_port_at32.c').read_text(encoding='utf-8')
+transport = ''.join(function(port, name, keep_directives=True) for name in (
+    'can_port_dlc_to_bytes', 'can_port_bytes_to_dlc', 'can_port_at32_write', 'can_port_at32_kick_bulk', 'can_port_at32_tx_ready', 'can_port_at32_send'))
+(work/'sweep_transport.inc').write_text(transport, encoding='utf-8')
+vendor = (root/'libraries/drivers/src/at32m412_416_can.c').read_text(encoding='utf-8')
+(work/'sweep_vendor_write.inc').write_text(function(vendor,'can_txbuf_write',keep_directives=True),encoding='utf-8')
+assert 'can_port_at32_kick_bulk();' in port[port.index('static unsigned int can_port_at32_poll_rx'):]
+includes = [tests/'sweep_support', tests/'c06_support', app, app/'FOC', app/'comm', root/'project/Board', sweep, work]
 for name, sources in (
+    ('schedule', [tests/'test_sweep_schedule.c']),
+    ('transport', [tests/'test_sweep_transport.c', sweep/'sweep_record.c']),
+    ('record', [tests/'test_sweep_record.c', sweep/'sweep_record.c']),
     ('wave', [tests/'test_sweep_chirp_wave.c']),
+    ('parity', [tests/'test_sweep_parity.c', tests/'sweep_support/reference_sweep_engine.c', sweep/'sweep_engine.c', sweep/'sweep_chirp.c', sweep/'sweep_prepare.c']),
     ('grid', [tests/'test_sweep_grid.c', sweep/'sweep_engine.c', sweep/'sweep_chirp.c']),
     ('engine', [tests/'test_sweep_engine.c', sweep/'sweep_engine.c', sweep/'sweep_chirp.c', sweep/'sweep_prepare.c']),
     ('integration', [tests/'test_sweep_integration.c', sweep/'sweep_engine.c', sweep/'sweep_chirp.c', sweep/'sweep_prepare.c',
-                     sweep/'foc_sweep.c', sweep/'sweep_protocol.c', app/'FOC/foc_fsm.c']),
+                     sweep/'foc_sweep.c', sweep/'sweep_protocol.c', sweep/'sweep_record.c', app/'FOC/foc_fsm.c']),
     ('disabled', [tests/'test_sweep_disabled.c', sweep/'sweep_protocol.c']),
 ):
     exe = work / (name + '.exe')

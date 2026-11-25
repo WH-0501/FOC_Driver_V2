@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -5,6 +6,7 @@
 #include "sweep/foc_sweep.h"
 #include "sweep/sweep_protocol.h"
 #include "common.h"
+#include "sweep/sweep_record.h"
 #include "control_mode.h"
 #include "foc_fsm.h"
 #include "foc_fault.h"
@@ -116,7 +118,7 @@ static void motion_diagnostics(void)
   reset_motor(); motor.state.shaft.position_rad = 10;
   assert(!foc_sweep_start(&motor, &cfg, 0x4568));
   assert(status().motion_reason == 0 && status().failure_sample == 0);
-  assert(sweep_protocol_handle(&motor, 0xbd, NULL, 0, reply) && response_length == 40);
+  assert(sweep_protocol_handle(&motor, 0xbd, NULL, 0, reply) && response_length == 52);
   /* First two low-frequency anchors still consume 30000 samples; no window change. */
   for (i=0; i<30000; ++i) tick();
   motor.state.shaft.position_rad = 9.5f;
@@ -137,7 +139,7 @@ static void motion_diagnostics(void)
   assert(status().motion_reason == SWEEP_REJECT_TRAVEL);
   reset_motor(); start(); tick(); ticks += 9000; tick(); aborted(SWEEP_TIMING);
   assert(status().motion_reason == 0 && status().failure_sample == 1);
-  assert(sweep_protocol_handle(&motor, 0xbd, NULL, 0, reply) && response_length == 40);
+  assert(sweep_protocol_handle(&motor, 0xbd, NULL, 0, reply) && response_length == 52);
   puts("PASS motion snapshot: signed value, relative travel, exact bounds, first/high-frequency point, multisine, reset and legacy timing");
 }
 static void chirp_integration(void)
@@ -166,9 +168,43 @@ static void chirp_integration(void)
   reset_motor();assert(sweep_protocol_handle(&motor,SWEEP_CMD_CONTROL,request,11,reply));
   tick();foc_sweep_stop(&motor,SWEEP_COMMAND);aborted(SWEEP_COMMAND);
   reset_motor();assert(sweep_protocol_handle(&motor,SWEEP_CMD_CONTROL,request,11,reply));
-  for(i=0;i<79999;++i)tick();force_limit=1;tick();aborted(SWEEP_LIMIT);
+  for(i=0;i<79999;++i) { tick(); }
+  force_limit=1;tick();aborted(SWEEP_LIMIT);
   assert(foc_sweep_result(0x6789,0,&result)==1);
   puts("PASS chirp dispatch/wire: completion/disarm, instantaneous motion diagnostic, timing, command, final-sample guard");
+}
+
+static FILE *capture_file;
+static unsigned capture_next;
+static bool capture_send(uint32_t node,uint8_t cmd,const uint8_t *p,uint8_t len)
+{
+  unsigned i, first=((unsigned)p[4]<<24)|((unsigned)p[5]<<16)|((unsigned)p[6]<<8)|p[7];
+  assert(node==1 && cmd==0xbf && p[0]==1 && first==capture_next);
+  capture_next+=p[1];
+  for(i=0;i<len;++i)fprintf(capture_file,"%02x",p[i]);
+  fputc('\n',capture_file);return true;
+}
+static void capture_integration(void)
+{
+  unsigned method,i;
+  for(method=1;method<=3;++method) {
+    char name[40];uint8_t packet[14]={1,0,0x12,0x34,0,20,7,0xd0,8,0,50,0xa9,1};
+    reset_motor();packet[1]=(uint8_t)method;capture_next=0;
+    sprintf(name,"capture-%u.frames",method);capture_file=fopen(name,"w");assert(capture_file);
+    assert(sweep_protocol_handle(&motor,0xbc,packet,sizeof(packet),reply));
+    assert(!response[1]&&response[40]==0xa9&&response[42]==1);
+    /* A rejected overlapping START must not clear this recording. */
+    assert(sweep_protocol_handle(&motor,0xbc,packet,sizeof(packet),reply));assert(response[1]);
+    while(status().state==SWEEP_RUNNING) {tick();sweep_record_poll(1,capture_send);}
+    while(sweep_record_poll(1,capture_send)){}
+    assert(status().state==SWEEP_DONE && capture_next==status().samples);
+    assert(!armed && disarms==1);
+    for(i=0;i<8;++i){sweep_result_t result;assert(!foc_sweep_result(0x1234,i,&result));
+      fprintf(capture_file,"R %.9g %.9g %.9g %.9g %.9g %.9g\n",result.hz,result.input,result.output,result.real,result.imag,result.coherence);}
+    fclose(capture_file);
+  }
+  reset_motor();start();tick();assert(!sweep_record_enabled());assert(!sweep_record_poll(1,capture_send));
+  puts("PASS real FOC -> raw frames for all 3 modes, opt-in, rejected restart, complete tails; emitted H1 fixtures");
 }
 int main(void)
 {
@@ -207,7 +243,7 @@ int main(void)
   motor.state.i_d = 0;
   assert(sweep_protocol_handle(&motor, 0xbc, packet, 10, reply)); assert(response[1] == 2);
   assert(sweep_protocol_handle(&motor, 0xbc, packet, sizeof(packet), reply)); /* DLC padding */
-  assert(response_length == 40 && response_cmd == 0xbc && !response[1] && response[2] == 1);
+  assert(response_length == 52 && response_cmd == 0xbc && !response[1] && response[2] == 1);
   assert(response[27] == 0xa5 && response[38] == 0xa6 && response[39] == 1);
   assert(response[4] == 0x12 && response[5] == 0x34 && response[10] == 0x4e && response[11] == 0x20);
   assert(foc_sweep_start(&motor, &c, 2) == 1);
@@ -255,5 +291,6 @@ int main(void)
   puts("PASS real FOC dispatch, guard/limits, cancellation, final-sample rejection, wrap, wire v1, session IDs and passive status");
   motion_diagnostics();
   chirp_integration();
+  capture_integration();
   return 0;
 }

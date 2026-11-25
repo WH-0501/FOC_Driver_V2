@@ -14,6 +14,11 @@ static const comm_transport_ops_t *s_transport;
 static const comm_protocol_ops_t *s_protocol;
 static comm_protocol_type_t s_active_protocol = COMM_PROTOCOL_NONE;
 
+bool comm_tx_ready(bool bulk)
+{
+  return s_transport && (!s_transport->tx_ready || s_transport->tx_ready(NULL, bulk));
+}
+
 static bool comm_send_wrapper(const comm_frame_t *frame)
 {
   if ((s_transport == NULL) || (s_transport->send == NULL))

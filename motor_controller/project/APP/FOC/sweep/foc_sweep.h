@@ -48,6 +48,8 @@ typedef struct { uint8_t reason; float value; } foc_sweep_rejection_t;
 int foc_sweep_start(motor_handle_t *m, const sweep_config_t *cfg, uint16_t run);
 int foc_sweep_start_checked(motor_handle_t *m, const sweep_config_t *cfg, uint16_t run,
                             foc_sweep_rejection_t *rejection);
+int foc_sweep_start_recorded(motor_handle_t *m, const sweep_config_t *cfg, uint16_t run,
+                             foc_sweep_rejection_t *rejection, bool record);
 void foc_sweep_stop(motor_handle_t *m, unsigned reason);
 void foc_sweep_status(foc_sweep_status_t *out);
 int foc_sweep_result(uint16_t run, unsigned index, sweep_result_t *out);

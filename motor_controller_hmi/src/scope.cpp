@@ -101,7 +101,7 @@ std::vector<Sample> Scope::samples() const {
 }
 void Scope::fitHistory() {
     auto info = history_ && !source_ ? displayHistory()->info() : HistoryInfo{};
-    if (source_ && !data_.empty()) {
+    if ((!history_ || source_) && !data_.empty()) {
         info.first = data_.front().time;
         info.last = data_.back().time;
         info.size = data_.size();
@@ -111,6 +111,7 @@ void Scope::fitHistory() {
         windowSeconds = std::max(.001, info.last - info.first);
     }
     follow = false;
+    dirty_ = true;
     update();
 }
 void Scope::clearDisplay() {
@@ -185,6 +186,7 @@ void Scope::drawBase(QPainter &p) {
     p.setPen(QColor("#9c9c9d"));
     p.drawText(QPointF(16, 18), view == 1      ? "XY · Id / Iq [A]"
                                 : view == 2    ? "FFT · Hann · peak amplitude"
+                                : !timeAxisLabel.isEmpty() ? timeAxisLabel
                                 : debugProfile ? "DEVICE PID TIME  /  sampled loop state"
                                                : "HOST RECEIVE TIME  /  queued target events");
     if (history_ && !source_) {

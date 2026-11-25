@@ -1,6 +1,7 @@
 #include "foc_sweep.h"
 #if FOC_SWEEP_ENABLED
 #include "board.h"
+#include "sweep_record.h"
 #include "common.h"
 #include "dwt_profile_delay.h"
 #include "foc_fsm.h"
@@ -82,6 +83,7 @@ static void finish(motor_handle_t *m, unsigned flags)
 {
   if (owner != m || !m) return;
   if (flags) sweep_engine_abort(&engine, flags);
+  sweep_record_end();
   owner = NULL;
   m->ref.iq = 0.0f;
   if (m->fsm != STATE_FAULT && !m->fault.latched) foc_fsm_next_state(m, STATE_IDLE);
@@ -146,6 +148,11 @@ int foc_sweep_start(motor_handle_t *m, const sweep_config_t *cfg, uint16_t run)
 int foc_sweep_start_checked(motor_handle_t *m, const sweep_config_t *cfg, uint16_t run,
                             foc_sweep_rejection_t *rejection)
 {
+  return foc_sweep_start_recorded(m, cfg, run, rejection, false);
+}
+int foc_sweep_start_recorded(motor_handle_t *m, const sweep_config_t *cfg, uint16_t run,
+                            foc_sweep_rejection_t *rejection, bool record)
+{
   uint32_t irq;
   int result;
   /* Single foreground caller. Preparation cannot be published to ISR early. */
@@ -176,6 +183,7 @@ int foc_sweep_start_checked(motor_handle_t *m, const sweep_config_t *cfg, uint16
   if (!result) {
     run_id = run; max_us = 0u; have_previous = false;
     memset(&timing, 0, sizeof(timing));
+    sweep_record_begin(run, record);
     sweep_engine_start(&engine);
     __DMB();
     owner = m;
@@ -200,7 +208,8 @@ void foc_sweep_on_disarm(motor_handle_t *m)
   __disable_irq();
   if (owner == m && m) {
     sweep_engine_abort(&engine, SWEEP_STOP);
-    owner = NULL;
+    sweep_record_end();
+  owner = NULL;
     m->ref.iq = 0.0f;
     /* Prevent STATE_RUNNING's automatic hardware re-arm on the next ISR. */
     if (m->fsm != STATE_FAULT && !m->fault.latched) foc_fsm_next_state(m, STATE_IDLE);
@@ -243,7 +252,7 @@ void foc_sweep_run_isr(motor_handle_t *m, motor_runtime_t *rt, uint32_t start_ti
                        foc_sweep_current_fn current_step)
 {
   uint32_t control_ticks, engine_ticks, us, end_ticks;
-  float reference, limited;
+  float reference, limited, feedback;
   unsigned guard;
   if (!m || owner != m) return;
   if (!rt || !current_step || !allowed(m)) { finish(m, SWEEP_STOP); return; }
@@ -270,7 +279,8 @@ void foc_sweep_run_isr(motor_handle_t *m, motor_runtime_t *rt, uint32_t start_ti
   guard = measurement_guard(m);
   if (guard) { finish_guard(m, guard); return; }
   engine_ticks = dwt_get_ticks();
-  reference = sweep_engine_step(&engine, m->state.i_q);
+  feedback = m->state.i_q;
+  reference = sweep_engine_step(&engine, feedback);
   us = dwt_elapsed_us(engine_ticks, dwt_get_ticks());
   if (us > timing.engine_max_us) timing.engine_max_us = bounded_us(us);
   if (engine.state == SWEEP_ABORTED) { finish(m, engine.flags); return; }
@@ -285,6 +295,8 @@ void foc_sweep_run_isr(motor_handle_t *m, motor_runtime_t *rt, uint32_t start_ti
   if (owner != m) return; /* motor_disarm/shutdown may have cancelled us */
   if (!allowed(m)) { finish(m, SWEEP_STOP); return; }
   if (voltage_limited(m)) { finish(m, SWEEP_LIMIT); return; }
+  /* x[n] is applied after y[n] was sampled: preserve the physical one-tick delay. */
+  sweep_record_push(engine.samples - 1u, reference, feedback);
   end_ticks = dwt_get_ticks();
   us = dwt_elapsed_us(control_ticks, end_ticks);
   if (us > timing.control_max_us) timing.control_max_us = bounded_us(us);
