@@ -16,6 +16,23 @@ struct SweepPoint {
 SweepPoint measureSweep(double hz, const std::vector<SweepSample> &samples);
 // Relative to the mean of the first two valid, flat low-frequency points.
 // Never bridge rejected points or extrapolate an unmeasured crossing.
+struct SweepBandwidthResult {
+  bool found=false, baselineValid=false;
+  double hz=0, lowHz=0, highHz=0, baselineDb=0;
+  QString message;
+};
+SweepBandwidthResult sweepBandwidthResult(const std::vector<SweepPoint> &points);
 QString sweepBandwidth(const std::vector<SweepPoint> &points);
+// Closed-loop 0 dB downward crossing, >=100 Hz; diagnostic, not open-loop crossover.
+// A later adjacent valid bracket can yield a candidate after a gap, but cannot
+// confirm that it is the first crossing. No interpolation bridges invalid data.
+struct SweepCrossingResult {
+  bool found=false, firstConfirmed=false;
+  double hz=0, lowHz=0, highHz=0;
+  QString message;
+};
+SweepCrossingResult sweepClosedLoopCrossingResult(const std::vector<SweepPoint> &points);
+// Conservative convenience API: returns only a crossing with no earlier gap.
+double sweepClosedLoopCrossing(const std::vector<SweepPoint> &points);
 QString sweepAbortMessage(const QJsonObject &status);
 } // namespace mt

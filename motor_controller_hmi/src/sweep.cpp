@@ -172,31 +172,75 @@ QString sweepAbortMessage(const QJsonObject &o) {
   return QString("设备中止：%1 · flags=0x%2 · 中止前已执行 %3 个采样周期")
       .arg(detail).arg(flags,0,16).arg(o["samples"].toDouble(),0,'f',0);
 }
-QString sweepBandwidth(const std::vector<SweepPoint> &p) {
+SweepBandwidthResult sweepBandwidthResult(const std::vector<SweepPoint> &p) {
+  SweepBandwidthResult result;
+  auto reject=[&](QString message){result.message=message;return result;};
   if (p.size() < 3 || !p[0].valid || !p[1].valid)
-    return "未测得带宽：需要至少 3 个频点及有效低频基准";
+    return reject("未测得带宽：需要至少 3 个频点及有效低频基准");
   if (std::abs(p[0].gainDb - p[1].gainDb) > .5)
-    return "未测得带宽：低频基准不平坦，请降低起始频率";
+    return reject("未测得带宽：低频基准不平坦，请降低起始频率");
   for (size_t i = 1; i < p.size(); ++i)
     if (!(p[i].hz > p[i - 1].hz))
-      return "未测得带宽：频点必须递增";
+      return reject("未测得带宽：频点必须递增");
+  result.baselineValid=true;
+  result.baselineDb=(p[0].gainDb+p[1].gainDb)/2;
   double base = (p[0].gainDb + p[1].gainDb) / 2, threshold = base - 3;
   for (size_t i = 2; i < p.size(); ++i) {
     if (!p[i - 1].valid || !p[i].valid)
-      return "未测得带宽：存在无效频点，需补测后确定首次交点";
+      return reject("未测得带宽：存在无效频点，需补测后确定首次交点");
     if (p[i - 1].gainDb > threshold && p[i].gainDb <= threshold) {
       double alpha =
           (threshold - p[i - 1].gainDb) / (p[i].gainDb - p[i - 1].gainDb);
       double bw = std::exp(std::log(p[i - 1].hz) +
                            alpha * std::log(p[i].hz / p[i - 1].hz));
-      return QString("−3 dB 带宽 ≈ %1 Hz · 交点区间 [%2, %3] Hz · 低频基准 %4 "
+      result.found=true;result.hz=bw;result.lowHz=p[i-1].hz;result.highHz=p[i].hz;
+      result.message=QString("−3 dB 带宽 ≈ %1 Hz · 交点区间 [%2, %3] Hz · 低频基准 %4 "
                      "dB（前两点均值）")
           .arg(bw, 0, 'g', 6)
           .arg(p[i - 1].hz, 0, 'g', 5)
           .arg(p[i].hz, 0, 'g', 5)
           .arg(base, 0, 'f', 2);
+      return result;
     }
   }
-  return "未测得带宽：当前频段未出现相对低频基准的 −3 dB 交点";
+  return reject("未测得带宽：当前频段未出现相对低频基准的 −3 dB 交点");
 }
+QString sweepBandwidth(const std::vector<SweepPoint> &points) {return sweepBandwidthResult(points).message;}
+SweepCrossingResult sweepClosedLoopCrossingResult(const std::vector<SweepPoint> &p) {
+  SweepCrossingResult result;
+  result.message="fc：无有效 ≥100 Hz 闭环 0 dB 向下交点";
+  for(size_t i=0;i<p.size();++i)
+    if(!std::isfinite(p[i].hz)||p[i].hz<=0||(i&&p[i].hz<=p[i-1].hz)) {
+      result.message="fc：频率无效或未递增";return result;
+    }
+  bool earlierGap=false;
+  for(size_t i=1;i<p.size();++i) {
+    const auto &a=p[i-1],&b=p[i];
+    if(b.hz<100)continue;
+    // Preserve the low-frequency-anchor gap guard, without rejecting ordinary
+    // brackets that straddle 100 Hz (e.g. 93 -> 126 Hz).
+    if((a.hz<=40&&b.hz>100)||!a.valid||!b.valid||
+       !std::isfinite(a.gainDb)||!std::isfinite(b.gainDb)) {
+      earlierGap=true;continue;
+    }
+    if(a.gainDb>=0&&b.gainDb<=0&&(a.gainDb>0||b.gainDb<0)) {
+      const double f=a.gainDb==0?a.hz:b.gainDb==0?b.hz:
+        std::exp(std::log(a.hz)-a.gainDb/(b.gainDb-a.gainDb)*std::log(b.hz/a.hz));
+      if(f<100)continue;
+      result.found=true;result.firstConfirmed=!earlierGap;
+      result.hz=f;result.lowHz=a.hz;result.highHz=b.hz;
+      result.message=earlierGap
+        ?QString("fc 候选 = %1 Hz（前段缺口，首次未确认）").arg(f,0,'g',6)
+        :QString("fc = %1 Hz（闭环 0 dB 向下交点，诊断）").arg(f,0,'g',6);
+      return result;
+    }
+  }
+  if(earlierGap)result.message="fc：有效相邻点无交点；存在缺口，首次未确认";
+  return result;
+}
+double sweepClosedLoopCrossing(const std::vector<SweepPoint> &p) {
+  const auto result=sweepClosedLoopCrossingResult(p);
+  return result.firstConfirmed?result.hz:0;
+}
+
 } // namespace mt

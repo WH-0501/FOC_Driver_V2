@@ -14,7 +14,7 @@ class BodePlot : public QWidget {
 public:
   std::vector<SweepPoint> points, comparison;
   QString comparisonName;
-  BodePlot() { setMinimumHeight(300); }
+  BodePlot() { setMinimumHeight(300);setToolTip("f_bandwidth：原始 H1 相对低频基准的 −3 dB 带宽。\nfc：≥100 Hz 的闭环 0 dB 向下交点，仅诊断；不是开环穿越频率，不用于相位裕度。\n无有效交点不画线；滤波对照不参与标记计算。"); }
   void paintEvent(QPaintEvent *) override {
     QPainter p(this);
     p.fillRect(rect(), QColor("#0b0e10"));
@@ -36,9 +36,13 @@ public:
       }
     for(const auto &v:comparison)if(v.valid){minGain=std::min(minGain,v.gainDb-2);maxGain=std::max(maxGain,v.gainDb+2);}
     if(!comparison.empty()){p.setPen(QColor("#55b3ff"));p.drawText(65,16,"原始 H1");p.setPen(QColor("#ed91bc"));p.drawText(170,16,comparisonName);}
+    const auto bw=sweepBandwidthResult(points);const auto crossing=sweepClosedLoopCrossingResult(points);
+    const double fc=crossing.found?crossing.hz:0;
+    p.setPen(QColor("#ffbc33"));p.drawText(65,34,bw.found?QString("f_bandwidth = %1 Hz  (−3 dB)").arg(bw.hz,0,'g',6):"f_bandwidth：未确认");
+    p.setPen(QColor("#b6a0ff"));p.drawText(65,52,p.fontMetrics().elidedText(crossing.message,Qt::ElideRight,std::max(0,width()-85)));
     for (int panel = 0; panel < 3; ++panel) {
-      QRectF r(65, 38 + panel * ((height()-18) / 3.), width() - 110,
-               (height()-18) / 3. - 48);
+      QRectF r(65, 78 + panel * ((height()-65) / 3.), width() - 105,
+               (height()-65) / 3. - 48);
       double low = panel==2?0:panel ? -180 : minGain, high = panel==2?1:panel ? 180 : maxGain;
       auto pos = [&](double hz, double v) {
         return QPointF(r.left() + (std::log10(hz) - lo) / (hi - lo) * r.width(),
@@ -59,11 +63,14 @@ public:
       for (int j = 0; j <= 4; ++j) {
         double hz = std::pow(10., lo + (hi - lo) * j / 4);
         double x = pos(hz, 0).x();
-        p.drawText(QRectF(x - 35, r.bottom() + 3, 70, 18), Qt::AlignCenter,
-                   QString::number(hz, 'g', 3) + " Hz");
+        const QString tick=QString::number(hz,'g',3)+" Hz";
+        double tw=p.fontMetrics().horizontalAdvance(tick)+8;
+        p.drawText(QRectF(std::clamp(x-tw/2,0.,std::max(0.,width()-tw)),r.bottom()+3,tw,18),Qt::AlignCenter,tick);
       }
-      if(!panel && points.size()>1 && points[0].valid && points[1].valid) {
-        double threshold=(points[0].gainDb+points[1].gainDb)/2-3;
+      auto marker=[&](double f,const QColor &color){if(f<=0)return;double x=pos(f,low).x();p.setPen(QPen(color,1,Qt::DashLine));p.drawLine(QPointF(x,r.top()),QPointF(x,r.bottom()));};
+      marker(bw.found?bw.hz:0,QColor("#ffbc33"));marker(fc,QColor("#b6a0ff"));
+      if(!panel && bw.baselineValid) {
+        double threshold=bw.baselineDb-3;
         double y=pos(points.front().hz,threshold).y();
         p.setPen(QPen(QColor("#ffbc33"),1,Qt::DashLine));p.drawLine(QPointF(r.left(),y),QPointF(r.right(),y));
         p.drawText(QPointF(r.left()+5,y-4),"原始基准 −3 dB");
@@ -107,7 +114,8 @@ class SweepDialog : public QDialog {
   quint32 node;
   QDoubleSpinBox *startHz, *endHz, *amplitude;
   QSpinBox *count;
-  QLabel *status, *bandwidth;
+  QLabel *status, *bandwidth, *diagnostics;
+  QToolButton *dataToggle;
   QTableWidget *table;
   BodePlot *plot;
   Scope *wave;
@@ -332,8 +340,8 @@ class SweepDialog : public QDialog {
   }
   void render() {
     resultChoice->setVisible(true);
-    filterChoice->setEnabled(recordMethod!=2 || !deviceData);
-    filterCutoff->setEnabled(lpfSelected() && (recordMethod!=2 || !deviceData));
+    filterChoice->setEnabled(methodChoice->currentData().toInt()==3 && (recordMethod!=2 || !deviceData));
+    filterCutoff->setEnabled(lpfSelected() && filterChoice->isEnabled());
     const auto &shown=resultChoice->currentIndex()==1 && !recordedResults.empty()?recordedResults:results;
     meanNote->setText(meanActive()?(lpfSelected()?feedbackLpfDescription(recordFs,filterCutoff->value()):feedbackMean16Description(recordFs))+
       "\n原始 H1、相干性及带宽判断保留；粉色曲线/附加列仅对照。"+(meanError.isEmpty()?QString{}:"\n频响对照不可用："+meanError):"给定与反馈共用电流纵轴；原始录波及 H1 始终保留。滤波对照仅适用于 Chirp。");
@@ -343,6 +351,7 @@ class SweepDialog : public QDialog {
     if(compare){table->setHorizontalHeaderItem(9,new QTableWidgetItem("对照增益 dB"));table->setHorizontalHeaderItem(10,new QTableWidgetItem("对照相位 °"));table->setHorizontalHeaderItem(11,new QTableWidgetItem("对照 γ²"));}
     table->setColumnHidden(7,deviceData);
     table->setRowCount(int(shown.size()));
+    dataToggle->setText(QString("频点数据（%1）").arg(shown.size()));
     for (int r = 0; r < int(shown.size()); ++r) {
       auto &p = shown[r];
       QStringList cells = {QString::number(p.hz, 'g', 6),
@@ -361,7 +370,8 @@ class SweepDialog : public QDialog {
     }
     plot->points = shown;plot->comparison=compare?meanResults:std::vector<SweepPoint>{};plot->comparisonName=comparisonName();
     plot->update();
-    bandwidth->setText((deviceData?"原始 H1：":"")+sweepBandwidth(shown)+"\n"+source);
+    bandwidth->setText((deviceData?"原始 H1：":"")+sweepBandwidth(shown));
+    diagnostics->setText(source);
   }
   void finish(QString text) {
     bool was = running;
@@ -548,35 +558,44 @@ public:
       : QDialog(parent), session(s), version(v), node(n) {
     qApp->installEventFilter(this);
     setWindowTitle("扫频 / 带宽测试");
-    resize(1080, 800);
+    resize(1440, 960);
     setObjectName("sweepDialog");
     auto l = new QVBoxLayout(this);
     methodChoice=new QComboBox;methodChoice->setObjectName("sweepMethod");
     methodChoice->addItem("设备周期线性 Chirp · 上位机频响分析（4 s）",3);
-    methodChoice->addItem("设备逐频正弦（精测）· 上位机频响分析",2);l->addWidget(methodChoice);
+    methodChoice->addItem("设备逐频正弦（精测）· 上位机频响分析",2);
+    auto topRow=new QHBoxLayout;topRow->addWidget(methodChoice,1);topRow->addWidget(new QLabel("图表显示"));
+    auto viewChoice=new QComboBox;viewChoice->setObjectName("sweepView");viewChoice->addItems({"录波与频响并排","仅录波 · 放大","仅频响 · 放大"});topRow->addWidget(viewChoice);l->addLayout(topRow);
     auto help = new QLabel("CST / 零给定开始 · 设备只生成 Chirp、同步采样并上传，完成自动失能\n1 s 周期重复 4 次：首周期稳定，后三周期在上位机计算原始 H1 / 相干性。起始 >40 Hz 时实际从 20 Hz 扫起并保留 20/40 Hz 基准。低相干性频点不计算带宽；可导入历史逐频数据对照。",this);
     help->setWordWrap(true);
-    l->addWidget(help);
-    auto settings = new QHBoxLayout;
+
+    auto settings = new QHBoxLayout;settings->setSpacing(12);
+    auto field=[&](QString text,QWidget *editor,int stretch=1){
+      auto group=new QWidget;auto column=new QVBoxLayout(group);column->setContentsMargins(0,0,0,0);column->setSpacing(4);
+      auto label=new QLabel(text);label->setBuddy(editor);column->addWidget(label);column->addWidget(editor);settings->addWidget(group,stretch);
+    };
     auto spin = [&](QString title, double low, double high, double val) {
-      settings->addWidget(new QLabel(title));
+
       auto w = new QDoubleSpinBox;
       w->setRange(low, high);
       w->setDecimals(3);
       w->setValue(val);
-      settings->addWidget(w);
+      field(title,w);
       return w;
     };
     startHz = spin("起始 Hz", 20, 2000, 20);
     endHz = spin("结束 Hz", 20, 2000, 2000);
     amplitude = spin("幅值 A", .005, .5, .05);
-    settings->addWidget(new QLabel("对数频点"));
+
     count = new QSpinBox;
     count->setRange(3, 16);
     count->setValue(16);
     startHz->setDecimals(0);endHz->setDecimals(0);
   startHz->setObjectName("sweepStartHz"); endHz->setObjectName("sweepEndHz"); amplitude->setObjectName("sweepAmplitude"); count->setObjectName("sweepCount");
-    settings->addWidget(count);
+    field("对数频点 / 点",count);
+    filterChoice=new QComboBox;filterChoice->setObjectName("sweepFeedbackFilter");filterChoice->addItems({"不滤波（原始）","16 点均值对照","Butterworth LPF 对照"});
+    filterChoice->setToolTip("仅用于 Chirp 的反馈波形及频响对照；原始 H1 决定带宽。逐频模式使用原始反馈。");field("反馈 Iq 滤波（仅 Chirp）",filterChoice,2);
+    filterCutoff=new QDoubleSpinBox;filterCutoff->setObjectName("sweepLpfCutoff");filterCutoff->setRange(20,8999);filterCutoff->setValue(3000);filterCutoff->setSuffix(" Hz");filterCutoff->setEnabled(false);field("LPF 单程截止",filterCutoff);
     l->addLayout(settings);
     safe = new QCheckBox(
         "确认空载、工作区安全；完成/停止后清零并失能（Ctrl+Shift+E 急停）");
@@ -594,6 +613,7 @@ public:
     connect(methodChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this,help,chirpHelp]{
       const bool stepped=methodChoice->currentData().toInt()==2;
       start->setText(stepped?"开始逐频精测":"开始 Chirp 测试");
+      filterChoice->setEnabled(!stepped && (recordMethod!=2 || !deviceData));filterCutoff->setEnabled(lpfSelected() && filterChoice->isEnabled());
       help->setText(stepped?"CST / 零给定开始 · 设备只生成逐频正弦、同步采样并上传，完成自动失能。\n每点稳定至少 20 ms 且至少 4 周期（向上取整周期），再采集 4 段 × 4 周期；上位机计算原始 H1 / 相干性。起始 >40 Hz 保留 20/40 Hz 基准；实际频率按整数采样周期量化，相邻频点避开重复周期，可用周期不足时拒绝。滤波对照仅适用于 Chirp。":chirpHelp);
     });
     safe->setObjectName("sweepSafe");
@@ -607,12 +627,17 @@ public:
     bandwidth = new QLabel;
     bandwidth->setWordWrap(true);
     l->addWidget(bandwidth);
-    auto filterRow=new QHBoxLayout;filterRow->addWidget(new QLabel("反馈 Iq 对照"));
-    filterChoice=new QComboBox;filterChoice->setObjectName("sweepFeedbackFilter");filterChoice->addItems({"不滤波（原始）","16 点均值对照","Butterworth LPF 对照"});filterRow->addWidget(filterChoice);
-    filterRow->addWidget(new QLabel("LPF 单程截止"));filterCutoff=new QDoubleSpinBox;filterCutoff->setObjectName("sweepLpfCutoff");filterCutoff->setRange(20,8999);filterCutoff->setValue(3000);filterCutoff->setSuffix(" Hz");filterCutoff->setEnabled(false);filterRow->addWidget(filterCutoff);
-    filterRow->addWidget(new QLabel("原始 H1 判定带宽；滤后仅对照"));filterRow->addStretch();l->addLayout(filterRow);
-    meanNote=new QLabel("给定与反馈共用电流纵轴；原始录波始终保留。16 点均值仅适用于 Chirp。");meanNote->setWordWrap(true);l->addWidget(meanNote);
+    auto detailsToggle=new QToolButton;detailsToggle->setText("测量说明与诊断");detailsToggle->setObjectName("sweepDetailsToggle");detailsToggle->setCheckable(true);detailsToggle->setArrowType(Qt::RightArrow);detailsToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    auto details=new QScrollArea;details->setObjectName("sweepDetails");details->setWidgetResizable(true);details->setMaximumHeight(160);details->hide();
+    auto detailsBody=new QWidget;auto detailsLayout=new QVBoxLayout(detailsBody);detailsLayout->addWidget(help);
+    diagnostics=new QLabel;diagnostics->setWordWrap(true);diagnostics->setTextInteractionFlags(Qt::TextSelectableByMouse);detailsLayout->addWidget(diagnostics);
+    meanNote=new QLabel("原始录波和 H1 保留；滤波仅作 Chirp 对照。");meanNote->setWordWrap(true);detailsLayout->addWidget(meanNote);
+    detailsLayout->addWidget(new QLabel("f_bandwidth：原始 H1 的 −3 dB 带宽；fc：≥100 Hz 闭环 0 dB 向下交点，仅诊断，不是开环穿越频率。"));details->setWidget(detailsBody);
+    l->addWidget(details);
+    connect(detailsToggle,&QToolButton::toggled,this,[details,detailsToggle](bool open){details->setVisible(open);detailsToggle->setArrowType(open?Qt::DownArrow:Qt::RightArrow);});
     auto traceRow=new QHBoxLayout;
+    traceRow->addWidget(detailsToggle);
+    dataToggle=new QToolButton;dataToggle->setObjectName("sweepDataToggle");dataToggle->setText("频点数据（0）");dataToggle->setCheckable(true);dataToggle->setArrowType(Qt::RightArrow);dataToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);traceRow->addWidget(dataToggle);
     recordStatus=new QLabel("等待设备同步录波");recordStatus->setWordWrap(true);traceRow->addWidget(recordStatus,1);
     resultChoice=new QComboBox;resultChoice->setObjectName("sweepResultSource");
     resultChoice->addItems({"上位机原始 H1","历史录波复算 H1"});resultChoice->setEnabled(false);traceRow->addWidget(resultChoice);
@@ -632,7 +657,9 @@ public:
     wave->visible.fill(false);wave->visible[0]=wave->visible[11]=true;wave->colors[11]=QColor("#5fc992");
     waveLayout->addWidget(wave,1);plots->addWidget(wavePanel);
     plot = new BodePlot;plot->setObjectName("sweepBode");plot->setMinimumWidth(350);plots->addWidget(plot);
-    plots->setSizes({500,500});l->addWidget(plots,2);
+    connect(viewChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this,wavePanel,plots](int mode){wavePanel->setVisible(mode!=2);plot->setVisible(mode!=1);if(mode==0)plots->setSizes({plots->width()/2,plots->width()/2});});
+    plots->setSizes({500,500});plots->setObjectName("sweepPlots");plots->setChildrenCollapsible(false);
+    auto content=new QSplitter(Qt::Vertical);content->setObjectName("sweepContent");content->addWidget(plots);content->setChildrenCollapsible(false);l->addWidget(content,1);
     connect(fit,&QPushButton::clicked,wave,&Scope::fitHistory);
     connect(resultChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{render();});
     table = new QTableWidget(0, 9);
@@ -643,7 +670,8 @@ public:
     table->horizontalHeader()->setSectionResizeMode(
         QHeaderView::ResizeToContents);
     table->horizontalHeader()->setStretchLastSection(true);
-    l->addWidget(table, 1);
+    content->addWidget(table);table->hide();
+    connect(dataToggle,&QToolButton::toggled,this,[this,content](bool open){table->setVisible(open);dataToggle->setArrowType(open?Qt::DownArrow:Qt::RightArrow);if(open)content->setSizes({std::max(300,content->height()-170),170});});
     connect(filterChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{updateMeanResults();drawRecording(true);render();});
     connect(filterCutoff,&QDoubleSpinBox::editingFinished,this,[this]{updateMeanResults();drawRecording(true);render();});
     connect(&session,&Session::replied,this,[this](quint64 t,quint32 n,int c,QJsonObject o){deviceReply(t,n,c,o);});

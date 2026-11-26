@@ -11,6 +11,55 @@ using namespace mt;
 class SweepTests : public QObject {
   Q_OBJECT
 private slots:
+  void closedLoopCrossingInterpolation() {
+    auto make=[](std::initializer_list<std::pair<double,double>> rows){
+      std::vector<SweepPoint> p;for(auto [f,g]:rows){SweepPoint v;v.hz=f;v.gainDb=g;v.valid=true;p.push_back(v);}return p;
+    };
+    // No sample exactly at zero; the search threshold applies to the crossing,
+    // not to the left endpoint. Log-frequency interpolation matches the plot.
+    auto p=make({{20,-.1},{40,-.1},{93,1},{126,-1},{200,-2}});
+    auto r=sweepClosedLoopCrossingResult(p);
+    QVERIFY(r.found&&r.firstConfirmed);QVERIFY(std::abs(r.hz-std::sqrt(93.*126.))<1e-10);
+    QCOMPARE(r.lowHz,93.);QCOMPARE(r.highHz,126.);
+    QCOMPARE(sweepClosedLoopCrossing(p),r.hz);
+    p[2].gainDb=.01;p[3].gainDb=-1;QVERIFY(!sweepClosedLoopCrossingResult(p).found); // crossing <100
+    p=make({{200,.2613310917},{267,-.1468987801}});
+    QVERIFY(std::abs(sweepClosedLoopCrossing(p)-240.63437656)<1e-6); // real run 64122 bracket
+    p=make({{93,1},{100,0},{126,-1}});QCOMPARE(sweepClosedLoopCrossing(p),100.);
+    p=make({{100,0},{126,-1}});QCOMPARE(sweepClosedLoopCrossing(p),100.);
+    p=make({{100,0},{126,0},{200,0}});QVERIFY(!sweepClosedLoopCrossingResult(p).found);
+    p=make({{100,-1},{126,1}});QVERIFY(!sweepClosedLoopCrossingResult(p).found); // downward fc only
+  }
+  void closedLoopCrossingNeverBridgesGaps() {
+    std::vector<SweepPoint> p(6);
+    const double hz[]={20,40,100,200,300,400},gain[]={0,0,1,-1,1,-1};
+    for(size_t i=0;i<p.size();++i){p[i].hz=hz[i];p[i].gainDb=gain[i];p[i].valid=true;}
+    p[3].valid=false;
+    auto r=sweepClosedLoopCrossingResult(p);
+    QVERIFY(r.found);QVERIFY(!r.firstConfirmed);QCOMPARE(r.lowHz,300.);QCOMPARE(r.highHz,400.);
+    QVERIFY(std::abs(r.hz-std::sqrt(300.*400.))<1e-10);
+    QVERIFY(r.message.contains("候选"));QVERIFY(r.message.contains("首次未确认"));
+    QCOMPARE(sweepClosedLoopCrossing(p),0.); // legacy caller cannot mistake candidate for confirmed fc
+    p.resize(4);QVERIFY(!sweepClosedLoopCrossingResult(p).found);
+    p[3].valid=true;p[2].valid=false;QVERIFY(!sweepClosedLoopCrossingResult(p).found);
+    p[2].valid=true;p[2].gainDb=std::numeric_limits<double>::quiet_NaN();QVERIFY(!sweepClosedLoopCrossingResult(p).found);
+    p[2].gainDb=1;p[2].hz=600;p[3].hz=800;p[1].gainDb=1;
+    r=sweepClosedLoopCrossingResult(p);QVERIFY(r.found&&!r.firstConfirmed);QCOMPARE(r.lowHz,600.);
+    p[2].gainDb=-1;QVERIFY(!sweepClosedLoopCrossingResult(p).found); // never use anchor 40 -> 600
+    p[2].hz=p[1].hz;QVERIFY(!sweepClosedLoopCrossingResult(p).found);
+    p[2].hz=std::numeric_limits<double>::infinity();QVERIFY(!sweepClosedLoopCrossingResult(p).found);
+  }
+  void fcDoesNotChangeRawH1OrBandwidth() {
+    std::vector<SweepPoint> p;
+    for(auto [f,g]:{std::pair{20.,0.},std::pair{40.,0.},std::pair{93.,1.},std::pair{126.,-1.},std::pair{800.,-2.},std::pair{1600.,-4.}}){SweepPoint v;v.hz=f;v.gainDb=g;v.valid=true;p.push_back(v);}
+    const auto original=p;const auto before=sweepBandwidthResult(p);
+    const auto fc=sweepClosedLoopCrossingResult(p);QVERIFY(fc.found&&fc.firstConfirmed);
+    const auto after=sweepBandwidthResult(p);
+    QCOMPARE(before.message,after.message);QCOMPARE(before.hz,after.hz);QVERIFY(after.found);
+    QVERIFY(std::abs(after.hz-std::sqrt(800.*1600.))<1e-9);
+    for(size_t i=0;i<p.size();++i){QCOMPARE(p[i].gainDb,original[i].gainDb);QCOMPARE(p[i].valid,original[i].valid);}
+    p[3].valid=false;QVERIFY(!sweepBandwidthResult(p).found); // bandwidth still refuses earlier invalid points
+  }
   void motionAbortDiagnostics() {
     QByteArray p(62,0);p[0]=1;p[2]=3;p[3]=2;p[6]=16;p[15]=char(159);p[17]=16;
     p[27]=char(0xa5);p[31]=char(159);p[38]=char(0xa6);p[39]=1;

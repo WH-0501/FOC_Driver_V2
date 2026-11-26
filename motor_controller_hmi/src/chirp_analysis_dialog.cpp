@@ -16,16 +16,23 @@ public:
     if(!(hi>lo)){p.setPen(Qt::lightGray);p.drawText(rect(),Qt::AlignCenter,"导入完整 Chirp 录波后显示离线对比");return;}
     int x=65;
     for(const auto &c:curves){p.setPen(c.color);p.drawText(x,18,c.name);x+=p.fontMetrics().horizontalAdvance(c.name)+22;}
+    const auto bw=sweepBandwidthResult(curves.empty()?std::vector<SweepPoint>{}:curves[0].points);
+    const auto crossing=sweepClosedLoopCrossingResult(curves[0].points);
+    const double fc=crossing.found?crossing.hz:0;
+    p.setPen(QColor("#ffbc33"));p.drawText(65,36,bw.found?QString("f_bandwidth = %1 Hz (−3 dB)").arg(bw.hz,0,'g',6):"f_bandwidth：未确认");
+    p.setPen(QColor("#b6a0ff"));p.drawText(65,54,p.fontMetrics().elidedText(crossing.message,Qt::ElideRight,std::max(0,width()-85)));
     for(int panel=0;panel<3;++panel){
-      QRectF r(65,43+panel*(height()-43)/3.,width()-95,(height()-43)/3.-35);
+      QRectF r(65,78+panel*(height()-78)/3.,width()-105,(height()-78)/3.-35);
       double a=panel==0?low:panel==1?-180:0,b=panel==0?high:panel==1?180:1;
       auto pt=[&](double f,double v){return QPointF(r.left()+std::log(f/lo)/std::log(hi/lo)*r.width(),r.bottom()-(v-a)/(b-a)*r.height());};
       p.setPen(Qt::lightGray);p.drawText(QPointF(65,r.top()-5),panel==0?"增益 / dB":panel==1?"相位 / °":"相干性 γ²（仅多周期估计）");
       for(int j=0;j<=4;++j){double v=a+(b-a)*j/4.,y=pt(lo,v).y();p.setPen(QColor("#283039"));p.drawLine(QPointF(r.left(),y),QPointF(r.right(),y));p.setPen(Qt::lightGray);p.drawText(QRectF(0,y-8,59,18),Qt::AlignRight,QString::number(v,'f',1));
-        double f=lo*std::pow(hi/lo,j/4.);p.drawText(QRectF(pt(f,a).x()-32,r.bottom()+3,64,18),Qt::AlignCenter,QString::number(f,'g',3));}
+        double f=lo*std::pow(hi/lo,j/4.);QString tick=QString::number(f,'g',3);double tw=p.fontMetrics().horizontalAdvance(tick)+8;
+        p.drawText(QRectF(std::clamp(pt(f,a).x()-tw/2,0.,std::max(0.,width()-tw)),r.bottom()+3,tw,18),Qt::AlignCenter,tick);}
       if(panel==0&&!curves.empty()&&curves[0].points.size()>1){const auto &v=curves[0].points;
         if(v[0].valid&&v[1].valid&&std::abs(v[0].gainDb-v[1].gainDb)<=.5){double y=pt(lo,(v[0].gainDb+v[1].gainDb)/2-3).y();
           p.setPen(QPen(QColor("#bc9c51"),1,Qt::DashLine));p.drawLine(QPointF(r.left(),y),QPointF(r.right(),y));p.drawText(QPointF(r.left()+6,y-4),"原始基准 −3 dB");}}
+      for(auto [f,color]:{std::pair{bw.found?bw.hz:0.,QColor("#ffbc33")},std::pair{fc,QColor("#b6a0ff")}})if(f>0){double x=pt(f,a).x();p.setPen(QPen(color,1,Qt::DashLine));p.drawLine(QPointF(x,r.top()),QPointF(x,r.bottom()));}
       for(const auto &c:curves){QPainterPath path;bool join=false;double last=0,lastHz=0;
         for(const auto &v:c.points){double y=panel==0?v.gainDb:panel==1?v.phaseDeg:v.inputFit;
           if(!std::isfinite(y)||(!v.valid&&panel!=2)){join=false;continue;}
