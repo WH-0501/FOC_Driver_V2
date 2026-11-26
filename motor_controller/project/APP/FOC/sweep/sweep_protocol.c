@@ -35,10 +35,12 @@ bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
       sweep_config_t cfg;
       unsigned i;
       memset(&cfg,0,sizeof(cfg));
-      cfg.method = p[1]; cfg.count = p[8];
-      cfg.low_hz = (float)read16(p + 4); cfg.high_hz = (float)read16(p + 6);
+      cfg.method = p[1];
+      cfg.count = p[8];
+      cfg.low_hz = (float)read16(p + 4); 
+      cfg.high_hz = (float)read16(p + 6);
       cfg.peak = (float)read16(p + 9) * 0.001f;
-      cfg.sample_hz = (float)FOC_CURRENT_LOOP_FS_HZ;
+      cfg.sample_hz = (float)FOC_CURRENT_LOOP_FS_HZ; ///< 扫频采样率. 固定为电流环采样率
       if(cfg.method==SWEEP_STEPPED) {
         if(cfg.count>SWEEP_MAX_POINTS || length<17u+2u*cfg.count ||
            p[13]!=0xadu || p[14]!=1u || read16(p+15)!=FOC_CURRENT_LOOP_FS_HZ) out[1]=2u;

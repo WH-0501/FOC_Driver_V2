@@ -18,6 +18,7 @@ float sweep_sine_phase(uint32_t phase)
 
 void sweep_chirp_reset(sweep_chirp_t *s)
 { s->phase = 0u; s->step = s->first_step; s->error = 0u; }
+
 float sweep_chirp_step(sweep_chirp_t *s, uint32_t length, uint32_t index)
 {
   uint32_t edge = index < length-1u-index ? index : length-1u-index;
@@ -30,6 +31,7 @@ float sweep_chirp_step(sweep_chirp_t *s, uint32_t length, uint32_t index)
   if (s->error >= length - 1u) { s->error -= length - 1u; ++s->step; }
   return value;
 }
+
 float sweep_chirp_frequency(const sweep_chirp_t *s, float fs)
 { return (float)s->step * (fs * (1.0f / 4294967296.0f)); }
 

@@ -1,5 +1,6 @@
 #include "chirp_analysis_dialog.h"
 #include "chirp_analysis.h"
+#include "welch_analysis.h"
 #include "scope.h"
 #include <QtWidgets>
 #include <cmath>
@@ -25,7 +26,7 @@ public:
       QRectF r(65,78+panel*(height()-78)/3.,width()-105,(height()-78)/3.-35);
       double a=panel==0?low:panel==1?-180:0,b=panel==0?high:panel==1?180:1;
       auto pt=[&](double f,double v){return QPointF(r.left()+std::log(f/lo)/std::log(hi/lo)*r.width(),r.bottom()-(v-a)/(b-a)*r.height());};
-      p.setPen(Qt::lightGray);p.drawText(QPointF(65,r.top()-5),panel==0?"增益 / dB":panel==1?"相位 / °":"相干性 γ²（仅多周期估计）");
+      p.setPen(Qt::lightGray);p.drawText(QPointF(65,r.top()-5),panel==0?"增益 / dB":panel==1?"相位 / °":"相干性 γ²（多周期 / 分段估计）");
       for(int j=0;j<=4;++j){double v=a+(b-a)*j/4.,y=pt(lo,v).y();p.setPen(QColor("#283039"));p.drawLine(QPointF(r.left(),y),QPointF(r.right(),y));p.setPen(Qt::lightGray);p.drawText(QRectF(0,y-8,59,18),Qt::AlignRight,QString::number(v,'f',1));
         double f=lo*std::pow(hi/lo,j/4.);QString tick=QString::number(f,'g',3);double tw=p.fontMetrics().horizontalAdvance(tick)+8;
         p.drawText(QRectF(std::clamp(pt(f,a).x()-tw/2,0.,std::max(0.,width()-tw)),r.bottom()+3,tw,18),Qt::AlignCenter,tick);}
@@ -52,15 +53,16 @@ class OfflineDialog:public QDialog {
   SweepCapture capture,steppedCapture;
   std::vector<SweepPoint> stepped;
   ChirpAnalysis analysis;
+  WelchAnalysis welch;
   ChirpAnalysisOptions options;
   QString capturePath="当前扫频录波副本",stepPath;
-  QLabel *summary,*referenceLabel;
-  QComboBox *filter,*neighbor;
+  QLabel *summary,*referenceLabel,*welchSummary;
+  QComboBox *filter,*neighbor,*welchLength;
   QDoubleSpinBox *cutoff;
   QCheckBox *showCycles;
   ComparisonPlot *plot;
   Scope *wave,*spikeWave;
-  QTableWidget *cycles,*points,*spikes;
+  QTableWidget *cycles,*points,*spikes,*welchPoints,*welchCompare;
   QPushButton *exportButton;
   static void cell(QTableWidget *t,int r,int c,const QString &s){t->setItem(r,c,new QTableWidgetItem(s));}
   static QString number(double x){return QString::number(x,'g',7);}
@@ -71,6 +73,7 @@ class OfflineDialog:public QDialog {
       if(showCycles->isChecked())for(int b=0;b<3;++b)plot->curves.push_back({QString("周期 %1").arg(b+1),QColor(b==0?"#b88bfa":b==1?"#f18b8b":"#62c9ce"),analysis.cycles[b],Qt::DotLine});
       if(!analysis.filtered.empty())plot->curves.push_back({options.filter==ChirpFilter::FeedbackMean16?"16 点均值对照":options.filter==ChirpFilter::FeedbackLpf?"Butterworth LPF 对照":"零相位对比",QColor("#ffbc33"),analysis.filtered,Qt::DashLine});
       if(!analysis.neighborhood.empty())plot->curves.push_back({"邻频 H1（诊断）",QColor("#ed91bc"),analysis.neighborhood,Qt::DashDotLine});
+      if(welch.ok())plot->curves.push_back({"Welch/CSD（诊断）",QColor("#ff984b"),welch.points});
       if(!stepped.empty())plot->curves.push_back({"逐频正弦",QColor("#5fc992"),stepped,Qt::SolidLine,true});
     }
     plot->update();
@@ -81,6 +84,20 @@ class OfflineDialog:public QDialog {
     cutoff->setEnabled(options.filter!=ChirpFilter::FeedbackMean16);
     wave->aliases[11]=options.filter==ChirpFilter::FeedbackMean16?"16 点均值后 Iq / A":"零相位滤后 Iq / A";
     analysis=analyzeChirp(capture,options,stepped);
+    welch=WelchAnalysis{};
+    if(welchLength->currentData().toUInt())welch=analyzeWelch(capture,welchLength->currentData().toUInt(),analysis.raw,stepped);
+    welchSummary->setText(welchLength->currentData().toUInt()?welchAnalysisSummary(welch):"Welch/CSD 对照已关闭；原始 H1 不变。");
+    welchPoints->setRowCount(int(welch.points.size()));
+    for(size_t i=0;i<welch.points.size();++i){const auto &p=welch.points[i];const auto &b=welch.bins[i];
+      QStringList row{number(p.hz),number(p.gainDb),number(p.phaseDeg),number(p.inputFit),p.valid?"有效·仅对照":"无效",number(b.inputPsd),number(b.outputPsd),number(b.energySegments)};
+      for(const auto &m:{b.raw,b.stepped}){if(m.available)row<<number(m.gainDb)<<number(m.gainDelta)<<number(m.phaseDelta)<<(m.interpolated?"有效邻点插值":"同频");else row<<"—"<<"—"<<"—"<<"无有效邻点";}
+      for(int j=0;j<row.size();++j)cell(welchPoints,int(i),j,row[j]);}
+
+    welchCompare->setRowCount(int(welch.comparisons.size()));
+    for(size_t i=0;i<welch.comparisons.size();++i){const auto &c=welch.comparisons[i];const auto &p=c.reference;const auto &m=c.welch;
+      QStringList row{c.source,number(p.hz),number(p.gainDb),number(p.phaseDeg),number(p.inputFit)};
+      if(m.available)row<<number(m.gainDb)<<number(m.phaseDeg)<<number(m.gainDelta)<<number(m.phaseDelta)<<(m.interpolated?"Welch 有效邻点插值":"同频");else row<<"—"<<"—"<<"—"<<"—"<<"无有效邻点/参考无效";
+      for(int j=0;j<row.size();++j)cell(welchCompare,int(i),j,row[j]);}
     summary->setText(chirpAnalysisSummary(capture,options,analysis));exportButton->setEnabled(analysis.ok());
     referenceLabel->setText(stepPath.isEmpty()?"逐频对照：未载入。仅离线分析，不发送控制指令。":
       QString("逐频对照 run %1：%2\n频率不同时仅在相邻有效点间按对数频率插值（间距比 ≤1.3）；不跨无效点、不外推。尚未核验两次 PID、固件版本及温度/工况一致。")
@@ -139,18 +156,19 @@ class OfflineDialog:public QDialog {
     if(path.isEmpty())return;
     // Never overwrite a raw capture even if its name was selected in the dialog.
     if(!path.endsWith(".chirp-analysis.csv",Qt::CaseInsensitive))path+=".chirp-analysis.csv";
-    QSaveFile csv(path),note(path+".txt"),events(path+".spikes.csv");
-    if(!csv.open(QIODevice::WriteOnly)||!note.open(QIODevice::WriteOnly)||!events.open(QIODevice::WriteOnly)){QMessageBox::warning(this,"导出失败","无法打开输出文件");return;}
+    QSaveFile csv(path),note(path+".txt"),events(path+".spikes.csv"),welchFile(path+".welch.csv"),compareFile(path+".welch-comparison.csv");
+    if(!csv.open(QIODevice::WriteOnly)||!note.open(QIODevice::WriteOnly)||!events.open(QIODevice::WriteOnly)||(welch.ok()&&(!welchFile.open(QIODevice::WriteOnly)||!compareFile.open(QIODevice::WriteOnly)))){QMessageBox::warning(this,"导出失败","无法打开输出文件");return;}
     auto data=chirpAnalysisCsv(analysis);
-    QString text="Chirp 来源："+capturePath+"\n逐频来源："+stepPath+"\n"+summary->text()+"\n"+referenceLabel->text()+"\n周期,均值A,RMS_A,峰值绝对值A,周期残差RMS_A,abs_Iq_gt_0.2A样本数\n";
+    QString text="Chirp 来源："+capturePath+"\n逐频来源："+stepPath+"\n"+summary->text()+"\n"+referenceLabel->text()+"\n"+welchSummary->text()+"\n周期,均值A,RMS_A,峰值绝对值A,周期残差RMS_A,abs_Iq_gt_0.2A样本数\n";
     for(int b=0;b<3;++b){const auto &s=analysis.cycleStats[b];text+=QString("%1,%2,%3,%4,%5,%6\n").arg(b+1).arg(number(s.mean)).arg(number(s.rms)).arg(number(s.peak)).arg(number(s.residualRms)).arg(s.over02A);}
     auto notes=text.toUtf8(),spikeData=chirpSpikesCsv(analysis,capture.fs);bool good=csv.write(data)==data.size()&&note.write(notes)==notes.size()&&events.write(spikeData)==spikeData.size();
-    bool a=good&&csv.commit(),b=good&&note.commit(),c=good&&events.commit();
-    if(!a||!b||!c)QMessageBox::warning(this,"导出失败","分析结果、说明或尖峰列表未完整保存");else QMessageBox::information(this,"已导出","已保存离线对比 CSV、分析说明及尖峰列表；原始录波未修改。");
+    auto welchData=welchAnalysisCsv(welch),comparisonData=welchComparisonCsv(welch);if(welch.ok())good=good&&welchFile.write(welchData)==welchData.size()&&compareFile.write(comparisonData)==comparisonData.size();
+    bool a=good&&csv.commit(),b=good&&note.commit(),c=good&&events.commit(),d=!welch.ok()||(good&&welchFile.commit()&&compareFile.commit());
+    if(!a||!b||!c||!d)QMessageBox::warning(this,"导出失败","分析结果、说明或尖峰列表未完整保存");else QMessageBox::information(this,"已导出","已保存离线对比 CSV、分析说明及尖峰列表；开启 Welch 时另存 .welch.csv 与 .welch-comparison.csv。原始录波未修改。");
   }
 public:
   OfflineDialog(QWidget *parent,const SweepCapture &c):QDialog(parent),capture(c){
-    setWindowTitle("Chirp 离线分析 · 原始 H1 / 周期一致性 / 零相位对比");resize(1250,850);setAttribute(Qt::WA_DeleteOnClose);
+    setWindowTitle("Chirp 离线分析 · 原始 H1 / Welch-CSD / 逐频对照");resize(1400,950);setAttribute(Qt::WA_DeleteOnClose);
     auto layout=new QVBoxLayout(this);auto row=new QHBoxLayout;
     auto open=new QPushButton("载入 Chirp 录波"),reference=new QPushButton("载入逐频录波"),clear=new QPushButton("清除逐频对照");
     row->addWidget(open);row->addWidget(reference);row->addWidget(clear);
@@ -161,10 +179,20 @@ public:
     auto nr=new QHBoxLayout;nr->addWidget(new QLabel("邻频原始谱平均"));neighbor=new QComboBox;neighbor->setObjectName("chirpOfflineNeighbor");neighbor->addItem("关闭（默认）",0);
     for(unsigned v:{5u,10u,20u,40u})neighbor->addItem(QString("请求 ±%1 Hz").arg(v),v);
     nr->addWidget(neighbor);nr->addWidget(new QLabel("仅诊断；保留原始带宽及 0.9 相干性门槛，不删除尖峰。"));nr->addStretch();layout->addLayout(nr);
+    auto wr=new QHBoxLayout;wr->addWidget(new QLabel("Welch/CSD 分段对照"));
+    welchLength=new QComboBox;welchLength->setObjectName("chirpOfflineWelch");welchLength->addItem("关闭",0);
+    for(unsigned n:{2048u,4096u,8192u,16384u})welchLength->addItem(QString("%1 点 Hann 窗").arg(n),n);
+    welchLength->setCurrentIndex(2);wr->addWidget(welchLength);
+    auto wh=new QLabel("未滤波原始录波 · 50% 重叠 · γ² ≥0.9 · 带宽说明见 Welch 数据页");wh->setWordWrap(true);wr->addWidget(wh,1);layout->addLayout(wr);
     summary=new QLabel;summary->setObjectName("chirpOfflineSummary");summary->setWordWrap(true);summary->setTextInteractionFlags(Qt::TextSelectableByMouse);layout->addWidget(summary);
     referenceLabel=new QLabel;referenceLabel->setWordWrap(true);layout->addWidget(referenceLabel);
     showCycles=new QCheckBox("叠加三个测量周期（单周期 Y/X）");layout->addWidget(showCycles);
     auto tabs=new QTabWidget;plot=new ComparisonPlot;plot->setObjectName("chirpOfflinePlot");tabs->addTab(plot,"频响对比");
+    auto wp=new QWidget;auto wl=new QVBoxLayout(wp);welchSummary=new QLabel;welchSummary->setObjectName("chirpWelchSummary");welchSummary->setWordWrap(true);welchSummary->setTextInteractionFlags(Qt::TextSelectableByMouse);wl->addWidget(welchSummary);
+    auto wm=new QLabel("差值仅在双方有效时显示；原始 H1 / 逐频参考只在相邻有效点间插值（频率比 ≤1.3），不跨无效点，不外推。能量等效段数不代表独立平均次数。PSD 单位 A²/Hz。");wm->setWordWrap(true);wl->addWidget(wm);
+    welchPoints=new QTableWidget(0,16);welchPoints->setObjectName("chirpWelchPoints");welchPoints->setHorizontalHeaderLabels({"Hz","Welch dB","Welch °","γ²","质量","输入 PSD","反馈 PSD","输入能量等效段数","原始 H1 dB","Welch−原始 dB","Welch−原始 °","原始来源","逐频 dB","Welch−逐频 dB","Welch−逐频 °","逐频来源"});wl->addWidget(welchPoints);tabs->addTab(wp,"Welch/CSD 数据");
+    auto wc=new QWidget;auto wcl=new QVBoxLayout(wc);auto wch=new QLabel("按原始 H1 / 逐频正弦的频率比较：仅在相邻有效 Welch 谱线之间插值，不跨无效点、不外推；插值行不参与任何带宽判定。差值为 Welch 减参考。");wch->setWordWrap(true);wcl->addWidget(wch);
+    welchCompare=new QTableWidget(0,10);welchCompare->setObjectName("chirpWelchCompare");welchCompare->setHorizontalHeaderLabels({"参考","Hz","参考 dB","参考 °","参考 γ²","Welch dB","Welch °","差值 dB","差值 °","来源/质量"});wcl->addWidget(welchCompare);tabs->addTab(wc,"Welch 对照差值");
     auto consistency=new QWidget;auto cl=new QVBoxLayout(consistency);
     cl->addWidget(new QLabel("周期残差＝本周期反馈减去三个周期的逐样本均值。0.2 A 只计数，不作为删点或保护阈值。"));
     cycles=new QTableWidget(0,7);cycles->setHorizontalHeaderLabels({"周期","时间 / s","均值 / A","RMS / A","绝对峰值 / A","残差 RMS / A","|Iq| >0.2 A 点数"});cl->addWidget(cycles);tabs->addTab(consistency,"周期一致性");
@@ -173,11 +201,12 @@ public:
     spikes=new QTableWidget(0,9);spikes->setObjectName("chirpOfflineSpikes");spikes->setSelectionBehavior(QAbstractItemView::SelectRows);spikes->setHorizontalHeaderLabels({"周期","峰值序号","设备时间 s","周期内时间 s","连续点数","给定 A","Iq 峰值 A","事件前 Iq A","事件后 Iq A"});sl->addWidget(spikes);
     spikeWave=new Scope;spikeWave->sampledTraces=true;spikeWave->aliases[0]="原始 Iq / A";spikeWave->aliases[11]="原始给定 / A";spikeWave->visible.fill(false);spikeWave->visible[0]=spikeWave->visible[11]=true;spikeWave->colors[11]=QColor("#5fc992");spikeWave->timeAxisLabel="设备采样时间 / s（原始值）";sl->addWidget(spikeWave,1);tabs->addTab(sp,"尖峰位置");
     wave=new Scope;wave->sampledTraces=true;wave->aliases=channelNames;wave->aliases[0]="原始 Iq / A";wave->aliases[11]="零相位滤后 Iq / A";wave->visible.fill(false);wave->visible[0]=wave->visible[11]=true;wave->colors[11]=QColor("#5fc992");wave->timeAxisLabel="原始设备采样时间 / s（仅 1–4 s 测量段）";tabs->addTab(wave,"原始/滤后录波");
-    for(auto t:{cycles,points,spikes}){t->setEditTriggers(QAbstractItemView::NoEditTriggers);t->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);t->horizontalHeader()->setStretchLastSection(true);}
+    for(auto t:{cycles,points,spikes,welchPoints,welchCompare}){t->setEditTriggers(QAbstractItemView::NoEditTriggers);t->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);t->horizontalHeader()->setStretchLastSection(true);}
     layout->addWidget(tabs,1);
     connect(open,&QPushButton::clicked,this,[this]{load(false);});connect(reference,&QPushButton::clicked,this,[this]{load(true);});
     connect(clear,&QPushButton::clicked,this,[this]{stepped.clear();stepPath.clear();calculate();});
     connect(apply,&QPushButton::clicked,this,[this]{calculate();});connect(exportButton,&QPushButton::clicked,this,[this]{save();});
+    connect(welchLength,&QComboBox::currentIndexChanged,this,[this]{calculate();});
     connect(showCycles,&QCheckBox::toggled,this,[this]{redrawPlot();});
     connect(spikes,&QTableWidget::currentCellChanged,this,[this](int row,int,int,int){showSpike(row);});calculate();
   }
