@@ -63,6 +63,43 @@ public:
     return out;
   }
 };
+// Accelerated 28-second capture through the real worker, decoder and dialog.
+class TimedCaptureBackend:public CanBackend {
+  std::vector<Frame> replies;quint32 cursor=0;quint16 run=0;quint8 sequence=0;
+  int state=0;bool enabled=true;double feedback=0;
+  void queue(int cmd,const QByteArray &p){replies.push_back({1,pack(sequence++,cmd,p),0});}
+public:
+  void open(const Connection &) override {}
+  void close() override {}
+  void send(const Frame &f) override {
+    int cmd=quint8(f.bytes[1]);auto p=f.bytes.mid(2);queue(0x7e,f.bytes.left(2));
+    if(cmd==0xbc||cmd==0xbd){
+      int error=0;
+      if(cmd==0xbc&&p.size()>1&&p[1]) {
+        if(p.size()<19||p.mid(13,6)!=QByteArray::fromHex("ae010fa00106"))error=2;
+        else {run=u16(p,2);state=1;cursor=0;}
+      }
+      if(cmd==0xbc&&p.size()>1&&!p[1]){state=3;enabled=false;}
+      if(state==1&&cursor==560000){state=2;enabled=false;}
+      QByteArray out(62,0);out[0]=1;out[1]=char(error);out[2]=char(state);out[3]=3;
+      qToBigEndian(run,out.data()+4);out[6]=8;out[7]=state==2?8:0;
+      qToBigEndian<quint32>(20000,out.data()+8);qToBigEndian(cursor,out.data()+12);
+      out[40]=char(0xa9);out[41]=1;out[42]=state?1:0;out[43]=char(0xaa);qToBigEndian(cursor,out.data()+48);
+      out[52]=char(0xac);out[53]=1;out[54]=7;out[55]=7;
+      out.replace(56,6,QByteArray::fromHex("ae010fa00106"));queue(cmd,out);
+    }else if(cmd==0x39||cmd==0x40){enabled=false;state=3;queue(cmd,QByteArray(1,0));}
+  }
+  std::vector<Frame> receive() override {
+    std::vector<Frame> out;out.swap(replies);
+    QByteArray t(18,0);t[14]=char(6|(enabled?16:0));t[16]=25;t[17]=240;out.push_back({1,pack(sequence++,0,t),0});
+    for(unsigned frame=0;state==1&&cursor<560000&&frame<600;++frame){
+      unsigned n=std::min(6u,560000-cursor);QByteArray p(8+8*n,0);p[0]=1;p[1]=char(n);qToBigEndian(run,p.data()+2);qToBigEndian(cursor,p.data()+4);
+      for(unsigned j=0;j<n;++j){double ts=(cursor%80000)/20000.;float x=float(.05*std::sin(2*3.141592653589793*(20*ts+247.5*ts*ts))),y=float(feedback);
+        feedback+=.22*(x-feedback);quint32 xb,yb;memcpy(&xb,&x,4);memcpy(&yb,&y,4);qToBigEndian(xb,p.data()+8+8*j);qToBigEndian(yb,p.data()+12+8*j);++cursor;}
+      out.push_back({1,pack(sequence++,0xbf,p),0});
+    }return out;
+  }
+};
 class CaptureUiTests:public QObject{
  Q_OBJECT
 private slots:
@@ -72,6 +109,23 @@ private slots:
    qApp->setStyle("Fusion");qApp->setFont(QFont("Microsoft YaHei UI",10));
    QFile f(qEnvironmentVariable("MOTORTUNE_SWEEP_STYLE"));
    if(f.open(QIODevice::ReadOnly))qApp->setStyleSheet(QString::fromUtf8(f.readAll()));
+ }
+ void deviceTimingLongCapture() {
+   Session session(nullptr,[](const Connection &){return std::make_unique<TimedCaptureBackend>();});
+   session.open({});QTRY_VERIFY(session.telemetryFresh(1));QWidget parent;
+   bool complete=false,timing=false;int rows=0,blocks=0;QTimer poll;QElapsedTimer deadline;deadline.start();
+   QTimer::singleShot(20,&parent,[&]{auto d=parent.findChild<QDialog*>("sweepDialog");QVERIFY(d);
+     d->findChild<QSpinBox*>("sweepCount")->setValue(8);d->findChild<QCheckBox*>("sweepSafe")->setChecked(true);
+     d->findChild<QPushButton*>("startSweep")->click();
+     connect(&poll,&QTimer::timeout,d,[&,d]{
+       if(!d->findChild<QPushButton*>("startSweep")->isEnabled()&&deadline.elapsed()<25000)return;
+       auto table=d->findChild<QTableWidget*>();rows=table->rowCount();if(rows)blocks=int(table->item(0,6)->text().toDouble());
+       for(auto label:d->findChildren<QLabel*>()){complete|=label->text().contains("560000 / 560000")&&label->text().contains("测量完成");timing|=label->text().contains("6 个测量周期");}
+       poll.stop();d->reject();
+     });poll.start(100);
+   });
+   showSweepDialog(session,Version::V2,1,&parent);
+   QVERIFY(complete);QVERIFY(timing);QCOMPARE(rows,8);QCOMPARE(blocks,6);QCOMPARE(session.sweepRecording().samples.size(),560000u);
  }
  void simultaneousWaveAndBode_data(){
    QTest::addColumn<int>("method");QTest::addColumn<bool>("drop");QTest::addColumn<bool>("abort");

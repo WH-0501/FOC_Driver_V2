@@ -1,4 +1,5 @@
 #include "sweep_chirp.h"
+#include "sweep_config.h"
 #include <string.h>
 /* Quarter-wave polynomial. The phase accumulator and window stay unchanged.
  * Odd Taylor polynomial through degree 11 on [0, pi/2]. Truncation error
@@ -47,7 +48,7 @@ float sweep_chirp_prepare(sweep_chirp_t *s, float low, float high, float fs, uin
   difference = last - s->first_step;
   s->delta = difference / (length - 1u);
   s->remainder = difference % (length - 1u);
-  s->ramp_gain = 200.0f / fs; /* smooth 5 ms edges, within each 1 s period */
+  s->ramp_gain = (1000.0f / SWEEP_CHIRP_EDGE_MS) / fs;
   sweep_chirp_reset(s);
   for (i = 0; i < length; ++i) {
     uint32_t edge = i < length-1u-i ? i : length-1u-i;

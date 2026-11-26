@@ -15,7 +15,7 @@ double db(double a){return a>1e-30?20*std::log10(a):-600.;}
 double degrees(Complex a){return std::arg(a)*180/pi;}
 // 63-tap Blackman windowed sinc, unit DC gain. Two centered circular passes
 // give |B(f)|^2 >= 0 with zero phase, including exact periodic boundaries.
-// This is NOT reflection-padded filtfilt: each complete 1 s block is periodic.
+// This is NOT reflection-padded filtfilt: each complete device period is periodic.
 std::vector<double> kernel(double cutoff,double fs) {
   std::vector<double> h(63);double sum=0;
   for(int i=0;i<63;++i){int m=i-31;double x=2*cutoff/fs;
@@ -34,22 +34,23 @@ Complex line(const std::vector<double> &v,size_t start,size_t n,double f,double 
   Complex sum=0,z=1,rot=std::polar(1.,-2*pi*f/fs);
   for(size_t i=0;i<n;++i){sum+=v[start+i]*z;z*=rot;}return sum*(2./n);
 }
-SweepPoint estimate(double f,const std::array<Complex,3> &x,const std::array<Complex,3> &y){
+SweepPoint estimate(double f,const std::vector<Complex> &x,const std::vector<Complex> &y){
   double xx=0,yy=0,xa=0,ya=0;Complex xy=0;
-  for(int b=0;b<3;++b){xx+=std::norm(x[b]);yy+=std::norm(y[b]);xy+=std::conj(x[b])*y[b];xa+=std::abs(x[b]);ya+=std::abs(y[b]);}
+  const int blocks=int(x.size());
+  for(int b=0;b<blocks;++b){xx+=std::norm(x[b]);yy+=std::norm(y[b]);xy+=std::conj(x[b])*y[b];xa+=std::abs(x[b]);ya+=std::abs(y[b]);}
   Complex h=xx>1e-30?xy/xx:Complex{};SweepPoint p;
-  p.hz=f;p.input=xa/3;p.output=ya/3;p.gainDb=db(std::abs(h));p.phaseDeg=degrees(h);
-  p.inputFit=xx*yy>1e-30?std::clamp(std::norm(xy)/(xx*yy),0.,1.):0;p.outputFit=p.count=3;
+  p.hz=f;p.input=xa/blocks;p.output=ya/blocks;p.gainDb=db(std::abs(h));p.phaseDeg=degrees(h);
+  p.inputFit=xx*yy>1e-30?std::clamp(std::norm(xy)/(xx*yy),0.,1.):0;p.outputFit=p.count=blocks;
   p.valid=p.input>1e-6&&std::abs(h)>1e-6&&p.inputFit>=.9;
-  p.status=p.valid?"原始 H1 · 3 周期":"原始 H1 · 相干性/幅值不足";return p;
+  p.status=p.valid?QString("原始 H1 · %1 周期").arg(blocks):"原始 H1 · 相干性/幅值不足";return p;
 }
 struct SpectralPool {
   double xx=0,yy=0,xa=0,ya=0;Complex xy=0;unsigned count=0;
   void add(Complex x,Complex y){xx+=std::norm(x);yy+=std::norm(y);xy+=std::conj(x)*y;xa+=std::abs(x);ya+=std::abs(y);++count;}
-  SweepPoint point(double hz)const{
+  SweepPoint point(double hz,int blocks)const{
     Complex h=xx>1e-30?xy/xx:Complex{};SweepPoint p;
     p.hz=hz;p.input=count?xa/count:0;p.output=count?ya/count:0;p.gainDb=db(std::abs(h));p.phaseDeg=degrees(h);
-    p.inputFit=xx*yy>1e-30?std::clamp(std::norm(xy)/(xx*yy),0.,1.):0;p.outputFit=p.count=3;
+    p.inputFit=xx*yy>1e-30?std::clamp(std::norm(xy)/(xx*yy),0.,1.):0;p.outputFit=p.count=blocks;
     p.valid=p.input>1e-6&&std::abs(h)>1e-6&&p.inputFit>=.9;
     p.status=p.valid?"邻频原始谱平均 · 诊断对比":"邻频原始谱平均 · 相干性/幅值不足";return p;
   }
@@ -98,7 +99,7 @@ std::vector<double> feedbackLpf(const SweepRecording &r,double fs,double fc) {
   return {v.begin()+pad,v.begin()+pad+n};
 }
 QString feedbackLpfDescription(double fs,double fc) {
-  return QString("反馈 LPF 对照：四阶 Butterworth，单程截止 %1 Hz（−3 dB）；正反向零相位，总响应为单程幅值平方（截止处 −6 dB）。完整 4 s 连续处理，奇对称延拓；边界仍可能有偏差。给定不滤波，仅对照，不作为最终带宽，不恢复带内信噪比。采样率 %2 Hz。")
+  return QString("反馈 LPF 对照：四阶 Butterworth，单程截止 %1 Hz（−3 dB）；正反向零相位，总响应为单程幅值平方（截止处 −6 dB）。完整录波连续处理，奇对称延拓；边界仍可能有偏差。给定不滤波，仅对照，不作为最终带宽，不恢复带内信噪比。采样率 %2 Hz。")
     .arg(fc,0,'g',6).arg(fs,0,'g',6);
 }
 QString feedbackMean16Description(double fs) {
@@ -126,8 +127,13 @@ ChirpAnalysis analyzeChirp(const SweepCapture &capture,const ChirpAnalysisOption
   if(capture.method!=3)return fail("请选择设备周期 Chirp 的 .samples.csv 录波");
   if(!capture.completed||!capture.recording.complete(capture.expected))return fail("录波未完成或存在缺样/拒收：不插补，不计算带宽");
   double fs=capture.fs;
-  if(!std::isfinite(fs)||fs<10000||fs>40000||std::abs(fs-std::round(fs))>1e-6||capture.expected!=4*quint32(fs))
-    return fail("要求 4 s 等间隔录波：1 s 稳定 + 3 × 1 s 测量");
+  const auto &timing=capture.timing;
+  if(!timing.valid(fs)||capture.expected!=timing.totalSamples(fs))
+    return fail("录波长度与设备 Chirp 时序不一致");
+  const int blocks=int(timing.measurePeriods);
+  const size_t n=timing.periodSamples(fs),start=n*timing.settlePeriods;
+  out.cycles.resize(blocks);out.cycleStats.resize(blocks);
+  out.periodSeconds=timing.periodMs/1000.;out.settleSeconds=start/fs;
   if(capture.points.size()<3)return fail("缺少本次测量的频点信息");
   double previous=0;
   for(const auto &p:capture.points){
@@ -135,53 +141,53 @@ ChirpAnalysis analyzeChirp(const SweepCapture &capture,const ChirpAnalysisOption
       return fail("Chirp 频点必须为递增的整 Hz 谱线且不超过采样率的 1/10");
     previous=p.hz;
   }
-  size_t n=size_t(fs);
   for(size_t i=0;i<capture.recording.samples.size();++i){const auto &v=capture.recording.samples[i];
     if(v.index!=i||!std::isfinite(v.input)||!std::isfinite(v.output))return fail("采样序号不连续或存在非有限值");}
   if(options.filter!=ChirpFilter::Off&&options.filter!=ChirpFilter::FeedbackMean16&&(!std::isfinite(options.cutoffHz)||options.cutoffHz<20||options.cutoffHz>=fs*.45))return fail("滤波截止频率须为 20 Hz 至 0.45 × 采样率之间");
   if(options.neighborHalfWidthHz>40)return fail("邻频平均半宽不得超过 40 Hz");
-  std::vector<double> x(3*n),y(3*n);
-  for(size_t i=0;i<3*n;++i){x[i]=capture.recording.samples[n+i].input;y[i]=capture.recording.samples[n+i].output;}
-  for(size_t i=0;i<n;++i){double xm=(x[i]+x[n+i]+x[2*n+i])/3,ym=(y[i]+y[n+i]+y[2*n+i])/3;
-    for(int b=0;b<3;++b){double u=x[b*n+i],v=y[b*n+i];auto &s=out.cycleStats[b];
+  std::vector<double> x(blocks*n),y(blocks*n);
+  for(size_t i=0;i<blocks*n;++i){x[i]=capture.recording.samples[start+i].input;y[i]=capture.recording.samples[start+i].output;}
+  for(size_t i=0;i<n;++i){double xm=0,ym=0;for(int b=0;b<blocks;++b){xm+=x[b*n+i];ym+=y[b*n+i];}xm/=blocks;ym/=blocks;
+    for(int b=0;b<blocks;++b){double u=x[b*n+i],v=y[b*n+i];auto &s=out.cycleStats[b];
       out.inputRepeatRms+=(u-xm)*(u-xm);s.residualRms+=(v-ym)*(v-ym);s.mean+=v;s.rms+=v*v;s.peak=std::max(s.peak,std::abs(v));s.over02A+=std::abs(v)>.2;
-      for(int c=b+1;c<3;++c)out.inputRepeatMax=std::max(out.inputRepeatMax,std::abs(u-x[c*n+i]));}}
+      for(int c=b+1;c<blocks;++c)out.inputRepeatMax=std::max(out.inputRepeatMax,std::abs(u-x[c*n+i]));}}
   double power=0,residual=0;
   for(auto &s:out.cycleStats){power+=s.rms;residual+=s.residualRms;s.mean/=n;s.rms=std::sqrt(s.rms/n);s.residualRms=std::sqrt(s.residualRms/n);}
-  out.inputRepeatRms=std::sqrt(out.inputRepeatRms/(3*n));out.outputRms=std::sqrt(power/(3*n));out.outputResidualRms=std::sqrt(residual/(3*n));
+  out.inputRepeatRms=std::sqrt(out.inputRepeatRms/(blocks*n));out.outputRms=std::sqrt(power/(blocks*n));out.outputResidualRms=std::sqrt(residual/(blocks*n));
   // Linear decomposition for observation only. No samples are removed from H1.
   std::vector<double> spikeOnly(y.size());double spikePower=0;
-  for(unsigned b=0;b<3;++b)for(size_t i=0;i<n;){
+  for(int b=0;b<blocks;++b)for(size_t i=0;i<n;){
     if(std::abs(y[b*n+i])<=.2){++i;continue;}
     size_t first=i,peak=i;
     while(i<n&&std::abs(y[b*n+i])>.2){double v=y[b*n+i];spikeOnly[b*n+i]=v;spikePower+=v*v;if(std::abs(v)>std::abs(y[b*n+peak]))peak=i;++i;}
-    size_t base=(b+1)*n,globalPeak=base+peak;
-    out.spikes.push_back({b+1,unsigned(base+first),unsigned(base+i-1),unsigned(globalPeak),
+    size_t base=start+b*n,globalPeak=base+peak;
+    out.spikes.push_back({unsigned(b+1),unsigned(base+first),unsigned(base+i-1),unsigned(globalPeak),
       capture.recording.samples[globalPeak].input,y[b*n+peak],
       capture.recording.samples[base+first-1].output,
       base+i<capture.recording.samples.size()?double(capture.recording.samples[base+i].output):std::numeric_limits<double>::quiet_NaN()});
   }
   out.spikeEnergyFraction=power>0?spikePower/power:0;
-  using Lines=std::pair<std::array<Complex,3>,std::array<Complex,3>>;
+  using Lines=std::pair<std::vector<Complex>,std::vector<Complex>>;
   std::map<int,Lines> cache;
   auto spectra=[&](int hz)->const Lines &{
     auto [it,inserted]=cache.try_emplace(hz);
-    if(inserted)for(int b=0;b<3;++b){it->second.first[b]=line(x,b*n,n,hz,fs);it->second.second[b]=line(y,b*n,n,hz,fs);}
+    if(inserted){it->second.first.resize(blocks);it->second.second.resize(blocks);}
+    if(inserted)for(int b=0;b<blocks;++b){it->second.first[b]=line(x,b*n,n,hz,fs);it->second.second[b]=line(y,b*n,n,hz,fs);}
     return it->second;
   };
   std::vector<double> taps;
   if(options.filter==ChirpFilter::FeedbackMean16||options.filter==ChirpFilter::FeedbackLpf){
     out.filteredRecording=options.filter==ChirpFilter::FeedbackMean16?feedbackMean16(capture.recording):feedbackLpf(capture.recording,fs,options.cutoffHz);
     if(out.filteredRecording.size()!=capture.expected)return fail("滤波对照无法处理当前录波");
-    out.filteredOutput.assign(out.filteredRecording.begin()+n,out.filteredRecording.end());out.filteredInput=x;
+    out.filteredOutput.assign(out.filteredRecording.begin()+start,out.filteredRecording.end());out.filteredInput=x;
     double sum=0;for(double v:out.filteredOutput)sum+=v*v;out.filteredOutputRms=std::sqrt(sum/y.size());
   } else if(options.filter!=ChirpFilter::Off){taps=kernel(options.cutoffHz,fs);
     out.filteredOutput=circularPass(circularPass(y,taps,n),taps,n);
     out.filteredInput=options.filter==ChirpFilter::Both?circularPass(circularPass(x,taps,n),taps,n):x;
     double sum=0;for(double v:out.filteredOutput)sum+=v*v;out.filteredOutputRms=std::sqrt(sum/y.size());}
-  for(const auto &p:capture.points){const auto &[xx,yy]=spectra(int(p.hz));std::array<Complex,3> xf,yf;ChirpFrequencyCheck check;
-    Complex meanY=(yy[0]+yy[1]+yy[2])/3.;
-    for(int b=0;b<3;++b){
+  for(const auto &p:capture.points){const auto &[xx,yy]=spectra(int(p.hz));std::vector<Complex> xf(blocks),yf(blocks);ChirpFrequencyCheck check;check.gain.resize(blocks);check.phase.resize(blocks);
+    Complex meanY=std::accumulate(yy.begin(),yy.end(),Complex{})/double(blocks);
+    for(int b=0;b<blocks;++b){
       check.spikeLineRms+=std::norm(line(spikeOnly,b*n,n,p.hz,fs));
       check.residualLineRms+=std::norm(yy[b]-meanY);
       Complex h=std::norm(xx[b])>1e-30?yy[b]/xx[b]:Complex{};
@@ -191,16 +197,16 @@ ChirpAnalysis analyzeChirp(const SweepCapture &capture,const ChirpAnalysisOption
       point.inputFit=std::numeric_limits<double>::quiet_NaN(); // single block has no meaningful coherence
       out.cycles[b].push_back(point);
       if(!out.filteredOutput.empty()){xf[b]=line(out.filteredInput,b*n,n,p.hz,fs);yf[b]=line(out.filteredOutput,b*n,n,p.hz,fs);}}
-    for(int a=0;a<3;++a)for(int b=a+1;b<3;++b){check.gainSpread=std::max(check.gainSpread,std::abs(check.gain[a]-check.gain[b]));check.phaseSpread=std::max(check.phaseSpread,std::abs(std::remainder(check.phase[a]-check.phase[b],360.)));}
+    for(int a=0;a<blocks;++a)for(int b=a+1;b<blocks;++b){check.gainSpread=std::max(check.gainSpread,std::abs(check.gain[a]-check.gain[b]));check.phaseSpread=std::max(check.phaseSpread,std::abs(std::remainder(check.phase[a]-check.phase[b],360.)));}
     out.raw.push_back(estimate(p.hz,xx,yy));compare(check,out.raw.back(),reference);
-    check.spikeLineRms=std::sqrt(check.spikeLineRms/3);check.residualLineRms=std::sqrt(check.residualLineRms/3);
+    check.spikeLineRms=std::sqrt(check.spikeLineRms/blocks);check.residualLineRms=std::sqrt(check.residualLineRms/blocks);
     if(options.neighborHalfWidthHz){
       // Keep the two baseline lines unchanged. Symmetric bands only, capped at
       // 5% of center frequency and captured bounds; no endpoint extrapolation.
       int radius=out.raw.size()<=2?0:std::min({int(options.neighborHalfWidthHz),int(std::floor(.05*p.hz)),int(p.hz-capture.points.front().hz),int(capture.points.back().hz-p.hz)});
       check.bandLowHz=p.hz-radius;check.bandHighHz=p.hz+radius;check.bandLines=unsigned(2*radius+1);
-      SpectralPool pool;for(int hz=int(check.bandLowHz);hz<=int(check.bandHighHz);++hz){const auto &[bx,by]=spectra(hz);for(int b=0;b<3;++b)pool.add(bx[b],by[b]);}
-      out.neighborhood.push_back(pool.point(p.hz));
+      SpectralPool pool;for(int hz=int(check.bandLowHz);hz<=int(check.bandHighHz);++hz){const auto &[bx,by]=spectra(hz);for(int b=0;b<blocks;++b)pool.add(bx[b],by[b]);}
+      out.neighborhood.push_back(pool.point(p.hz,blocks));
     }
     if(!out.filteredOutput.empty()){
       if(options.filter==ChirpFilter::FeedbackMean16){Complex response=0;for(int k=0;k<16;++k)response+=std::polar(1./16,-2*pi*p.hz*k/fs);check.filterDb=db(std::abs(response));}
@@ -214,14 +220,14 @@ ChirpAnalysis analyzeChirp(const SweepCapture &capture,const ChirpAnalysisOption
 }
 QString chirpAnalysisSummary(const SweepCapture &c,const ChirpAnalysisOptions &o,const ChirpAnalysis &a){
   if(!a.ok())return a.error;
-  QString s=QString("run %1 · %2/%3 点 · 丢弃 0–1 s，分析 1–4 s 的三个完整周期\n原始 H1：%4\n输入周期最大差 %5 A；反馈非周期残差 RMS %6 A（包含噪声与非平稳变化，不等同于纯噪声）")
-    .arg(c.recording.run).arg(c.recording.samples.size()).arg(c.expected).arg(sweepBandwidth(a.raw)).arg(a.inputRepeatMax,0,'g',5).arg(a.outputResidualRms,0,'g',5);
-  if(a.inputRepeatMax>1e-6)s+="\n注意：给定三个周期不完全重复，周期一致性需结合输入变化判断。";
+  QString s=QString("run %1 · %2/%3 点 · 丢弃 0–%7 s，分析 %7–%8 s 的 %9 个完整周期（单周期 %10 s）\n原始 H1：%4\n输入周期最大差 %5 A；反馈非周期残差 RMS %6 A（包含噪声与非平稳变化，不等同于纯噪声）")
+    .arg(c.recording.run).arg(c.recording.samples.size()).arg(c.expected).arg(sweepBandwidth(a.raw)).arg(a.inputRepeatMax,0,'g',5).arg(a.outputResidualRms,0,'g',5).arg(a.settleSeconds).arg(c.expected/c.fs).arg(a.cycles.size()).arg(a.periodSeconds);
+  if(a.inputRepeatMax>1e-6)s+="\n注意：给定各周期不完全重复，周期一致性需结合输入变化判断。";
   if(o.filter==ChirpFilter::FeedbackMean16)s+="\n"+feedbackMean16Description(c.fs)+"\n16 点均值仅对照；最终带宽仍采用原始 H1。";
   else if(o.filter==ChirpFilter::FeedbackLpf)s+="\n"+feedbackLpfDescription(c.fs,o.cutoffHz)+QString("\n反馈 RMS %1 → %2 A").arg(a.outputRms,0,'g',6).arg(a.filteredOutputRms,0,'g',6);
   else if(o.filter!=ChirpFilter::Off)s+=QString("\n%1 · 63 抽头 Blackman FIR，两次居中循环卷积，过渡中心 %2 Hz（非 −3 dB 点）；反馈 RMS %3 → %4 A。只适用于完整周期。滤波不修复同频带噪声，相干性不应因此改善；仅滤反馈会改变增益。")
     .arg(o.filter==ChirpFilter::Both?"给定/反馈同滤（零相位）":"仅反馈滤波（零相位）").arg(o.cutoffHz).arg(a.outputRms,0,'g',5).arg(a.filteredOutputRms,0,'g',5);
-  s+=QString("\n|Iq| >0.2 A：%1 个连续事件，占测量段平方和 %2%；仅观察，不删点。谱线贡献为三个周期复幅值的 RMS，不是独立噪声功率。")
+  s+=QString("\n|Iq| >0.2 A：%1 个连续事件，占测量段平方和 %2%；仅观察，不删点。谱线贡献为各测量周期复幅值的 RMS，不是独立噪声功率。")
     .arg(a.spikes.size()).arg(100*a.spikeEnergyFraction,0,'f',2);
   if(o.neighborHalfWidthHz)s+=QString("\n邻频对比：请求半宽 ±%1 Hz，实际不超过中心频率 5%%；首两点及边界保留单谱线。对原始互谱/自谱先求和再求 H1，相干性门槛仍为 0.9。仅诊断，不替代原始带宽；谱线数量不代表独立周期数。")
     .arg(o.neighborHalfWidthHz).replace("5%%","5%");
@@ -229,7 +235,10 @@ QString chirpAnalysisSummary(const SweepCapture &c,const ChirpAnalysisOptions &o
   return s;
 }
 QByteArray chirpAnalysisCsv(const ChirpAnalysis &a){
-  QByteArray csv="frequency_hz,raw_gain_db,raw_phase_deg,raw_coherence,raw_valid,cycle1_gain_db,cycle2_gain_db,cycle3_gain_db,cycle1_phase_deg,cycle2_phase_deg,cycle3_phase_deg,gain_spread_db,phase_spread_deg,filtered_gain_db,filtered_phase_deg,filtered_coherence,filter_response_db,stepped_gain_db,stepped_phase_deg,chirp_minus_stepped_db,chirp_minus_stepped_deg,stepped_interpolated,spike_line_rms_A,residual_line_rms_A,band_low_hz,band_high_hz,band_lines,band_gain_db,band_phase_deg,band_coherence,band_valid\n";
+  QByteArray csv="frequency_hz,raw_gain_db,raw_phase_deg,raw_coherence,raw_valid";
+  for(const char *suffix:{"gain_db","phase_deg"})for(size_t b=0;b<a.cycles.size();++b)
+    csv+=",cycle"+QByteArray::number(b+1)+"_"+suffix;
+  csv+=",gain_spread_db,phase_spread_deg,filtered_gain_db,filtered_phase_deg,filtered_coherence,filter_response_db,stepped_gain_db,stepped_phase_deg,chirp_minus_stepped_db,chirp_minus_stepped_deg,stepped_interpolated,spike_line_rms_A,residual_line_rms_A,band_low_hz,band_high_hz,band_lines,band_gain_db,band_phase_deg,band_coherence,band_valid\n";
   auto num=[](double x){return QString::number(x,'g',17);};
   for(size_t i=0;i<a.raw.size();++i){const auto &p=a.raw[i];const auto &c=a.checks[i];QStringList row{num(p.hz),num(p.gainDb),num(p.phaseDeg),num(p.inputFit),p.valid?"1":"0"};
     for(double v:c.gain)row<<num(v);
@@ -247,7 +256,7 @@ QByteArray chirpSpikesCsv(const ChirpAnalysis &a,double fs){
   QByteArray csv="cycle,first_index,last_index,peak_index,peak_time_s,cycle_time_s,duration_us,input_A,peak_Iq_A,before_Iq_A,after_Iq_A\n";
   if(!std::isfinite(fs)||fs<=0)return csv;
   for(const auto &s:a.spikes){QStringList row;for(unsigned v:{s.cycle,s.firstIndex,s.lastIndex,s.peakIndex})row<<QString::number(v);
-    for(double v:{s.peakIndex/fs,s.peakIndex/fs-s.cycle,(s.lastIndex-s.firstIndex+1)*1e6/fs,s.input,s.peak,s.before,s.after})row<<QString::number(v,'g',17);
+    for(double v:{s.peakIndex/fs,s.peakIndex/fs-a.settleSeconds-(s.cycle-1)*a.periodSeconds,(s.lastIndex-s.firstIndex+1)*1e6/fs,s.input,s.peak,s.before,s.after})row<<QString::number(v,'g',17);
     csv+=row.join(',').toUtf8()+'\n';}return csv;
 }
 } // namespace mt

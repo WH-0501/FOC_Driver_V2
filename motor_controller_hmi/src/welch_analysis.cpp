@@ -34,14 +34,15 @@ WelchAnalysis analyzeWelch(const SweepCapture &c,unsigned length,const std::vect
   WelchAnalysis out;out.segmentLength=length;out.sampleHz=c.fs;
   auto fail=[&](QString s){out.error=s;return out;};
   if(c.method!=3||!c.completed||!c.recording.complete(c.expected))return fail("Welch：要求完整、零缺样且零拒收的 Chirp 录波；不插补。");
-  if(!std::isfinite(c.fs)||c.fs<10000||c.fs>40000||c.fs!=std::floor(c.fs)||c.expected!=4*quint32(c.fs))return fail("Welch：要求 1 s 稳定 + 3 × 1 s 测量的同步录波。");
+  if(!c.timing.valid(c.fs)||c.expected!=c.timing.totalSamples(c.fs))return fail("Welch：录波长度与设备时序不一致。");
   if(length<2048||length>16384||(length&(length-1)))return fail("Welch：窗长仅支持 2048、4096、8192、16384 点。");
   if(c.points.size()<3)return fail("Welch：缺少扫频范围。");
   double previous=0;
   for(const auto &p:c.points){if(!std::isfinite(p.hz)||p.hz<20||p.hz<=previous||p.hz>2000||p.hz>c.fs*.1)return fail("Welch：扫频频率范围无效。");previous=p.hz;}
   for(size_t i=0;i<c.recording.samples.size();++i){const auto &v=c.recording.samples[i];
     if(v.index!=i||!std::isfinite(v.input)||!std::isfinite(v.output))return fail("Welch：存在序号缺口或非有限采样，不计算。");}
-  const size_t start=size_t(c.fs),count=3*start,hop=length/2,bins=length/2+1;
+  const size_t start=c.timing.periodSamples(c.fs)*c.timing.settlePeriods,count=c.expected-start,hop=length/2,bins=length/2+1;
+  if(count<length)return fail("Welch：测量段短于窗长。");
   out.segments=unsigned((count-length)/hop+1);
   if(out.segments<3)return fail("Welch：至少需要三个完整分段。");
   out.usedSamples=unsigned(length+(out.segments-1)*hop);out.tailSamples=unsigned(count-out.usedSamples);
@@ -77,7 +78,7 @@ WelchAnalysis analyzeWelch(const SweepCapture &c,unsigned length,const std::vect
 QString welchAnalysisSummary(const WelchAnalysis &a){
   if(!a.ok())return a.error;
   const auto valid=std::count_if(a.points.begin(),a.points.end(),[](const auto &p){return p.valid;});
-  return QString("Welch/CSD 对照：未滤波 1–4 s；周期 Hann 窗 %1 点（%2 ms），50% 重叠，每段去均值；%3 段算术平均，FFT 栅格 %4 Hz，ENBW %5 Hz。尾部 %6 点不构成完整窗，未参与此对照（非丢样）。\n有效 %7/%8 个原生频点；γ² ≥0.9，无效点保留并断线。重叠段数不等于独立平均次数；能量等效段数也不是自由度。\nWelch 诊断：%9；基准为前两条原生谱线 %10/%11 Hz，仅作对照，不替代原始 H1。窗长影响泄漏和分辨率，不保证比周期 H1 更准确。")
+  return QString("Welch/CSD 对照：未滤波的设备定义测量段；周期 Hann 窗 %1 点（%2 ms），50% 重叠，每段去均值；%3 段算术平均，FFT 栅格 %4 Hz，ENBW %5 Hz。尾部 %6 点不构成完整窗，未参与此对照（非丢样）。\n有效 %7/%8 个原生频点；γ² ≥0.9，无效点保留并断线。重叠段数不等于独立平均次数；能量等效段数也不是自由度。\nWelch 诊断：%9；基准为前两条原生谱线 %10/%11 Hz，仅作对照，不替代原始 H1。窗长影响泄漏和分辨率，不保证比周期 H1 更准确。")
     .arg(a.segmentLength).arg(1000*a.segmentLength/a.sampleHz,0,'g',6).arg(a.segments).arg(a.binHz,0,'g',6).arg(a.enbwHz,0,'g',6).arg(a.tailSamples)
     .arg(valid).arg(a.points.size()).arg(sweepBandwidth(a.points)).arg(a.points[0].hz,0,'g',6).arg(a.points[1].hz,0,'g',6);
 }

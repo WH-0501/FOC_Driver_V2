@@ -4,20 +4,7 @@
 #include "motor.h"
 #include "sweep_engine.h"
 
-#ifndef FOC_SWEEP_ENABLED
-#define FOC_SWEEP_ENABLED 1
-#endif
-/* Independent commissioning bounds, at the MOTOR SHAFT (not joint/gearbox).
- * Override at build time only after evaluating the actual mechanism. */
-#ifndef FOC_SWEEP_MAX_TRAVEL_RAD
-#define FOC_SWEEP_MAX_TRAVEL_RAD 0.5f
-#endif
-#ifndef FOC_SWEEP_MAX_SPEED_RAD_S
-#define FOC_SWEEP_MAX_SPEED_RAD_S 5.0f
-#endif
-#ifndef FOC_SWEEP_MAX_TEMP_C
-#define FOC_SWEEP_MAX_TEMP_C 60.0f
-#endif
+/* Excitation, acquisition and commissioning limits: sweep_config.h. */
 
 typedef struct {
   uint16_t run, flags, max_us;

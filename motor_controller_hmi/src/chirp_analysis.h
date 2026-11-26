@@ -13,7 +13,7 @@ struct ChirpCycleStats {
   unsigned over02A=0; // observation count, never deletes or replaces samples
 };
 struct ChirpFrequencyCheck {
-  std::array<double,3> gain{}, phase{};
+  std::vector<double> gain, phase;
   double gainSpread=0, phaseSpread=0, filterDb=0;
   bool referenceAvailable=false, referenceInterpolated=false;
   double referenceGain=0, referencePhase=0, gainDelta=0, phaseDelta=0;
@@ -30,13 +30,14 @@ struct ChirpAnalysis {
   std::vector<SweepPoint> raw, filtered;
   std::vector<SweepPoint> neighborhood;
   std::vector<ChirpSpike> spikes;
-  std::array<std::vector<SweepPoint>,3> cycles;
+  std::vector<std::vector<SweepPoint>> cycles;
   std::vector<ChirpFrequencyCheck> checks;
-  std::array<ChirpCycleStats,3> cycleStats;
+  std::vector<ChirpCycleStats> cycleStats;
+  double periodSeconds=1, settleSeconds=1;
   double inputRepeatMax=0, inputRepeatRms=0, outputResidualRms=0;
   double filteredOutputRms=0, outputRms=0;
   double spikeEnergyFraction=0;
-  // Measurement cycles only: t=1..4 s. Raw capture is never modified.
+  // Device-defined measurement cycles only. Raw capture is never modified.
   std::vector<double> filteredInput, filteredOutput;
   std::vector<double> filteredRecording; // Full capture, for the matching waveform comparison.
   bool ok() const { return error.isEmpty() && !raw.empty(); }

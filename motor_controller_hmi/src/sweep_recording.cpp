@@ -8,6 +8,30 @@
 #include <cstring>
 #include <numbers>
 namespace mt {
+quint32 ChirpTiming::periodSamples(double fs) const {return valid(fs)?quint32(fs)*periodMs/1000:0;}
+quint32 ChirpTiming::totalSamples(double fs) const {return periodSamples(fs)*(settlePeriods+measurePeriods);}
+bool ChirpTiming::valid(double fs) const {
+  return std::isfinite(fs)&&fs>=10000&&fs<=40000&&fs==std::floor(fs)&&
+    periodMs>=1000&&periodMs<=60000&&periodMs%1000==0&&settlePeriods>=1&&settlePeriods<=253&&measurePeriods<=254&&
+    measurePeriods>=2&&settlePeriods+measurePeriods<=255&&
+    quint64(fs)*(periodMs/1000)*(settlePeriods+measurePeriods)<=1200000;
+}
+QString ChirpTiming::description() const {
+  return QString("%1 s / 周期 · %2 个稳定周期 + %3 个测量周期 · 共 %4 s")
+    .arg(periodMs/1000.).arg(settlePeriods).arg(measurePeriods).arg(periodMs/1000.*(settlePeriods+measurePeriods));
+}
+bool readChirpTiming(const QJsonObject &o,double fs,ChirpTiming &out) {
+  ChirpTiming t;
+  if(o.contains("chirp_timing_revision")) {
+    if(o["chirp_timing_revision"].toInt()!=1)return false;
+    t.periodMs=unsigned(o["chirp_period_ms"].toInt());
+    t.settlePeriods=unsigned(o["chirp_settle_periods"].toInt());
+    t.measurePeriods=unsigned(o["chirp_measure_periods"].toInt());
+  } else if(o["chirp_timing_required"].toBool()||!o["host_h1"].toBool()||o["chirp_periods"].toInt()!=4) return false;
+  if(!t.valid(fs))return false;
+  out=t;return true;
+}
+
 void SweepRecording::reset(quint32 n, quint16 r) {
   node=n; run=r; missing=rejected=0; samples.clear();
 }
@@ -69,16 +93,17 @@ std::vector<SweepPoint> steppedFrequencyGrid(double low,double high,unsigned cou
   return out;
 }
 std::vector<SweepPoint> recordingH1(const SweepRecording &r,int method,double fs,
-                                  const std::vector<SweepPoint> &points,quint32 expected) {
+                                  const std::vector<SweepPoint> &points,quint32 expected,const ChirpTiming &timing) {
   std::vector<SweepPoint> out;
   if(!r.complete(expected)||fs<10000||fs>40000||method<1||method>3||points.empty())return out;
+  if(method==3&&(!timing.valid(fs)||expected!=timing.totalSamples(fs)))return out;
   size_t offset=0;
   for(const auto &original:points) {
     if(!std::isfinite(original.hz)||original.hz<=0||original.hz>fs*.1)return {};
     size_t period=size_t(std::llround(fs/original.hz));
-    size_t length=method==2?4*period:size_t(std::llround(fs*(method==3?1.:.05)));
-    size_t settle=method==2?((std::max((size_t(std::llround(fs))+49)/50,length)+period-1)/period)*period:length;
-    unsigned blocks=method==2?4:3;
+    size_t length=method==2?4*period:(method==3?timing.periodSamples(fs):size_t(std::llround(fs*.05)));
+    size_t settle=method==2?((std::max((size_t(std::llround(fs))+49)/50,length)+period-1)/period)*period:(method==3?timing.settlePeriods*length:length);
+    unsigned blocks=method==2?4:method==3?timing.measurePeriods:3;
     if(!length||offset+settle+blocks*length>r.samples.size())return {};
     double xx=0,yy=0,xa=0,ya=0;std::complex<double> cross=0;
     auto rotate=std::polar(1.,-2*std::numbers::pi*original.hz/fs);
@@ -98,16 +123,21 @@ std::vector<SweepPoint> recordingH1(const SweepRecording &r,int method,double fs
     out.push_back(p);
     if(method==2)offset+=settle+blocks*length;
   }
-  if((method==2?offset:size_t(std::llround(fs*(method==3?4.:.2))))!=expected)return {};
+  if((method==2?offset:(method==3?timing.totalSamples(fs):size_t(std::llround(fs*.2))))!=expected)return {};
   return out;
 }
 bool writeSweepCapture(QIODevice &file,const SweepCapture &c) {
   QJsonArray points;
   for(const auto &p:c.points)points.append(QJsonObject{{"hz",p.hz},{"input",p.input},{"output",p.output},
     {"gain",p.gainDb},{"phase",p.phaseDeg},{"coherence",p.inputFit},{"blocks",p.count},{"valid",p.valid},{"status",p.status}});
-  QJsonObject meta{{"format",1},{"method",c.method},{"sample_hz",c.fs},{"expected",double(c.expected)},
+  QJsonObject meta{{"format",c.method==3?2:1},{"method",c.method},{"sample_hz",c.fs},{"expected",double(c.expected)},
     {"run",int(c.recording.run)},{"node",double(c.recording.node)},{"complete_run",c.completed},
     {"missing",double(c.recording.missing)},{"rejected",double(c.recording.rejected)},{"points",points},{"diagnostic",c.diagnostic}};
+  if(c.method==3) {
+    if(!c.timing.valid(c.fs))return false;
+    meta["chirp_timing_revision"]=1;meta["chirp_period_ms"]=int(c.timing.periodMs);
+    meta["chirp_settle_periods"]=int(c.timing.settlePeriods);meta["chirp_measure_periods"]=int(c.timing.measurePeriods);
+  }
   auto put=[&](const QByteArray &b){return file.write(b)==b.size();};
   if(!put("# motortune_sweep "+QJsonDocument(meta).toJson(QJsonDocument::Compact)+"\n") ||
      !put("sample_index,time_s,input_A,feedback_A\n")) return false;
@@ -121,11 +151,16 @@ bool readSweepCapture(QIODevice &file,const QByteArray &metadata,SweepCapture &o
   auto m=QJsonDocument::fromJson(metadata).object();
   c.method=m["method"].toInt();c.fs=m["sample_hz"].toDouble();
   double expected=m["expected"].toDouble(-1);
-  if(m["format"].toInt()!=1 || c.method<1 || c.method>3 || !std::isfinite(c.fs) ||
+  if((m["format"].toInt()!=1&&m["format"].toInt()!=2) || c.method<1 || c.method>3 || !std::isfinite(c.fs) ||
      c.fs<10000 || c.fs>40000 || expected<0 || expected>1200000 || expected!=std::floor(expected) ||
      file.readLine().trimmed()!="sample_index,time_s,input_A,feedback_A") {
     error="录波元数据/表头无效";return false;
   }
+  if(c.method==3&&m["format"].toInt()==2&&(!m.contains("chirp_timing_revision")||!readChirpTiming(m,c.fs,c.timing))) {
+    error="Chirp 时序元数据缺失或无效";return false;
+  }
+  if(c.method==3&&m["format"].toInt()==1&&m.contains("chirp_timing_revision")) {error="时序扩展要求录波格式 2";return false;}
+  if(c.method==3&&m["complete_run"].toBool()&&expected!=c.timing.totalSamples(c.fs)) {error="录波长度与设备时序不匹配";return false;}
   c.expected=quint32(expected);c.completed=m["complete_run"].toBool();c.diagnostic=m["diagnostic"].toString();
   c.recording.reset(quint32(m["node"].toDouble()),quint16(m["run"].toInt()));
   double rejected=m["rejected"].toDouble();
@@ -139,7 +174,7 @@ bool readSweepCapture(QIODevice &file,const QByteArray &metadata,SweepCapture &o
     point.inputFit=p["coherence"].toDouble();point.count=p["blocks"].toInt();point.outputFit=point.count;
     point.valid=p["valid"].toBool();point.status=p["status"].toString();
     if(point.hz<=previous||point.hz>2000||point.input<0||point.output<0||point.inputFit<0||point.inputFit>1||
-       point.count<0||point.count>4||c.points.size()>=16) {error="录波频点元数据无效";return false;}
+       point.count<0||point.count>int(c.method==3?c.timing.measurePeriods:4)||c.points.size()>=16) {error="录波频点元数据无效";return false;}
     previous=point.hz;c.points.push_back(point);
   }
   quint32 next=0;int line=2;

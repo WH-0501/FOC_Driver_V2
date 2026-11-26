@@ -64,7 +64,7 @@ class OperationUiTests : public QObject {
                         QCOMPARE(t->item(0,0)->text().toDouble(),20.0);
                         QCOMPARE(t->item(1,0)->text().toDouble(),40.0);
                         QCOMPARE(t->item(0,6)->text().toDouble(),3.0);
-                        QVERIFY(t->item(0,8)->text().contains("Chirp"));
+                        QVERIFY(t->item(0,8)->text().contains("原始 H1"));
                     }
                     auto path=qEnvironmentVariable("MOTORTUNE_FRA_PREVIEW");
                     if(!path.isEmpty())d->grab().save(path+QString::number(method)+".png");

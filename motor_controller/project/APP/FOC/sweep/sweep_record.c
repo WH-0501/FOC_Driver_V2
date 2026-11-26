@@ -6,7 +6,7 @@
 #include "sweep_record.h"
 #include "board.h"
 #include <string.h>
-#define CAPACITY 16u
+#define CAPACITY SWEEP_RECORD_QUEUE_FRAMES
 #define PAIRS 6u
 /* 896 bytes of wire-ready slots + 16 bytes of state/diagnostics. Full 20 kHz binary32 pairs.
  * Head/tail are monotonic uint8 counters; occupancy never exceeds CAPACITY. */

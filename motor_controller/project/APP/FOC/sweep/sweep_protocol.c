@@ -23,7 +23,7 @@ static void write_float(uint8_t *p, float f)
 bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
                            uint8_t length, void (*reply)(uint8_t, const uint8_t *, uint8_t))
 {
-  uint8_t out[56] = {1u, 0u};
+  uint8_t out[62] = {1u, 0u};
   foc_sweep_rejection_t rejection = {0u, 0.0f};
   foc_sweep_status_t s;
   if (cmd < SWEEP_CMD_CONTROL || cmd > SWEEP_CMD_RESULT) return false;
@@ -41,6 +41,11 @@ bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
       cfg.high_hz = (float)read16(p + 6);
       cfg.peak = (float)read16(p + 9) * 0.001f;
       cfg.sample_hz = (float)FOC_CURRENT_LOOP_FS_HZ; ///< 扫频采样率. 固定为电流环采样率
+      /* Echo the queried layout before enabling: an old host must not start
+       * a long capture and interpret it as its fixed four-second window. */
+      if(cfg.method==SWEEP_CHIRP && (length<19u || p[13]!=0xaeu || p[14]!=1u ||
+         read16(p+15)!=SWEEP_CHIRP_PERIOD_MS || p[17]!=SWEEP_CHIRP_SETTLE_PERIODS ||
+         p[18]!=SWEEP_CHIRP_MEASURE_PERIODS)) out[1]=2u;
       if(cfg.method==SWEEP_STEPPED) {
         if(cfg.count>SWEEP_MAX_POINTS || length<17u+2u*cfg.count ||
            p[13]!=0xadu || p[14]!=1u || read16(p+15)!=FOC_CURRENT_LOOP_FS_HZ) out[1]=2u;
@@ -60,6 +65,11 @@ bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
     out[5]=s.state; write16(out+6,s.flags);
     reply(cmd,out,34u);
   } else {
+    /* AE/1 also accompanies errors and motion aborts; bytes 0..55 retain
+     * their previous meaning. 62 payload bytes + 2 transport bytes = DLC 64. */
+    out[56]=0xaeu; out[57]=1u;
+    write16(out+58,SWEEP_CHIRP_PERIOD_MS);
+    out[60]=SWEEP_CHIRP_SETTLE_PERIODS; out[61]=SWEEP_CHIRP_MEASURE_PERIODS;
     out[2] = s.state; out[3] = s.method; write16(out + 4, s.run);
     out[6] = s.count; out[7] = s.progress; write32(out + 8, s.sample_hz?s.sample_hz:FOC_CURRENT_LOOP_FS_HZ);
     write32(out + 12, s.samples); write16(out + 16, s.flags); write16(out + 18, s.max_us);
@@ -71,7 +81,7 @@ bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
     if (out[1] && rejection.reason) {
       out[40] = rejection.reason; out[41] = 0xa7; out[42] = 1;
       write_float(out + 44, rejection.value);
-      reply(cmd, out, 48u); /* only failed starts; successful/status frames unchanged */
+      reply(cmd, out, 62u);
     } else if (!out[1] && s.motion_reason) {
       /* A8/1 extends the unchanged 40-byte A6/1 status. Only motion aborts
        * carry it; old hosts ignore the tail. 56+2 bytes fit CAN-FD DLC 64. */
@@ -80,7 +90,7 @@ bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
       write_float(out + 44, s.motion_value);
       write_float(out + 48, s.motion_limit);
       write_float(out + 52, s.motion_hz);
-      reply(cmd, out, 56u);
+      reply(cmd, out, 62u);
     } else {
       out[40]=0xa9u; out[41]=1u; out[42]=(uint8_t)sweep_record_enabled();
       /* AA marker distinguishes diagnostics from old zero DLC padding. Counts
@@ -89,9 +99,10 @@ bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
       write32(out+44, sweep_record_dropped());
       write32(out+48, sweep_record_submitted());
       /* Optional capability tail. Bytes 0..51 and raw 0xBF are unchanged.
-       * AC/1, bit0: host H1; bit1: AD/1 stepped plan. Byte55: 4 Chirp periods / stepped blocks. */
-      out[52]=0xacu; out[53]=1u; out[54]=3u; out[55]=4u;
-      reply(cmd, out, 56u);
+       * AC/1, bit0: host H1; bit1: AD/1 stepped plan; bit2: AE/1 timing required. Byte55: total periods / stepped blocks. */
+      out[52]=0xacu; out[53]=1u; out[54]=7u;
+      out[55]=(uint8_t)(s.method==SWEEP_STEPPED ? SWEEP_STEPPED_BLOCKS : SWEEP_CHIRP_TOTAL_PERIODS);
+      reply(cmd, out, 62u);
     }
   }
   return true;

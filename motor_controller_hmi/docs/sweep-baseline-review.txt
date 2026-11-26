@@ -1,0 +1,113 @@
+扫频基准与环路适用性核对（2026-11-27）
+
+本次已回退：700–1300 Hz 加密、后续全段/自动/手动局部加密、专用频谱
+辅助实现、专用测试及入口。保留 Chirp、逐点正弦、原始 H1、逐周期对照、
+Welch/CSD、滤波对照、设备时序读取。未改固件与 CAN-FD。
+当前固件 sweep_config.h 已设置 SWEEP_CHIRP_PERIOD_MS=4000u，注释仍写1s；
+这是核对时读取的已有状态，本次没有修改周期、保护开关或重新烧录。
+
+结论
+不是每次都必须扫20/40 Hz。需要的是已被激励、可信且足够低频的增益
+平台，用来估计直流增益。固定20/40只是当前电流环实现的约定。
+对带宽20–40 Hz的速度/位置环，它们可能已在衰减区，不能当直流基准。
+
+一、当前代码的实际行为
+motor_controller/project/APP/FOC/sweep/sweep_config.h:
+  SWEEP_MIN_HZ=20；SWEEP_BASELINE_HIGH_HZ=40；SWEEP_BASELINE_POINTS=2。
+sweep_engine.c / sweep_engine_prepare:
+  用户low>40时，Chirp实际从20扫到high；逐频模式强制前两点为20/40。
+  low<=40时没有额外插入这两个锚点。
+上位机 src/chirp_analysis.cpp / chirpFrequencyGrid:
+  low>40时前两点为20/40，之后为用户范围；low=20、high=2000、16点时
+  前两点实际为20/27，而不是20/40。
+src/sweep_recording.cpp / steppedFrequencyGrid:
+  同样在low>40时加20/40；实际逐点频率按整数采样周期量化。
+src/sweep.cpp / sweepBandwidthResult:
+  用首两个有效点的dB均值作为基准，二者差>0.5dB就拒绝；查找相对
+  基准下降3dB的首次交点，遇到无效点不继续强行确认。
+  前两点相近只能说明局部变化小，不能证明它们真的代表直流平台。
+
+二、参考工程核对（实际宏优先于可能过时的注释）
+参考 dex-con-firmware-v5/motor_control/src/app/DEBUG/sweep.h 和 sweep.c：
+  电流：10–1500Hz，4s；速度：5–150Hz，5s；位置：10–150Hz，5s。
+  线性Chirp，按环路选择给定/反馈及幅值单位。没有专门插入20/40。
+配套 motor_tune/foc-kits/src/foc_kits/analyze/bode.py：
+  progress分箱、过零估频、单频DFT；用低频若干点中位数做基准。
+  但METRICS_MIN_FREQ_HZ=50、METRICS_GAIN_CROSSOVER_MIN_FREQ_HZ=100。
+  这两个固定门限对20–40Hz带宽并不适用，不能原样照搬。
+  电流CHIRP_BANDS中的duration_s=5与上述固件4s也不一致，需要读设备
+  元数据，不能只相信上位机硬编码默认值。
+
+jnzim stm32-servo-drive/Include/config.h 与 src/sysid/foc_sysid.c：
+  闭环电流：1–1000Hz，40s，Iq激励；
+  闭环速度：0.5–400Hz，60s，速度给定激励；
+  闭环位置：0.1–300Hz，60s，位置给定激励，全串级闭环。
+  频率用 f_start*(f_end/f_start)^(t/T)，即对数Chirp，不是当前周期线性Chirp。
+  相位按对应环路更新周期积分。没有每次补扫20/40的逻辑。
+jnzim foc-sysid/py-script/closed_{current,vel,pos}_bode_plot.py：
+  Welch/CSD计算H1；低频参考范围为 f <= max(3*f_min, f_min+1Hz)，
+  对该范围有效点增益取中位数。不是固定20/40，也不是注释所说整整一个decade。
+  good相干门限0.5、strong0.8；筛去无效点后查交点可能跳过原始无效区。
+  本项目要求0.9及不跨无效点，不能把这部分一起复制过来。
+  位置分析上限仍有225Hz及过时150Hz注释，与配置300Hz不完全一致。
+  应借鉴按环路配置和同步采集，而不是把其全部常数视为通用标准。
+
+三、低带宽的数值例子
+设闭环是一阶 H(f)=1/(1+j*f/20)，其约20Hz处相对直流衰减3dB。
+20Hz增益约-3.01dB，40Hz约-6.99dB，均已非平台。若误取两者均值-5dB
+为基准，就会去找-8dB，约46Hz才到，明显偏高。当前0.5dB平坦性门槛
+会拒绝这组数据，这是正确的拒绝，不应为得到数字而放宽。
+若取2/4Hz，增益约-0.043/-0.170dB，才更接近低频平台；它们也只是
+该模型的示例，不能成为新一组普适固定锚点。
+
+四、按适用性调整的建议顺序（本次未实现新的设备测试模式）
+1. 保留两种激励：Chirp快速观测；逐点正弦精测和复核交点。
+   两者共享被测环路、单位、起止频率和采样时序元数据，不共享固定20/40。
+2. 真正选择被测对象。电流注入Iq/采Iq；速度注入速度给定/采速度；
+   位置注入位置给定/采位置。仅更改频率或图中文字不能把Iq测量变为位置环。
+3. 选择能覆盖低频平台和首次衰减的频段。对预期20–40Hz带宽，可先评估
+   1–2Hz起点、约100Hz终点；这只是实验初值，仍需检查平台、行程、稳定性
+   以及饱和。低频机械环路优先使用对数Chirp或逐点正弦分配足够周期。
+4. 基准按录波内连续有效低频区选择，检查幅值平坦性和周期一致性。
+   自动选择失败就要求降低起点/补测；手动范围也必须验证，不自动强置0dB。
+   显示基准范围、基准增益及为何无法确认，而不是暗中更换基准。
+5. 区分完整带宽测量与局部复测。完整测量须含平台；局部600–1500Hz
+   可以只扫该段并显示H1，但缺少同工况基准就不宣称绝对带宽。
+   若引用既有基准，要明确来源和工况一致性，不能无条件复用历史记录。
+6. 继续保持原始H1、相干性>=0.9、缺样拒绝和不跨无效点确认。
+   不将滤波、拟合或相干门槛放宽作为通用化的替代。
+
+五、当前实现不能只改两个频率宏的原因
+- foc_sweep.c仅允许CST、以A为幅值单位，注入reference至current_step，
+  反馈为m->state.i_q。速度/位置环要新增正确的注入与成对采集路径。
+- 主机和设备都校验20Hz下限及20/40锚点，单改一端会配置失败或分析错窗。
+- Chirp原始分析要求整数Hz；T变长并不会自动让原有频点支持0.1Hz。
+- 逐点周期为uint16_t。20kHz时0.1Hz需要200000点/周期，超出65535；
+  若要保留协议，可考虑按目标环路提供合适的采样率/采集分频与抗混叠，
+  而不是把外环同一数值重复上报20kHz当成独立采样。
+- 逐点当前至少4周期稳定+16周期测量。1Hz约20s，0.5Hz约40s；多频点
+  可能超过1200000点录波限制。时长、容量及上传需要一起规划。
+- fc目前是闭环0dB诊断交点且有100Hz下限，并非开环增益穿越。低带宽
+  环路不能保留该固定搜索下限；也不能用闭环相位直接计算开环相位裕度。
+  jnzim在满足单一单位负反馈假设时用L=H/(1-H)重建开环，是另一项分析。
+- CAN-FD传输接口可保留。环路类型、单位、实际采样率及频率能力需要设备
+  可识别元数据/版本协商；具体字段复用前需评估兼容性，不静默改解释。
+- 设备端需要改动时仍须重新编译验证APP<=54KiB，其他保护不因通用化放宽。
+
+建议先以电流环保留逐点精测作为对照，设计“完整带宽/局部复测”和可验证
+基准；再单独扩展速度/位置环。不要将参考代码的电流环常数直接套到外环。
+本次回退未改变现有20/40规则，也没有声称已支持低频位置/速度扫频。
+
+依据文件路径
+D:/workspaces/code-registories/FOC/FOC_Driver_V2/motor_controller/project/APP/FOC/sweep/sweep_config.h
+D:/workspaces/code-registories/FOC/FOC_Driver_V2/motor_controller/project/APP/FOC/sweep/sweep_engine.c
+D:/workspaces/code-registories/FOC/FOC_Driver_V2/motor_controller/project/APP/FOC/sweep/foc_sweep.c
+D:/workspaces/code-registories/FOC/FOC_Driver_V2/motor_controller_hmi/src/sweep.cpp
+D:/workspaces/psi-projects/FOC/dex-con-firmware-v5/motor_control/src/app/DEBUG/sweep.h
+D:/workspaces/psi-projects/FOC/dex-con-firmware-v5/motor_control/src/app/DEBUG/sweep.c
+D:/workspaces/psi-projects/FOC/motor_tune/foc-kits/src/foc_kits/analyze/bode.py
+D:/workspaces/code-registories/FOC/foc_jnzim/stm32-servo-drive/Include/config.h
+D:/workspaces/code-registories/FOC/foc_jnzim/stm32-servo-drive/src/sysid/foc_sysid.c
+D:/workspaces/code-registories/FOC/foc_jnzim/foc-sysid/py-script/closed_current_bode_plot.py
+D:/workspaces/code-registories/FOC/foc_jnzim/foc-sysid/py-script/closed_pos_bode_plot.py
+https://www.mathworks.com/help/control/ref/dynamicsystem.bandwidth.html

@@ -4,6 +4,16 @@
 #include <QtGlobal>
 #include <QIODevice>
 namespace mt {
+// Legacy defaults are used only for version-1 captures/known legacy devices.
+struct ChirpTiming {
+  unsigned periodMs=1000, settlePeriods=1, measurePeriods=3;
+  quint32 periodSamples(double fs) const;
+  quint32 totalSamples(double fs) const;
+  bool valid(double fs) const;
+  QString description() const;
+  bool operator==(const ChirpTiming &) const = default;
+};
+bool readChirpTiming(const QJsonObject &, double fs, ChirpTiming &);
 struct SweepRawSample { quint32 index; float input, output; };
 // Session worker owns ingestion under its mutex; GUI consumes immutable snapshots.
 // Device sample indices, never PC/CAN receive timestamps, define the time axis.
@@ -23,7 +33,7 @@ std::vector<SweepPoint> steppedFrequencyGrid(double low, double high, unsigned c
 // No interpolation of lost samples and no phase shift to hide the control delay.
 std::vector<SweepPoint> recordingH1(const SweepRecording &, int method, double fs,
                                   const std::vector<SweepPoint> &devicePoints,
-                                  quint32 expected);
+                                  quint32 expected, const ChirpTiming &timing = {});
 struct SweepCapture {
   SweepRecording recording;
   int method=0;
@@ -32,6 +42,7 @@ struct SweepCapture {
   bool completed=false;
   QString diagnostic;
   std::vector<SweepPoint> points;
+  ChirpTiming timing;
 };
 bool readSweepCapture(QIODevice &, const QByteArray &metadata, SweepCapture &, QString &error);
 bool writeSweepCapture(QIODevice &, const SweepCapture &);

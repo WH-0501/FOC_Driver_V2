@@ -44,7 +44,8 @@ class DemoBackend final : public CanBackend {
     quint32 debugTicks[3]{};
     bool hardProtection = true;
     int fraState=0,fraMethod=0,fraRun=0,fraN=0;
-    double fraAt=0,fraPeak=0;
+    double fraAt=0,fraPeak=0, fraLow=20, fraHigh=2000, fraFeedback=0;
+    quint32 fraCursor=0;
     std::vector<double> fraHz;
 
 
@@ -80,11 +81,11 @@ class DemoBackend final : public CanBackend {
                     fraMethod=quint8(p[1]);fraRun=u16(p,2);fraN=quint8(p[8]);fraPeak=u16(p,9)/1000.;fraHz.clear();
                     double lo=u16(p,4),hi=u16(p,6),last=0;
                     if(fraN<3||(lo>40&&fraN<4)||fraN>16||lo<20||hi<=lo||hi>2000||fraPeak<=0||fraPeak>.5)error=2;
-                    else {for(int i=0;i<fraN;++i){double f=lo>40?(i<2?(i==0?20.:40.):lo*std::pow(hi/lo,double(i-2)/(fraN-3))):lo*std::pow(hi/lo,double(i)/(fraN-1));f=fraMethod==1?std::max(last+20,20*std::round(f/20)):fraMethod==3?std::max(last+1,std::round(f)):20000/std::ceil(20000/f);fraHz.push_back(f);last=f;}fraState=1;fraAt=timer.nsecsElapsed()/1e9;}
+                    else {for(int i=0;i<fraN;++i){double f=lo>40?(i<2?(i==0?20.:40.):lo*std::pow(hi/lo,double(i-2)/(fraN-3))):lo*std::pow(hi/lo,double(i)/(fraN-1));f=fraMethod==1?std::max(last+20,20*std::round(f/20)):fraMethod==3?std::max(last+1,std::round(f)):20000/std::ceil(20000/f);fraHz.push_back(f);last=f;}fraState=1;fraAt=timer.nsecsElapsed()/1e9;fraCursor=0;fraFeedback=0;fraLow=lo>40?20:lo;fraHigh=hi;}
                 }
             }
             double duration=fraMethod==1?.2:4.;
-            if(fraState==1 && timer.nsecsElapsed()/1e9-fraAt>=duration){fraState=2;enabled=false;targets[2]=0;}
+            if(fraState==1 && timer.nsecsElapsed()/1e9-fraAt>=duration && (fraMethod!=3 || fraCursor==80000)){fraState=2;enabled=false;targets[2]=0;}
             if(cmd==0xbe){
                 result=QByteArray(34,0);result[0]=1;
                 int i=p.size()>=3?quint8(p[2]):255;
@@ -93,6 +94,14 @@ class DemoBackend final : public CanBackend {
                 if(!error){double f=fraHz[i],q=f/800.,g=1/std::sqrt(1+q*q);putFloat(result,8,f);putFloat(result,12,fraPeak/4);putFloat(result,16,fraPeak/4*g);putFloat(result,20,1/(1+q*q));putFloat(result,24,-q/(1+q*q));putFloat(result,28,.999);qToBigEndian<quint16>(fraMethod==2?4:3,result.data()+32);}
             }else{
                 result=QByteArray(20,0);result[0]=1;result[1]=char(error);result[2]=char(fraState);result[3]=char(fraMethod);qToBigEndian<quint16>(fraRun,result.data()+4);result[6]=char(fraN);result[7]=char(fraState==2?fraN:0);qToBigEndian<quint32>(20000,result.data()+8);qToBigEndian<quint32>(quint32(std::min(duration,std::max(0.,timer.nsecsElapsed()/1e9-fraAt))*20000),result.data()+12);qToBigEndian<quint16>(20,result.data()+18);
+                // The demo advertises its own 1 s + 3 x 1 s layout. Live devices
+                // may report a different layout; the dialog must use the metadata.
+                result.resize(62);for(int i=20;i<62;++i)result[i]=0;
+                result[40]=char(0xa9);result[41]=1;result[42]=fraMethod==3?1:0;
+                result[43]=char(0xaa);qToBigEndian(fraCursor,result.data()+48);
+                result[52]=char(0xac);result[53]=1;result[54]=5;result[55]=4;
+                result[56]=char(0xae);result[57]=1;qToBigEndian<quint16>(1000,result.data()+58);result[60]=1;result[61]=3;
+                if(fraMethod==3)qToBigEndian(fraCursor,result.data()+12);
             }
         }
         else if (cmd == 0x40) {
@@ -285,6 +294,19 @@ class DemoBackend final : public CanBackend {
                     qToBigEndian<quint16>(quint16(22), p.data() + 56);
                     out.push_back({node, pack(count++, quint8(0xb9 + loop), p), stamp});
                 }
+        }
+        if(fraState==1 && fraMethod==3) {
+            const auto available=quint32(std::min(4.,std::max(0.,now-fraAt))*20000);
+            while(fraCursor+6<=available || (available==80000 && fraCursor<available)) {
+                unsigned n=std::min(6u,available-fraCursor);QByteArray p(8+8*n,0);p[0]=1;p[1]=char(n);
+                qToBigEndian<quint16>(fraRun,p.data()+2);qToBigEndian(fraCursor,p.data()+4);
+                for(unsigned j=0;j<n;++j){double t=(fraCursor%20000)/20000.;
+                    float x=float(fraPeak*std::sin(2*std::numbers::pi*(fraLow*t+.5*(fraHigh-fraLow)*t*t)));
+                    float y=float(fraFeedback);fraFeedback+=(1-std::exp(-2*std::numbers::pi*800/20000))*(x-fraFeedback);
+                    quint32 xb,yb;memcpy(&xb,&x,4);memcpy(&yb,&y,4);qToBigEndian(xb,p.data()+8+8*j);qToBigEndian(yb,p.data()+12+8*j);++fraCursor;
+                }
+                out.push_back({node,pack(count++,0xbf,p),now});
+            }
         }
         const int reportHz = debugMask ? 5 : hz;
         if (!reportHz) {

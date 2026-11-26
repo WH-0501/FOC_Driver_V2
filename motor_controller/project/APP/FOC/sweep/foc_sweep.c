@@ -69,10 +69,14 @@ static unsigned measurement_guard(const motor_handle_t *m)
       !finite_value(m->state.i_q) || !finite_value(m->state.i_d) ||
       !finite_value(m->state.board_temp.value) || !finite_value(m->state.motor_temp.value))
     return SWEEP_NONFINITE;
-  if (fabsf(position - origin) >= FOC_SWEEP_MAX_TRAVEL_RAD ||
-      fabsf(speed) >= FOC_SWEEP_MAX_SPEED_RAD_S) return SWEEP_MOTION;
+#if FOC_SWEEP_TRAVEL_GUARD_ENABLED
+  if (fabsf(position - origin) >= FOC_SWEEP_MAX_TRAVEL_RAD) return SWEEP_MOTION;
+#endif
+#if FOC_SWEEP_SPEED_GUARD_ENABLED
+  if (fabsf(speed) >= FOC_SWEEP_MAX_SPEED_RAD_S) return SWEEP_MOTION;
+#endif
   if (!(m->config.limits.iq_limit > 0.0f) || !finite_value(m->config.limits.iq_limit) ||
-      peak > m->config.limits.iq_limit * 0.8f ||
+      peak > m->config.limits.iq_limit * FOC_SWEEP_CURRENT_LIMIT_FRACTION ||
       m->state.board_temp.value >= FOC_SWEEP_MAX_TEMP_C ||
       m->state.motor_temp.value >= FOC_SWEEP_MAX_TEMP_C) return SWEEP_LIMIT;
   return 0u;
@@ -90,18 +94,21 @@ static void finish(motor_handle_t *m, unsigned flags)
   motor_disarm(m);
 }
 /* Cold abort path only: snapshot BEFORE disarm; no work added to the normal
- * measurement guard. Travel has precedence when both bounds are exceeded. */
+ * measurement guard. Enabled travel guard has precedence when both bounds are exceeded. */
 #if defined(__CC_ARM)
 __attribute__((noinline))
 #endif
 static void finish_guard(motor_handle_t *m, unsigned flags)
 {
   if (flags == SWEEP_MOTION) {
+#if FOC_SWEEP_TRAVEL_GUARD_ENABLED
     float travel = m->state.shaft.position_rad - origin;
     if (fabsf(travel) >= FOC_SWEEP_MAX_TRAVEL_RAD) {
       timing.motion_reason = SWEEP_REJECT_TRAVEL;
       timing.motion_value = travel;
-    } else {
+    } else
+#endif
+    {
       timing.motion_reason = SWEEP_REJECT_SPEED;
       timing.motion_value = m->state.shaft.velocity_rad_s;
     }
@@ -136,7 +143,7 @@ static int start_guard(const motor_handle_t *m, foc_sweep_rejection_t *out)
     if (fabsf(travel) >= FOC_SWEEP_MAX_TRAVEL_RAD) return reject_start(out, 1, SWEEP_REJECT_TRAVEL, travel);
     return reject_start(out, 1, SWEEP_REJECT_SPEED, m->state.shaft.velocity_rad_s);
   }
-  if (!(m->config.limits.iq_limit > 0.0f) || !finite_value(m->config.limits.iq_limit) || peak > m->config.limits.iq_limit * 0.8f)
+  if (!(m->config.limits.iq_limit > 0.0f) || !finite_value(m->config.limits.iq_limit) || peak > m->config.limits.iq_limit * FOC_SWEEP_CURRENT_LIMIT_FRACTION)
     return reject_start(out, 1, SWEEP_REJECT_CURRENT_LIMIT, m->config.limits.iq_limit);
   if (m->state.board_temp.value >= FOC_SWEEP_MAX_TEMP_C) return reject_start(out, 1, SWEEP_REJECT_BOARD_TEMP, m->state.board_temp.value);
   return reject_start(out, 1, SWEEP_REJECT_MOTOR_TEMP, m->state.motor_temp.value);
@@ -154,11 +161,11 @@ int foc_sweep_start_recorded(motor_handle_t *m, const sweep_config_t *cfg, uint1
   if (result) return result;
   if (!record || !cfg || !run || cfg->sample_hz != (float)FOC_CURRENT_LOOP_FS_HZ)
     return reject_start(rejection, 2, SWEEP_REJECT_REQUEST, 0);
-  if (!(m->config.limits.iq_limit > 0.0f) || !finite_value(m->config.limits.iq_limit) || cfg->peak > m->config.limits.iq_limit * 0.8f)
+  if (!(m->config.limits.iq_limit > 0.0f) || !finite_value(m->config.limits.iq_limit) || cfg->peak > m->config.limits.iq_limit * FOC_SWEEP_CURRENT_LIMIT_FRACTION)
     return reject_start(rejection, 2, SWEEP_REJECT_CURRENT_LIMIT, m->config.limits.iq_limit);
   if (!finite_value(m->state.shaft.position_rad) || !finite_value(m->state.shaft.velocity_rad_s))
     return reject_start(rejection, 2, SWEEP_REJECT_NONFINITE, 0);
-  if (fabsf(m->state.shaft.velocity_rad_s) > 1.0f) return reject_start(rejection, 2, SWEEP_REJECT_START_SPEED, m->state.shaft.velocity_rad_s);
+  if (fabsf(m->state.shaft.velocity_rad_s) > FOC_SWEEP_START_SPEED_RAD_S) return reject_start(rejection, 2, SWEEP_REJECT_START_SPEED, m->state.shaft.velocity_rad_s);
   if (!(m->config.pid.iq.limit > 0.0f) || !finite_value(m->config.pid.iq.limit)) return reject_start(rejection, 2, SWEEP_REJECT_Q_LIMIT, m->config.pid.iq.limit);
   if (!(m->config.pid.id.limit > 0.0f) || !finite_value(m->config.pid.id.limit)) return reject_start(rejection, 2, SWEEP_REJECT_D_LIMIT, m->config.pid.id.limit);
   if (m->config.pid.iq.ramp != 0.0f) return reject_start(rejection, 2, SWEEP_REJECT_Q_RAMP, m->config.pid.iq.ramp);
@@ -201,7 +208,7 @@ void foc_sweep_on_disarm(motor_handle_t *m)
   if (owner == m && m) {
     sweep_engine_abort(&engine, SWEEP_STOP);
     sweep_record_end();
-  owner = NULL;
+    owner = NULL;
     m->ref.iq = 0.0f;
     /* Prevent STATE_RUNNING's automatic hardware re-arm on the next ISR. */
     if (m->fsm != STATE_FAULT && !m->fault.latched) foc_fsm_next_state(m, STATE_IDLE);
@@ -262,7 +269,7 @@ void foc_sweep_run_isr(motor_handle_t *m, motor_runtime_t *rt, uint32_t start_ti
     timing.interval_last_us = bounded_us(interval);
     if (!timing.interval_min_us || interval < timing.interval_min_us) timing.interval_min_us = bounded_us(interval);
     if (interval > timing.interval_max_us) timing.interval_max_us = bounded_us(interval);
-    if (interval < period * 0.8f || interval > period * 1.2f) {
+    if (interval < period * FOC_SWEEP_INTERVAL_MIN_RATIO || interval > period * FOC_SWEEP_INTERVAL_MAX_RATIO) {
       timing.timing_reason = 1;
       finish(m, SWEEP_TIMING); return;
     }
@@ -299,7 +306,7 @@ void foc_sweep_run_isr(motor_handle_t *m, motor_runtime_t *rt, uint32_t start_ti
   if (rt->foc_sense_update_us > timing.sense_max_us) timing.sense_max_us = bounded_us(rt->foc_sense_update_us);
   us = dwt_elapsed_us(start_ticks, end_ticks);
   if (us > max_us) max_us = us;
-  if (us > (1000000.0f / (float)FOC_CURRENT_LOOP_FS_HZ) * 0.9f) {
+  if (us > (1000000.0f / (float)FOC_CURRENT_LOOP_FS_HZ) * FOC_SWEEP_EXECUTION_MAX_RATIO) {
     timing.timing_reason = 2;
     finish(m, SWEEP_TIMING);
   } else if (engine.state == SWEEP_DONE) finish(m, 0u);
@@ -328,7 +335,7 @@ void foc_sweep_status(foc_sweep_status_t *out)
   out->motion_index = 255u;
   __set_PRIMASK(irq);
   /* No division under IRQ mask. A stopped engine is immutable until the next
-   * foreground start. Multisine has simultaneous tones, not one current Hz. */
+   * foreground start. Report the current stimulus frequency for diagnosis. */
   out->motion_limit = out->motion_reason == SWEEP_REJECT_TRAVEL ? FOC_SWEEP_MAX_TRAVEL_RAD
       : out->motion_reason == SWEEP_REJECT_SPEED ? FOC_SWEEP_MAX_SPEED_RAD_S : 0.0f;
   out->motion_hz = out->motion_reason

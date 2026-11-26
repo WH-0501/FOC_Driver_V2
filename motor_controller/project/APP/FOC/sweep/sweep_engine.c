@@ -2,32 +2,41 @@
 #include <float.h>
 #include <string.h>
 static int finite_float(float f) { return f >= -FLT_MAX && f <= FLT_MAX; }
+/* Foreground only: round settling time up to complete stimulus cycles. */
+static unsigned stepped_cycles(unsigned fs, unsigned period)
+{
+  unsigned ticks = (fs * SWEEP_STEPPED_SETTLE_MS + 999u) / 1000u;
+  unsigned settle = (ticks + period - 1u) / period;
+  if (settle < SWEEP_STEPPED_MIN_SETTLE_CYCLES)
+    settle = SWEEP_STEPPED_MIN_SETTLE_CYCLES;
+  return settle + SWEEP_STEPPED_MEASURE_CYCLES;
+}
 int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *c)
 {
   float maximum;
   unsigned i;
   if (!e || !c) return 2;
   if (e->state == SWEEP_RUNNING) return 1;
-  if ((c->method != SWEEP_CHIRP && c->method != SWEEP_STEPPED) || c->count < 3u || c->count > SWEEP_MAX_POINTS ||
+  if ((c->method != SWEEP_CHIRP && c->method != SWEEP_STEPPED) || c->count < SWEEP_MIN_POINTS || c->count > SWEEP_MAX_POINTS ||
       !finite_float(c->low_hz) || !finite_float(c->high_hz) ||
       !finite_float(c->peak) || !finite_float(c->sample_hz) ||
-      c->sample_hz < 10000.0f || c->sample_hz > 40000.0f ||
+      c->sample_hz < SWEEP_MIN_SAMPLE_HZ || c->sample_hz > SWEEP_MAX_SAMPLE_HZ ||
       c->sample_hz != (float)(unsigned)c->sample_hz ||
-      c->low_hz < 20.0f || c->high_hz <= c->low_hz ||
-      c->high_hz > 2000.0f || c->high_hz > c->sample_hz * 0.1f ||
-      c->peak < 0.005f || c->peak > 0.5f ||
-      (c->low_hz > 40.0f && c->count < 4u)) return 2;
+      c->low_hz < SWEEP_MIN_HZ || c->high_hz <= c->low_hz ||
+      c->high_hz > SWEEP_MAX_HZ || c->high_hz > c->sample_hz * (1.0f / SWEEP_MIN_SAMPLES_PER_CYCLE) ||
+      c->peak < SWEEP_MIN_PEAK_A || c->peak > SWEEP_MAX_PEAK_A ||
+      (c->low_hz > SWEEP_BASELINE_HIGH_HZ && c->count < SWEEP_BASELINE_POINTS + 2u)) return 2;
   if (c->method == SWEEP_STEPPED) {
-    unsigned anchor=c->low_hz>40.0f?2u:0u;
+    unsigned anchor=c->low_hz>SWEEP_BASELINE_HIGH_HZ?SWEEP_BASELINE_POINTS:0u;
     unsigned first=(unsigned)(c->sample_hz/c->low_hz+0.5f);
     unsigned last=(unsigned)(c->sample_hz/c->high_hz+0.5f);
     for(i=0;i<c->count;++i) {
       unsigned p=c->periods[i];
-      if(p<10u || (float)p<c->sample_hz/2000.0f ||
-         p>(unsigned)(c->sample_hz/20.0f+0.5f) ||
+      if(p<SWEEP_MIN_SAMPLES_PER_CYCLE || (float)p<c->sample_hz/SWEEP_MAX_HZ ||
+         p>(unsigned)(c->sample_hz/SWEEP_MIN_HZ+0.5f) ||
          (i && p>=c->periods[i-1])) return 2;
       if(i<anchor) {
-        if(p!=(unsigned)(c->sample_hz/(i?40.0f:20.0f)+0.5f)) return 2;
+        if(p!=(unsigned)(c->sample_hz/(i?SWEEP_BASELINE_HIGH_HZ:SWEEP_MIN_HZ)+0.5f)) return 2;
       } else if(p>first || p<last) return 2;
     }
     if(c->periods[anchor]!=first || c->periods[c->count-1]!=last) return 2;
@@ -35,27 +44,27 @@ int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *c)
 
   memset(e,0,sizeof(*e));
   e->method=(uint8_t)c->method; e->count=(uint8_t)c->count;
-  // 在 20KHz 采样率下, 1s 采样点数为 20000点
-  e->sample_hz=c->sample_hz; e->length=(uint16_t)c->sample_hz;
+  e->sample_hz=c->sample_hz;
+  e->length=(unsigned)c->sample_hz * SWEEP_CHIRP_PERIOD_MS / 1000u;
   if(c->method==SWEEP_STEPPED) {
     for(i=0;i<c->count;++i) {
-      unsigned p=c->periods[i], settle=(((unsigned)c->sample_hz+49u)/50u+p-1u)/p;
-      if(settle<4u) settle=4u;
-      e->periods[i]=(uint16_t)p; e->point_cycles[i]=(uint8_t)(settle+16u);
+      unsigned p=c->periods[i];
+      e->periods[i]=(uint16_t)p;
+      e->point_cycles[i]=(uint8_t)stepped_cycles((unsigned)c->sample_hz,p);
     }
     e->length=e->periods[0]; e->scale=c->peak;
     e->chirp.ramp_gain=4294967296.0f/(float)e->length;
     return 0;
   }
-  maximum=sweep_chirp_prepare(&e->chirp,c->low_hz>40.0f?20.0f:c->low_hz,
+  maximum=sweep_chirp_prepare(&e->chirp,c->low_hz>SWEEP_BASELINE_HIGH_HZ?SWEEP_MIN_HZ:c->low_hz,
                               c->high_hz,c->sample_hz,e->length);
-  e->scale=c->peak/(maximum*1.001f);
+  e->scale=c->peak/(maximum*SWEEP_CHIRP_PEAK_HEADROOM);
   return 0;
 }
 
 void sweep_engine_start(sweep_engine_t *e)
 { 
-  if(e && e->state==SWEEP_IDLE && e->count>=3u) {
+  if(e && e->state==SWEEP_IDLE && e->count>=SWEEP_MIN_POINTS) {
     e->state=SWEEP_RUNNING; 
   }
 }
@@ -83,8 +92,8 @@ float sweep_engine_step(sweep_engine_t *e,float feedback)
   ++e->samples;
   if (++e->position==e->length) {
     e->position=0; sweep_chirp_reset(&e->chirp);
-    ++e->cycles; e->progress=(uint8_t)((e->cycles*e->count)/4u);
-    if(e->cycles==4u) e->state=SWEEP_DONE; // 固定4个完整1s周期
+    ++e->cycles; e->progress=(uint8_t)((e->cycles*e->count)/SWEEP_CHIRP_TOTAL_PERIODS);
+    if(e->cycles==SWEEP_CHIRP_TOTAL_PERIODS) e->state=SWEEP_DONE;
   }
   return x;
 }

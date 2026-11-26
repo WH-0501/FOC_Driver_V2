@@ -87,3 +87,8 @@ add_executable(welch_tests tests/welch_tests.cpp src/scope.cpp src/chirp_analysi
 target_link_libraries(welch_tests PRIVATE motortune_core Qt6::Widgets Qt6::Test)
 add_test(NAME welch_tests COMMAND welch_tests)
 set_tests_properties(welch_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
+
+add_executable(chirp_timing_tests tests/chirp_timing_tests.cpp)
+target_link_libraries(chirp_timing_tests PRIVATE motortune_core Qt6::Test)
+add_test(NAME chirp_timing_tests COMMAND chirp_timing_tests)
+set_tests_properties(chirp_timing_tests PROPERTIES TIMEOUT 60)
