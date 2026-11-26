@@ -2,6 +2,7 @@
  * vendor's actual register layout and two timer write functions stubbed. */
 #include <assert.h>
 #include <stdio.h>
+#include <math.h>
 #include "board.h"
 #include "at32m412_416_wk_config.h"
 #include "at32m412_416_adc.h"
@@ -10,6 +11,7 @@
 #include "wk_usart.h"
 
 static tmr_type timer_ram;
+static adc_type adc_ram;
 static uint32_t irq_mask;
 static uint32_t active_compare[3];
 static unsigned int inject_update;
@@ -17,12 +19,17 @@ static unsigned int channel_enabled[3];
 uint32_t SystemCoreClock = 180000000u;
 #undef TMR1
 #define TMR1 (&timer_ram)
+#undef ADC2
+#define ADC2 (&adc_ram)
 /* The unrelated UART functions in this translation unit use ARM intrinsics.
  * Replace only those intrinsics for the x86 host test, not the PWM functions. */
 #define __get_PRIMASK() irq_mask
 #define __disable_irq() (irq_mask = 1u)
 #define __enable_irq() (irq_mask = 0u)
-#include "../project/Board/board_at32.c"
+static void test_direct_write(unsigned channel, uint32_t value);
+/* Generated from the actual board file; direct MMIO stores are instrumented
+ * to inject hardware update events between every pair of phase writes. */
+#include "sampling_board_impl.inc"
 
 static void natural_update(void)
 {
@@ -67,6 +74,10 @@ void tmr_channel_value_set(tmr_type *timer, tmr_channel_select_type channel, uin
   }
   if (inject_update) natural_update();
 }
+static void test_direct_write(unsigned channel, uint32_t value)
+{
+  tmr_channel_value_set(&timer_ram, (tmr_channel_select_type)(channel * 2u), value);
+}
 void tmr_channel_enable(tmr_type *timer, tmr_channel_select_type channel, confirm_state state)
 {
   assert(timer == &timer_ram);
@@ -75,6 +86,7 @@ void tmr_channel_enable(tmr_type *timer, tmr_channel_select_type channel, confir
 
 int main(void)
 {
+  motor_handle_t m = {0};
   motor_actuation_t pwm = {0};
   float max_duty;
   timer_ram.pr = AT32_FOC_TIMER_ARR;
@@ -126,6 +138,27 @@ int main(void)
   assert(timer_ram.cm1_output_bit.c1oben && timer_ram.cm1_output_bit.c2oben && timer_ram.cm2_output_bit.c3oben);
   assert(channel_enabled[0] && channel_enabled[1] && channel_enabled[2]);
   assert(irq_mask == 0);
+  {
+    float bad[] = {NAN, INFINITY, -.01f, max_duty+.001f};
+    unsigned i, phase;
+    for (phase=0;phase<3;++phase) for(i=0;i<4;++i)
+    {
+      pwm.duty_a=pwm.duty_b=pwm.duty_c=.4f;
+      if (phase==0) pwm.duty_a=bad[i];
+      else if (phase==1) pwm.duty_b=bad[i];
+      else pwm.duty_c=bad[i];
+      assert(set_pwm(&pwm,max_duty)==ERR_PARAM);
+      assert(!channel_enabled[0] && !channel_enabled[1] && !channel_enabled[2]);
+      assert(timer_ram.c1dt==0 && timer_ram.c2dt==0 && timer_ram.c3dt==0);
+    }
+    assert(set_pwm(NULL,max_duty)==ERR_PARAM);
+    assert(set_pwm(&pwm,1.0f)==ERR_PARAM);
+  }
+  adc_ram.pdt1=100; adc_ram.pdt2=2048; adc_ram.pdt3=4095; adc_ram.pdt4=777;
+  board_get_phase_current(&m);
+  assert(m.state.phase_current.adc_raw[0]==100);
+  assert(m.state.phase_current.adc_raw[1]==2048);
+  assert(m.state.phase_current.adc_raw[2]==4095);
   puts("PASS: real board PWM phase mapping and low-side calibration");
   return 0;
 }

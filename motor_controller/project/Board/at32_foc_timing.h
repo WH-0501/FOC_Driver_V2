@@ -3,7 +3,7 @@
 
 /* One timing contract for PWM, injected ADC and the output guard.
  * PWM A active-high: CNT > CCR means MP6540 low-side ON.
- * CH4 PWM B rising edge triggers on the up-counting half-cycle.
+ * CH4 PWM B reference -> TMR1 TRGOUT rising edge on the up-counting half-cycle.
  * ADC sequence: Ia, Ib, Ic, temperature. Budget the ENTIRE sequence.
  */
 #define AT32_FOC_TIMER_CLOCK_HZ       180000000u

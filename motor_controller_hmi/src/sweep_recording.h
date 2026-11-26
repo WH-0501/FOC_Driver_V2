@@ -15,8 +15,10 @@ struct SweepRecording {
   void reset(quint32 n, quint16 r);
   bool append(quint32 n, const QByteArray &payload);
   bool complete(quint32 expected) const;
-  QString summary(quint32 expected, bool supported) const;
+  QString summary(quint32 expected, bool supported, bool measurementCompleted=false) const;
 };
+// Explicit mode-2 plan; unique integer periods, rejecting ranges with too few periods.
+std::vector<SweepPoint> steppedFrequencyGrid(double low, double high, unsigned count, double fs);
 // Whole-period block H1 on uploaded x[n], y[n], sharing the device's windows.
 // No interpolation of lost samples and no phase shift to hide the control delay.
 std::vector<SweepPoint> recordingH1(const SweepRecording &, int method, double fs,

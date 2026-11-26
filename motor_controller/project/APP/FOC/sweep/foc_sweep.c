@@ -141,15 +141,6 @@ static int start_guard(const motor_handle_t *m, foc_sweep_rejection_t *out)
   if (m->state.board_temp.value >= FOC_SWEEP_MAX_TEMP_C) return reject_start(out, 1, SWEEP_REJECT_BOARD_TEMP, m->state.board_temp.value);
   return reject_start(out, 1, SWEEP_REJECT_MOTOR_TEMP, m->state.motor_temp.value);
 }
-int foc_sweep_start(motor_handle_t *m, const sweep_config_t *cfg, uint16_t run)
-{
-  return foc_sweep_start_checked(m, cfg, run, NULL);
-}
-int foc_sweep_start_checked(motor_handle_t *m, const sweep_config_t *cfg, uint16_t run,
-                            foc_sweep_rejection_t *rejection)
-{
-  return foc_sweep_start_recorded(m, cfg, run, rejection, false);
-}
 int foc_sweep_start_recorded(motor_handle_t *m, const sweep_config_t *cfg, uint16_t run,
                             foc_sweep_rejection_t *rejection, bool record)
 {
@@ -157,10 +148,11 @@ int foc_sweep_start_recorded(motor_handle_t *m, const sweep_config_t *cfg, uint1
   int result;
   /* Single foreground caller. Preparation cannot be published to ISR early. */
   if (rejection) { rejection->reason = SWEEP_REJECT_NONE; rejection->value = 0; }
-  if (owner) return reject_start(rejection, 1, SWEEP_REJECT_BUSY, 0);
+  if (owner || sweep_record_pending())
+    return reject_start(rejection, 1, SWEEP_REJECT_BUSY, 0);
   result = start_admission(m, rejection);
   if (result) return result;
-  if (!cfg || !run || cfg->sample_hz != (float)FOC_CURRENT_LOOP_FS_HZ)
+  if (!record || !cfg || !run || cfg->sample_hz != (float)FOC_CURRENT_LOOP_FS_HZ)
     return reject_start(rejection, 2, SWEEP_REJECT_REQUEST, 0);
   if (!(m->config.limits.iq_limit > 0.0f) || !finite_value(m->config.limits.iq_limit) || cfg->peak > m->config.limits.iq_limit * 0.8f)
     return reject_start(rejection, 2, SWEEP_REJECT_CURRENT_LIMIT, m->config.limits.iq_limit);
@@ -175,7 +167,7 @@ int foc_sweep_start_recorded(motor_handle_t *m, const sweep_config_t *cfg, uint1
   if (result) return reject_start(rejection, result, SWEEP_REJECT_FREQUENCIES, 0);
   irq = __get_PRIMASK();
   __disable_irq();
-  /* Recheck after interruptible sin/cos/peak calculation. No libm under mask. */
+  /* Recheck after interruptible Chirp normalization. No libm under mask. */
   origin = m->state.shaft.position_rad;
   peak = cfg->peak;
   result = start_admission(m, rejection);
@@ -296,7 +288,11 @@ void foc_sweep_run_isr(motor_handle_t *m, motor_runtime_t *rt, uint32_t start_ti
   if (!allowed(m)) { finish(m, SWEEP_STOP); return; }
   if (voltage_limited(m)) { finish(m, SWEEP_LIMIT); return; }
   /* x[n] is applied after y[n] was sampled: preserve the physical one-tick delay. */
-  sweep_record_push(engine.samples - 1u, reference, feedback);
+  if (!sweep_record_push(engine.samples - 1u, reference, feedback)) {
+    /* A missing input to the host estimator invalidates this run.
+     * Stop immediately; never synthesize samples or publish partial H1. */
+    finish(m, SWEEP_RECORD_GAP); return;
+  }
   end_ticks = dwt_get_ticks();
   us = dwt_elapsed_us(control_ticks, end_ticks);
   if (us > timing.control_max_us) timing.control_max_us = bounded_us(us);
@@ -316,6 +312,9 @@ void foc_sweep_status(foc_sweep_status_t *out)
   out->run = run_id; out->flags = (uint16_t)engine.flags;
   out->max_us = (uint16_t)(max_us > 65535u ? 65535u : max_us);
   out->state = (uint8_t)engine.state; out->method = (uint8_t)engine.method;
+  /* PWM is already off at DONE. Publish completion only after the foreground
+   * has submitted the final recording slot. */
+  if (engine.state == SWEEP_DONE && sweep_record_pending()) out->state = SWEEP_RUNNING;
   out->count = (uint8_t)engine.count; out->progress = (uint8_t)engine.progress;
   out->sample_hz = (uint32_t)engine.sample_hz; out->samples = engine.samples;
   out->interval_min_us = timing.interval_min_us; out->interval_max_us = timing.interval_max_us;
@@ -326,24 +325,14 @@ void foc_sweep_status(foc_sweep_status_t *out)
   out->motion_reason = engine.state == SWEEP_ABORTED && (engine.flags & SWEEP_MOTION)
       ? timing.motion_reason : 0u;
   out->motion_value = out->motion_reason ? timing.motion_value : 0.0f;
-  out->motion_index = out->motion_reason && engine.method == SWEEP_STEPPED_SINE
-      ? engine.index : 255u;
+  out->motion_index = 255u;
   __set_PRIMASK(irq);
   /* No division under IRQ mask. A stopped engine is immutable until the next
    * foreground start. Multisine has simultaneous tones, not one current Hz. */
   out->motion_limit = out->motion_reason == SWEEP_REJECT_TRAVEL ? FOC_SWEEP_MAX_TRAVEL_RAD
       : out->motion_reason == SWEEP_REJECT_SPEED ? FOC_SWEEP_MAX_SPEED_RAD_S : 0.0f;
-  out->motion_hz = out->motion_reason && engine.method == SWEEP_CHIRP
-      ? sweep_chirp_frequency(&engine.chirp, engine.sample_hz)
-      : out->motion_index < out->count
-      ? sweep_engine_frequency(&engine, out->motion_index) : 0.0f;
-}
-int foc_sweep_result(uint16_t run, unsigned index, sweep_result_t *out)
-{
-  /* Only foreground starts a new sweep. Completed buffers are immutable in ISR
-   * after owner is cleared, so sqrt/division do not need an IRQ mask. */
-  if (owner || run != run_id) return 1;
-  __DMB();
-  return sweep_engine_result(&engine, index, out);
+  out->motion_hz = out->motion_reason
+      ? (engine.method==SWEEP_STEPPED ? engine.sample_hz/engine.length
+         : sweep_chirp_frequency(&engine.chirp, engine.sample_hz)) : 0.0f;
 }
 #endif

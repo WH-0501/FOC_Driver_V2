@@ -5,6 +5,7 @@
  * 本文件负责电流环 IRQ、PWM 运行时控制、UART 与预驱 GPIO 绑定。
  */
 #include "board.h"
+#include "sweep/foc_sweep.h"
 #include "common.h" /* FOC_RT 优化宏须在 at32_foc_timing.h 之前 */
 #include "at32_foc_timing.h"
 #include "at32m412_416_wk_config.h"
@@ -223,11 +224,11 @@ float pwm_hw_max_duty(void)
  * while the counter and fixed CH4 ADC trigger continue running. */
 static void pwm_stage_compare(uint32_t u, uint32_t v, uint32_t w)
 {
-  // uint32_t irq_state = __get_PRIMASK();
-  // uint32_t previous_ovfen;
-  // __disable_irq();
-  // previous_ovfen = PWM_TIM_HANDLE->ctrl1_bit.ovfen;
-  // PWM_TIM_HANDLE->ctrl1_bit.ovfen = TRUE;
+  uint32_t irq_state = __get_PRIMASK();
+  uint32_t previous_ovfen;
+  __disable_irq();
+  previous_ovfen = PWM_TIM_HANDLE->ctrl1_bit.ovfen;
+  PWM_TIM_HANDLE->ctrl1_bit.ovfen = TRUE;
 #if AT32_PWM_INLINE_STAGE_CCR
   /* U/V/W = CH3/CH2/CH1 (see PWM_TIME_*_CHANNEL); avoid driver switch/call in IRQ. */
   PWM_TIM_HANDLE->c3dt = u;
@@ -238,8 +239,8 @@ static void pwm_stage_compare(uint32_t u, uint32_t v, uint32_t w)
   tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_V_CHANNEL, v);
   tmr_channel_value_set(PWM_TIM_HANDLE, PWM_TIME_W_CHANNEL, w);
 #endif
-  // PWM_TIM_HANDLE->ctrl1_bit.ovfen = previous_ovfen;
-  // if (irq_state == 0U) { __enable_irq(); }
+  PWM_TIM_HANDLE->ctrl1_bit.ovfen = previous_ovfen;
+  if (irq_state == 0U) { __enable_irq(); }
 }
 
 /* All phase channels must be disabled here. Clear active AND pending values
@@ -307,13 +308,32 @@ error_t pwm_hw_lowside_brake_on(void)
   return ERR_NONE;
 }
 
+/* The fixed AT32 ceiling is positive and finite. Positive IEEE binary32
+ * encodings are ordered like unsigned integers; all negative encodings are
+ * above it, except -0 which the original ordered comparison accepts.
+ * This preserves the existing predicate (including NaN/Inf rejection), while
+ * avoiding six FPU comparisons and FPSCR -> APSR transfers every FOC tick.
+ * memcpy is alias-safe and compiles to integer loads, not a library call. */
+static bool pwm_at32_duties_in_range(const motor_actuation_t *actuation, float limit)
+{
+  uint32_t a, b, c, ceiling;
+  if (actuation == NULL) return false;
+  memcpy(&a, &actuation->duty_a, sizeof(a));
+  memcpy(&b, &actuation->duty_b, sizeof(b));
+  memcpy(&c, &actuation->duty_c, sizeof(c));
+  memcpy(&ceiling, &limit, sizeof(ceiling));
+  return (a <= ceiling || a == 0x80000000u) &&
+         (b <= ceiling || b == 0x80000000u) &&
+         (c <= ceiling || c == 0x80000000u);
+}
+
 error_t set_pwm(const motor_actuation_t *actuation, float max_duty)
 {
-  // if (max_duty != AT32_FOC_CURRENT_MAX_DUTY || !pwm_duties_in_range(actuation, max_duty))
-  // {
-  //   (void)pwm_hw_stop();
-  //   return ERR_PARAM;
-  // }
+  if (max_duty != AT32_FOC_CURRENT_MAX_DUTY || !pwm_at32_duties_in_range(actuation, max_duty))
+  {
+    (void)pwm_hw_stop();
+    return ERR_PARAM;
+  }
 
   pwm_stage_compare(
       (uint32_t)(actuation->duty_a * (float)AT32_FOC_TIMER_ARR),
@@ -321,6 +341,7 @@ error_t set_pwm(const motor_actuation_t *actuation, float max_duty)
       (uint32_t)(actuation->duty_c * (float)AT32_FOC_TIMER_ARR));
   return ERR_NONE;
 }
+
 
 void board_get_phase_current(motor_handle_t *m)
 {

@@ -2,6 +2,8 @@
 #include "sweep.h"
 #include "scope.h"
 #include "sweep_recording.h"
+#include "chirp_analysis_dialog.h"
+#include "chirp_analysis.h"
 #include <QtWidgets>
 #include <cmath>
 #include <map>
@@ -10,7 +12,8 @@ namespace mt {
 namespace {
 class BodePlot : public QWidget {
 public:
-  std::vector<SweepPoint> points;
+  std::vector<SweepPoint> points, comparison;
+  QString comparisonName;
   BodePlot() { setMinimumHeight(300); }
   void paintEvent(QPaintEvent *) override {
     QPainter p(this);
@@ -31,9 +34,11 @@ public:
         minGain = std::min(minGain, v.gainDb - 2);
         maxGain = std::max(maxGain, v.gainDb + 2);
       }
+    for(const auto &v:comparison)if(v.valid){minGain=std::min(minGain,v.gainDb-2);maxGain=std::max(maxGain,v.gainDb+2);}
+    if(!comparison.empty()){p.setPen(QColor("#55b3ff"));p.drawText(65,16,"原始 H1");p.setPen(QColor("#ed91bc"));p.drawText(170,16,comparisonName);}
     for (int panel = 0; panel < 3; ++panel) {
-      QRectF r(65, 20 + panel * (height() / 3.), width() - 110,
-               height() / 3. - 48);
+      QRectF r(65, 38 + panel * ((height()-18) / 3.), width() - 110,
+               (height()-18) / 3. - 48);
       double low = panel==2?0:panel ? -180 : minGain, high = panel==2?1:panel ? 180 : maxGain;
       auto pos = [&](double hz, double v) {
         return QPointF(r.left() + (std::log10(hz) - lo) / (hi - lo) * r.width(),
@@ -61,7 +66,7 @@ public:
         double threshold=(points[0].gainDb+points[1].gainDb)/2-3;
         double y=pos(points.front().hz,threshold).y();
         p.setPen(QPen(QColor("#ffbc33"),1,Qt::DashLine));p.drawLine(QPointF(r.left(),y),QPointF(r.right(),y));
-        p.drawText(QPointF(r.left()+5,y-4),"−3 dB 阈值");
+        p.drawText(QPointF(r.left()+5,y-4),"原始基准 −3 dB");
       }
       QPainterPath path;
       bool pen = false;
@@ -81,12 +86,19 @@ public:
       }
       p.setPen(QPen(QColor(panel ? "#5fc992" : "#55b3ff"), 1.5));
       p.drawPath(path);
+      QPainterPath overlay;bool join=false;double lastPhase=0;
+      for(const auto &v:comparison){double y=panel==2?v.inputFit:panel?v.phaseDeg:v.gainDb;
+        if(!std::isfinite(y)||(!v.valid&&panel!=2)){join=false;continue;}
+        auto q=pos(v.hz,y);if(join&&!(panel==1&&std::abs(y-lastPhase)>180))overlay.lineTo(q);else overlay.moveTo(q);
+        join=true;lastPhase=y;p.setPen(QColor("#ed91bc"));p.drawEllipse(q,2,2);}
+      p.setPen(QPen(QColor("#ed91bc"),1.4,Qt::DashLine));p.drawPath(overlay);
     }
   }
 };
 class SweepDialog : public QDialog {
   QComboBox *methodChoice;
-  bool deviceMode=false,deviceData=false;
+  bool deviceMode=false,deviceData=false, awaitingPlan=false;
+  double planFs=0;
   quint64 deviceToken=0;
   quint16 runId=0;
   int nextPoint=0,deviceCount=0;
@@ -99,6 +111,23 @@ class SweepDialog : public QDialog {
   QTableWidget *table;
   BodePlot *plot;
   Scope *wave;
+  QComboBox *filterChoice;
+  QDoubleSpinBox *filterCutoff;
+  std::vector<double> comparisonWave;
+  QLabel *meanNote;
+  std::vector<SweepPoint> meanResults;
+  QString meanError;
+  bool meanActive() const {return deviceData&&filterChoice->currentIndex()!=0&&recordMethod==3;}
+  bool lpfSelected() const {return filterChoice->currentIndex()==2;}
+  ChirpAnalysisOptions filterOptions() const {ChirpAnalysisOptions o;o.filter=lpfSelected()?ChirpFilter::FeedbackLpf:ChirpFilter::FeedbackMean16;o.cutoffHz=filterCutoff->value();return o;}
+  QString comparisonName() const {return lpfSelected()?"LPF 对照（含滤波器）":"16 点均值对照（含滤波器）";}
+  void updateMeanResults() {
+    meanResults.clear();meanError.clear();comparisonWave.clear();
+    if(!meanActive())return;
+    SweepCapture c{recording,recordMethod,recordFs,recordExpected,deviceCompleted,source,results.empty()?requestedPoints:results};
+    auto o=filterOptions();
+    auto a=analyzeChirp(c,o);meanResults=std::move(a.filtered);meanError=a.error;comparisonWave=std::move(a.filteredRecording);
+  }
   QLabel *recordStatus;
   QComboBox *resultChoice;
   SweepRecording recording;
@@ -106,95 +135,157 @@ class SweepDialog : public QDialog {
   double recordFs=0;
   quint32 recordExpected=0;
   int recordMethod=0;
-  bool recordSupported=false, resultsReady=false, deviceCompleted=false;
+  bool recordSupported=false, resultsReady=false, deviceCompleted=false, hostH1=false;
+  std::vector<SweepPoint> requestedPoints;
   qint64 drainDeadline=0, lastWaveDraw=0;
   void refreshRecording(bool draw=false) {
     auto snapshot=session.sweepRecording();
     if(snapshot.node==node && snapshot.run==runId) recording=std::move(snapshot);
-    recordStatus->setText(recording.summary(recordExpected,recordSupported));
+    recordStatus->setText(recording.summary(recordExpected,recordSupported,deviceCompleted));
     if(draw || (running && clock.elapsed()-lastWaveDraw>=300)) {
       drawRecording();lastWaveDraw=clock.elapsed();
     }
   }
-  void drawRecording() {
+  void drawRecording(bool preserveView=false) {
     std::vector<Sample> data;
+    const auto smooth=meanActive()?(lpfSelected()?comparisonWave:feedbackMean16(recording)):std::vector<double>{};
+    wave->aliases[11]=smooth.empty()?"Iq 反馈（原始）/ A":lpfSelected()?"Iq 反馈（LPF 对照）/ A":"Iq 反馈（16 点均值对照）/ A";
     if(recordFs>0) {
       data.reserve(recording.samples.size());
       quint32 next=0;
-      for(const auto &v:recording.samples) {
+      size_t i=0;for(const auto &v:recording.samples) {
         if(v.index!=next) {Sample gap;gap.time=(next+.5)/recordFs;gap.values.fill(std::numeric_limits<double>::quiet_NaN());data.push_back(gap);}
         Sample point;point.time=v.index/recordFs;point.node=node;
-        point.values[0]=v.input;point.values[1]=v.output;data.push_back(point);next=v.index+1;
+        point.values.fill(std::numeric_limits<double>::quiet_NaN());
+        point.values[0]=v.input;point.values[11]=smooth.empty()?v.output:smooth[i];data.push_back(point);next=v.index+1;++i;
       }
     }
     wave->setSamples(std::move(data));
-    if(!running || resultsReady)wave->fitHistory();
+    if(!preserveView && (!running || resultsReady))wave->fitHistory();
   }
   void completeDevice() {
     refreshRecording(true);
-    recordedResults=deviceCompleted?recordingH1(recording,recordMethod,recordFs,results,recordExpected):std::vector<SweepPoint>{};
+    QString analysisError;
+    if(hostH1) {
+      SweepCapture c{recording,recordMethod,recordFs,recordExpected,deviceCompleted,source,requestedPoints};
+      if(recordMethod==2) {
+        results=deviceCompleted?recordingH1(recording,2,recordFs,requestedPoints,recordExpected):std::vector<SweepPoint>{};
+        recordedResults.clear();
+        if(results.empty()){analysisError="逐频录波不完整或频点窗口不匹配，不计算带宽";results=requestedPoints;}
+        else source+="\n上位机原始 H1（未滤波） · 每点舍弃整周期稳定段，4 段 × 4 周期同步估计";
+        resultChoice->setItemText(0,"上位机原始 H1");
+      } else {
+      auto a=analyzeChirp(c,{});
+      results=a.raw;recordedResults.clear();analysisError=a.error;
+      if(a.ok()) source+=QString("\n上位机原始 H1（未滤波） · 输入周期最大差 %1 A · 反馈非周期残差 RMS %2 A")
+        .arg(a.inputRepeatMax,0,'g',5).arg(a.outputResidualRms,0,'g',5);
+      else {results=requestedPoints;source+="\n"+analysisError;}
+      resultChoice->setItemText(0,"上位机原始 H1");
+      }
+    } else {
+      recordedResults=deviceCompleted?recordingH1(recording,recordMethod,recordFs,results,recordExpected):std::vector<SweepPoint>{};
+      resultChoice->setItemText(0,"历史设备 H1");
+    }
+    updateMeanResults();drawRecording();
     running=false;timer.stop();deviceToken=0;
     start->setEnabled(true);import->setEnabled(true);methodChoice->setEnabled(true);
     startHz->setEnabled(true);endHz->setEnabled(true);amplitude->setEnabled(true);count->setEnabled(true);
     resultChoice->setEnabled(!recordedResults.empty());
-    status->setText(QString("设备辨识完成并失能 · 含录波传输与显示 %1 ms").arg(clock.elapsed()));render();
+    status->setText(analysisError.isEmpty()?QString("设备辨识完成并失能 · 含上传、分析与显示 %1 ms").arg(clock.elapsed()):"采集/分析未完成："+analysisError);render();
   }
   QPushButton *start, *import;
   QCheckBox *safe;
   QTimer timer;
   QElapsedTimer clock;
-  std::vector<double> frequencies;
   std::vector<SweepPoint> results;
   std::vector<std::vector<SweepSample>> raw;
-  int index = 0;
-  quint64 firstToken = 0, lastToken = 0;
   bool running = false;
   QString source = "尚无数据";
   QString deviceAbortDetail;
-  double nextTick = 0;
+  QJsonObject spikeSnapshot;
+  unsigned spikePages=0;
+  QString spikeSummary() const {
+    if(spikePages!=7)return "尖峰现场：未取得完整诊断快照（旧固件或测量中止时不可用）";
+    if(!spikeSnapshot["spike_present"].toBool())return "尖峰现场：本次未捕获 |Iq| > 0.2 A（仅为诊断触发值）";
+    auto v=[&](const char *k){return spikeSnapshot[k].toDouble();};
+    return QString("尖峰现场：样本 %1，Iq=%2 A，Id=%3 A；ADC=[%4,%5,%6]，前一拍=[%7,%8,%9]，零偏=[%10,%11,%12]；PWM 预装载 U/V/W=[%13,%14,%15]，ADC 读取时 CNT=%16（%17计数）；电角度 %18→%19 rad，编码器计数 %20→%21。CCR 并非有效锁存值；CNT 并非硬件采样时刻。")
+      .arg(v("spike_sample")).arg(v("spike_iq"),0,'g',9).arg(v("spike_id"),0,'g',9)
+      .arg(v("spike_adc0")).arg(v("spike_adc1")).arg(v("spike_adc2"))
+      .arg(v("spike_previous_adc0")).arg(v("spike_previous_adc1")).arg(v("spike_previous_adc2"))
+      .arg(v("spike_offset0")).arg(v("spike_offset1")).arg(v("spike_offset2"))
+      .arg(v("spike_ccr0")).arg(v("spike_ccr1")).arg(v("spike_ccr2"))
+      .arg(v("spike_counter")).arg((int(v("spike_timer_ctrl"))&16)?"向下":"向上")
+      .arg(v("spike_previous_theta"),0,'g',9).arg(v("spike_theta"),0,'g',9)
+      .arg(v("spike_previous_shaft")).arg(v("spike_shaft"));
+  }
   QByteArray deviceRequest(int action) {
     QByteArray p; p.append(char(1));p.append(char(action));p+=be16(runId);
-    p+=be16(int(startHz->value()));p+=be16(int(endHz->value()));p.append(char(count->value()));p+=be16(int(amplitude->value()*1000));
-    if(action) {p.append(char(0xa9));p.append(char(1));}return p;
+    p+=be16(int(startHz->value()));p+=be16(int(endHz->value()));p.append(char(count->value()));p+=be16(qRound(amplitude->value()*1000));
+    if(action) {p.append(char(0xa9));p.append(char(1));}
+    if(action==2){p.append(char(0xad));p.append(char(1));p+=be16(qRound(planFs));
+      for(const auto &v:requestedPoints)p+=be16(qRound(planFs/v.hz));}
+    return p;
   }
   void beginDevice() {
     auto s=session.latest(node);
     if(version!=Version::V2 || !safe->isChecked() || !session.connected() || !session.telemetryFresh(node) || !s || !s->enabled || s->mode!=6) {
       status->setText("设备辨识要求 V2 固件、CST 已使能、零给定及工作区确认");return;
     }
-    if(startHz->value()>=endHz->value() || (startHz->value()>40 && count->value()<4) || (methodChoice->currentIndex()==1 && std::floor(endHz->value()/20)-std::ceil(startHz->value()/20)+1<count->value())) {status->setText("频段过窄或频点过多：快速法使用 20 Hz 整数栅格");return;}
+    awaitingPlan=methodChoice->currentData().toInt()==2;
+    requestedPoints=awaitingPlan?std::vector<SweepPoint>{}:chirpFrequencyGrid(startHz->value(),endHz->value(),unsigned(count->value()));
+    if(!awaitingPlan && requestedPoints.empty()){status->setText("频段或频点数无效：请减少频点数量或扩大频段");return;}
     runId=quint16(QRandomGenerator::global()->bounded(1,65536));
-    results.clear();raw.clear();deviceAbortDetail.clear();deviceMode=deviceData=true;running=true;nextPoint=0;deviceCount=0;
+    results.clear();meanResults.clear();meanError.clear();comparisonWave.clear();raw.clear();deviceAbortDetail.clear();deviceMode=deviceData=true;running=true;nextPoint=0;deviceCount=0;
+    spikeSnapshot={};spikePages=0;
     session.beginSweepRecording(node,runId);recording.reset(node,runId);
-    recordFs=0;recordExpected=0;recordMethod=methodChoice->currentIndex();
-    recordSupported=resultsReady=deviceCompleted=false;lastWaveDraw=0;recordedResults.clear();
+    recordFs=0;recordExpected=0;recordMethod=methodChoice->currentData().toInt();
+    recordSupported=resultsReady=deviceCompleted=hostH1=false;lastWaveDraw=0;recordedResults.clear();
     resultChoice->setCurrentIndex(0);resultChoice->setEnabled(false);wave->clearDisplay();
     wave->follow=true;
     clock.start();start->setEnabled(false);import->setEnabled(false);methodChoice->setEnabled(false);
     startHz->setEnabled(false);endHz->setEnabled(false);count->setEnabled(false);amplitude->setEnabled(false);
     source="设备同步采样 · 闭环给定→实际 Iq · H1 频响 / 多段相干性 · 未收到结果";
-    if(methodChoice->currentIndex()==3) source+=" · 周期线性 Chirp，4 s 采集";
-    deviceToken=session.command(node,0xbc,deviceRequest(methodChoice->currentIndex()),-1,"启动设备电流环辨识（一次配置，无续租）");
+    if(methodChoice->currentData().toInt()==3) source+=" · 周期线性 Chirp，4 s 采集";
+    deviceToken=awaitingPlan?session.command(node,0xbd,{},-1,"查询逐频录波能力和采样率"):
+      session.command(node,0xbc,deviceRequest(methodChoice->currentData().toInt()),-1,"启动设备电流环辨识（一次配置，无续租）");
     timer.start(100);status->setText("等待固件确认（不支持的固件将超时，不回退到主机发波）");render();
   }
   void deviceReply(quint64 token,quint32 n,int cmd,const QJsonObject &o) {
     if(!running || !deviceMode || token!=deviceToken || n!=node)return;
     deviceToken=0;
     if(!o["ok"].toBool()){finish(o["message"].toString("设备辨识应答无效"));return;}
+    if(awaitingPlan) {
+      if(cmd!=0xbd || !o["host_h1"].toBool() || !o["host_stepped"].toBool() || o["chirp_periods"].toInt()!=4) {
+        finish("固件不支持上位机逐频分析，请升级配套固件");return;
+      }
+      planFs=o["fs"].toDouble();
+      requestedPoints=steppedFrequencyGrid(startHz->value(),endHz->value(),unsigned(count->value()),planFs);
+      if(requestedPoints.empty()){finish("逐频频段可用整周期频点不足或参数无效，请减少点数或扩大频段");return;}
+      awaitingPlan=false;
+      deviceToken=session.command(node,0xbc,deviceRequest(2),-1,"启动逐频正弦同步录波（AD/1 周期计划）");return;
+    }
     if(o["run"].toInt()!=runId){finish("辨识会话编号不匹配");return;}
     int state=o["state"].toInt();
-    if(cmd!=0xbe && o["method"].toInt()!=methodChoice->currentIndex()){finish("固件返回的激励模式不匹配");return;}
+    if(cmd!=0xbe && o["method"].toInt()!=methodChoice->currentData().toInt()){finish("固件返回的激励模式不匹配");return;}
 
     if(cmd!=0xbe){
       recordFs=o["fs"].toDouble();recordExpected=quint32(o["samples"].toDouble());
       recordSupported=recordSupported || o["recording"].toBool();
+      if(o["host_h1"].toBool()) {
+        if(o["chirp_periods"].toInt()!=4){finish("不支持的测量分段配置");return;}
+        hostH1=true;
+      }
+      if(recordMethod==2 && state!=3 && !o["flags"].toInt() &&
+         (!hostH1 || !o["host_stepped"].toBool() || !recordSupported || recordFs!=planFs)) {
+        finish("固件逐频能力或采样率与计划不匹配");return;
+      }
       refreshRecording();
       deviceCount=o["count"].toInt();
-      if(deviceCount<3 || deviceCount>16){finish("固件返回频点数量无效");return;}
-      source=QString("设备采样 %1 Hz · 采集 %2 ms · 最长 FOC 回调 %3 μs · %4 · 同步给定/实际 Iq，H1 频响").arg(o["fs"].toDouble()).arg(o["samples"].toDouble()/std::max(1.,o["fs"].toDouble())*1000,0,'f',1).arg(o["max_us"].toInt()).arg(methodChoice->currentIndex()==1?"快速多正弦":methodChoice->currentIndex()==3?"周期线性 Chirp（1 s 稳定 + 3 × 1 s 估计）":"逐频正弦");
+      if(deviceCount<3 || deviceCount>16 || (hostH1 && deviceCount!=int(requestedPoints.size()))){finish("固件返回频点数量无效");return;}
+      source=QString("设备采样 %1 Hz · 采集 %2 ms · 最长 FOC 回调 %3 μs · %4 · 同步给定/实际 Iq，H1 频响").arg(o["fs"].toDouble()).arg(o["samples"].toDouble()/std::max(1.,o["fs"].toDouble())*1000,0,'f',1).arg(o["max_us"].toInt()).arg(methodChoice->currentData().toInt()==1?"快速多正弦":methodChoice->currentData().toInt()==3?"周期线性 Chirp（1 s 稳定 + 3 × 1 s 估计）":"逐频正弦");
       if(o.contains("record_dropped")) source+=QString(" · 上传状态快照：设备缓冲丢样 %1 点，已提交 CAN %2 点（非主机收妥）").arg(o["record_dropped"].toDouble(),0,'f',0).arg(o["record_submitted"].toDouble(),0,'f',0);
       status->setText(QString("设备进度 %1/%2 · 主机经过 %3 ms").arg(o["progress"].toInt()).arg(deviceCount).arg(clock.elapsed()));
-      if(o.contains("timing_revision"))source+=QString(" · 诊断 A6/%1 · 分段峰值：采样/编码器 %2 μs，控制 %3 μs（含 FRA %4 μs）").arg(o["timing_revision"].toInt()).arg(o["sense_us"].toInt()).arg(o["control_us"].toInt()).arg(o["fra_us"].toInt());
+      if(o.contains("timing_revision"))source+=QString(" · 诊断 A6/%1 · 分段峰值：采样/编码器 %2 μs，控制 %3 μs（含激励 %4 μs）").arg(o["timing_revision"].toInt()).arg(o["sense_us"].toInt()).arg(o["control_us"].toInt()).arg(o["fra_us"].toInt());
       if(o.contains("peak_cycles")) {
         if(o["base_period_us"].toInt()>0)
           source+=QString(" · 普通 CST 耗时 %1 μs，间隔 %2 μs").arg(o["base_us"].toInt()).arg(o["base_period_us"].toInt());
@@ -211,14 +302,25 @@ class SweepDialog : public QDialog {
       }
       if(state!=2)return;
       deviceCompleted=true;
+      if(hostH1) {
+        resultsReady=true;drainDeadline=clock.elapsed()+1500;refreshRecording();
+        if(recording.complete(recordExpected))completeDevice();
+        else status->setText("设备已失能，等待录波尾帧；收齐后上位机计算频响");
+        return;
+      }
     }else{
       if(o["index"].toInt()!=nextPoint || state!=2 || o["flags"].toInt()){finish("设备频点索引或状态不匹配");return;}
+      if(o.contains("spike_page")) {
+        for(auto it=o.begin();it!=o.end();++it)if(it.key().startsWith("spike_"))spikeSnapshot[it.key()]=it.value();
+        spikePages|=1u<<o["spike_page"].toInt();
+        if(spikePages==7)source+="\n"+spikeSummary();
+      }
       SweepPoint p;p.hz=o["hz"].toDouble();p.input=o["input"].toDouble();p.output=o["output"].toDouble();
       double re=o["real"].toDouble(),im=o["imag"].toDouble(),g=std::hypot(re,im);
       p.gainDb=g>0?20*std::log10(g):0;p.phaseDeg=std::atan2(im,re)*180/std::numbers::pi;
       p.inputFit=o["coherence"].toDouble();p.outputFit=o["blocks"].toInt();p.count=o["blocks"].toInt();
       p.valid=p.hz>0 && p.input>1e-6 && g>1e-6 && p.inputFit>=.9 && p.outputFit>=3;
-      p.status=p.valid?(methodChoice->currentIndex()==1?"有效·快速估计，建议逐频确认交点":methodChoice->currentIndex()==3?"有效·周期 Chirp，建议逐频复核交点":"有效·逐频测量"):"相干性/幅值不足，请逐频复测或检查信噪比";
+      p.status=p.valid?(methodChoice->currentData().toInt()==1?"有效·快速估计，建议逐频确认交点":methodChoice->currentData().toInt()==3?"有效·周期 Chirp，建议逐频复核交点":"有效·逐频测量"):"相干性/幅值不足，请逐频复测或检查信噪比";
       results.push_back(p);++nextPoint;render();
     }
     if(nextPoint<deviceCount){deviceToken=session.command(node,0xbe,be16(runId)+QByteArray(1,char(nextPoint)),-1,"读取设备辨识频点");}
@@ -229,8 +331,16 @@ class SweepDialog : public QDialog {
     }
   }
   void render() {
+    resultChoice->setVisible(true);
+    filterChoice->setEnabled(recordMethod!=2 || !deviceData);
+    filterCutoff->setEnabled(lpfSelected() && (recordMethod!=2 || !deviceData));
     const auto &shown=resultChoice->currentIndex()==1 && !recordedResults.empty()?recordedResults:results;
+    meanNote->setText(meanActive()?(lpfSelected()?feedbackLpfDescription(recordFs,filterCutoff->value()):feedbackMean16Description(recordFs))+
+      "\n原始 H1、相干性及带宽判断保留；粉色曲线/附加列仅对照。"+(meanError.isEmpty()?QString{}:"\n频响对照不可用："+meanError):"给定与反馈共用电流纵轴；原始录波及 H1 始终保留。滤波对照仅适用于 Chirp。");
+    const bool compare=meanActive()&&!meanResults.empty();
+    table->setColumnCount(compare?12:9);
     table->setHorizontalHeaderLabels(deviceData?QStringList{"Hz","输入谱线 A","反馈谱线 A","H1 增益 dB","相位 °","相干性 γ²","平均段数","段数","质量"}:QStringList{"Hz","输入幅值","反馈幅值","增益 dB","相位 °","输入 R²","反馈 R²","点数","质量"});
+    if(compare){table->setHorizontalHeaderItem(9,new QTableWidgetItem("对照增益 dB"));table->setHorizontalHeaderItem(10,new QTableWidgetItem("对照相位 °"));table->setHorizontalHeaderItem(11,new QTableWidgetItem("对照 γ²"));}
     table->setColumnHidden(7,deviceData);
     table->setRowCount(int(shown.size()));
     for (int r = 0; r < int(shown.size()); ++r) {
@@ -244,12 +354,14 @@ class SweepDialog : public QDialog {
                            QString::number(p.outputFit, 'f', 3),
                            QString::number(p.count),
                            p.status};
+      if(compare){auto it=std::find_if(meanResults.begin(),meanResults.end(),[&](const auto &q){return std::abs(q.hz-p.hz)<1e-6;});
+        if(it!=meanResults.end()){cells<<(it->valid?QString::number(it->gainDb,'f',3):"—")<<(it->valid?QString::number(it->phaseDeg,'f',2):"—")<<QString::number(it->inputFit,'f',3);}else cells<<"—"<<"—"<<"—";}
       for (int c = 0; c < cells.size(); ++c)
         table->setItem(r, c, new QTableWidgetItem(cells[c]));
     }
-    plot->points = shown;
+    plot->points = shown;plot->comparison=compare?meanResults:std::vector<SweepPoint>{};plot->comparisonName=comparisonName();
     plot->update();
-    bandwidth->setText(sweepBandwidth(shown) + "\n" + source);
+    bandwidth->setText((deviceData?"原始 H1：":"")+sweepBandwidth(shown)+"\n"+source);
   }
   void finish(QString text) {
     bool was = running;
@@ -282,144 +394,20 @@ class SweepDialog : public QDialog {
       if(!deviceToken) deviceToken=session.command(node,0xbd,{},-1,"查询设备辨识进度（不续租）");
       return;
     }
-    auto sample = session.latest(node);
-    if (!session.connected() || session.upgrading() ||
-        session.selectedNode() != node || !session.telemetryFresh(node) ||
-        !sample || !sample->enabled || sample->error ||
-        sample->mode != (version == Version::V2 ? 6 : 2) ||
-        !safe->isChecked() ||
-        (sample->environment && sample->values[8] >= 60)) {
-      finish("测试中止：连接、使能、模式、温度或遥测条件失效");
-      return;
-    }
-    double hz = frequencies[index], elapsed = clock.nsecsElapsed() / 1e9;
-    if (elapsed >= 7 / hz) {
-      auto events = session.sampling.targetEvents();
-      auto first = std::find_if(events.begin(), events.end(),
-                                [&](auto &e) { return e.token == firstToken; });
-      std::vector<SweepSample> data;
-      if (first != events.end()) {
-        double begin = first->queued + 2 / hz, end = first->queued + 7 / hz;
-        auto samples = session.sampling.range(begin, end);
-        size_t cursor = size_t(first - events.begin());
-        double input = 0;
-        bool have = false, failed = false;
-        for (auto &s : samples) {
-          while (cursor < events.size() && events[cursor].queued <= s.time) {
-            auto &e = events[cursor++];
-            if (e.node != node || !std::isfinite(e.values[2]))
-              continue;
-            if (e.token < firstToken || e.token > lastToken)
-              continue;
-            if (e.state == 3) {
-              failed = true;
-              continue;
-            }
-            if (e.state == 1 || e.state == 2) {
-              input = e.values[2];
-              have = true;
-            }
-          }
-          if (s.node == node && have)
-            data.push_back({s.time, input, s.values[0]});
-        }
-        if (failed) {
-          finish("测试中止：目标请求失败，当前频点未计入");
-          return;
-        }
-      }
-      results.push_back(measureSweep(hz, data));
-      raw.push_back(std::move(data));
-      render();
-      if (++index == int(frequencies.size())) {
-        finish("扫频完成");
-        return;
-      }
-      firstToken = 0;
-      clock.restart();
-      elapsed = 0;
-    }
-    // Use actual elapsed time, never emit a burst of catch-up commands after a
-    // stalled UI.
-    if (elapsed - nextTick > .15 && firstToken) {
-      finish("测试中止：发送调度停顿超过 150 ms");
-      return;
-    }
-    double value = amplitude->value() * std::sin(2 * std::numbers::pi *
-                                                 frequencies[index] * elapsed);
-    lastToken =
-        session.command(node, 3, target(quint8(node), value, 2, version), -1,
-                        QString("扫频电流给定 %1 Hz · %2 A")
-                            .arg(frequencies[index])
-                            .arg(value));
-    if (!firstToken)
-      firstToken = lastToken;
-    nextTick = elapsed;
-    status->setText(QString("频点 %1/%2 · %3 Hz · %4 · %5 s / %6 s")
-                        .arg(index + 1)
-                        .arg(frequencies.size())
-                        .arg(frequencies[index], 0, 'g', 4)
-                        .arg(elapsed < 2 / frequencies[index]
-                                 ? "等待稳定（2 周期）"
-                                 : "测量（5 周期）")
-                        .arg(elapsed, 0, 'f', 1)
-                        .arg(7 / frequencies[index], 0, 'f', 1));
   }
-  void begin() {
-    if(methodChoice->currentIndex()>0){beginDevice();return;}
-    deviceMode=deviceData=false;
-    resultChoice->setCurrentIndex(0);resultChoice->setEnabled(false);recordedResults.clear();
-    recording={};wave->clearDisplay();recordStatus->setText("主机低频模式：无设备同步录波");
-    if (!safe->isChecked()) {
-      status->setText("请确认空载和工作区安全");
-      return;
-    }
-    if (startHz->value() >= endHz->value()) {
-      status->setText("结束频率必须大于起始频率");
-      return;
-    }
-    auto s = session.latest(node);
-    if (!session.connected() || !session.telemetryFresh(node) || !s ||
-        !s->enabled || s->mode != (version == Version::V2 ? 6 : 2)) {
-      status->setText("在线扫频要求当前节点已使能 CST 模式，且遥测有效");
-      return;
-    }
-    frequencies.clear();
-    results.clear();
-    raw.clear();
-    for (int i = 0; i < count->value(); ++i)
-      frequencies.push_back(startHz->value() *
-                            std::pow(endHz->value() / startHz->value(),
-                                     double(i) / (count->value() - 1)));
-    source = QString("Node %1 · 主机电流给定→主机接收 Iq · "
-                     "端到端低频频响，含通信/调度延迟；非设备电流环带宽")
-                 .arg(node);
-    index = 0;
-    firstToken = 0;
-    nextTick = 0;
-    running = true;
-    clock.start();
-    start->setEnabled(false);
-    import->setEnabled(false);
-    startHz->setEnabled(false);
-    endHz->setEnabled(false);
-    amplitude->setEnabled(false);
-    count->setEnabled(false);
-    methodChoice->setEnabled(false);
-    timer.start(20);
-    tick();
-  }
+  void begin() { beginDevice(); }
   void loadRecording(QIODevice &f,const QByteArray &metadata) {
     SweepCapture capture;QString error;
     if(!readSweepCapture(f,metadata,capture,error)){status->setText(error);return;}
     recording=std::move(capture.recording);recordMethod=capture.method;recordFs=capture.fs;
     recordExpected=capture.expected;deviceCompleted=capture.completed;
-    deviceData=true;deviceMode=false;recordSupported=true;results=std::move(capture.points);
+    deviceData=true;deviceMode=false;recordSupported=true;hostH1=false;results=std::move(capture.points);
+    resultChoice->setItemText(0,"文件内原始 H1");
     source="导入设备录波 · "+capture.diagnostic;
     recordedResults=deviceCompleted?recordingH1(recording,recordMethod,recordFs,results,recordExpected):std::vector<SweepPoint>{};
     resultChoice->setCurrentIndex(0);resultChoice->setEnabled(!recordedResults.empty());
-    recordStatus->setText(recording.summary(recordExpected,true));
-    drawRecording();render();status->setText("已导入录波及同次设备频响，可选择完整录波复算 H1");
+    recordStatus->setText(recording.summary(recordExpected,true,deviceCompleted));
+    updateMeanResults();drawRecording();render();status->setText("已导入录波及同次设备频响，可选择完整录波复算 H1");
   }
   void load() {
     QString path = QFileDialog::getOpenFileName(this, "导入逐频点稳态数据", {},
@@ -517,14 +505,21 @@ class SweepDialog : public QDialog {
       return;
     }
     if(deviceData) {
+      if(meanActive()&&!meanResults.empty()) {
+        SweepCapture c{recording,recordMethod,recordFs,recordExpected,deviceCompleted,source,results};auto o=filterOptions();
+        auto a=analyzeChirp(c,o);QString suffix=lpfSelected()?".lpf":".mean16";QSaveFile comparison(path+suffix+".csv"),description(path+suffix+".txt");
+        if(!comparison.open(QIODevice::WriteOnly)||!description.open(QIODevice::WriteOnly)){status->setText("原始频响已保存，滤波对比文件打开失败");return;}
+        auto bytes=chirpAnalysisCsv(a),notes=chirpAnalysisSummary(c,o,a).toUtf8();
+        if(comparison.write(bytes)!=bytes.size()||description.write(notes)!=notes.size()||!comparison.commit()||!description.commit()){status->setText("滤波对比导出失败");return;}
+      }
       QSaveFile samples(path+".samples.csv"),note(path+".txt");
       if(!samples.open(QIODevice::WriteOnly)||!note.open(QIODevice::WriteOnly)) {status->setText("频响已保存，录波/说明文件打开失败");return;}
       SweepCapture capture{recording,recordMethod,recordFs,recordExpected,deviceCompleted,source,results};
       if(!writeSweepCapture(samples,capture)){status->setText("频响已保存，录波写入失败");return;}
-      note.write((source+"\n"+sweepBandwidth(results)+"\n"+recording.summary(recordExpected,recordSupported)+
-        "\n时间轴=设备采样序号/采样率；x[n] 为本周期施加的给定，y[n] 在施加前采样，保留真实控制延迟。缺样不插值，设备 H1 与录波复算分开。\n").toUtf8());
+      note.write((source+"\n"+sweepBandwidth(results)+"\n"+recording.summary(recordExpected,recordSupported,deviceCompleted)+
+        "\n时间轴=设备采样序号/采样率；x[n] 为本周期施加的给定，y[n] 在施加前采样，保留真实控制延迟。缺样不插值；新固件仅上传原始数据，由上位机计算 H1，滤波对比单独显示。\n").toUtf8());
       bool a=samples.commit(),b=note.commit();
-      status->setText(a&&b?"已导出设备频响、同步录波和诊断说明":"频响已保存，但录波/说明保存失败");return;
+      status->setText(a&&b?(meanActive()&&!meanResults.empty()?"已导出原始频响与录波；滤后对比单独保存为 .lpf 或 .mean16 附件":"已导出设备频响、同步录波和诊断说明"):"频响已保存，但录波/说明保存失败");return;
     }
     QSaveFile samples(path + ".samples.csv"), note(path + ".txt");
     if (!samples.open(QIODevice::WriteOnly) ||
@@ -557,8 +552,9 @@ public:
     setObjectName("sweepDialog");
     auto l = new QVBoxLayout(this);
     methodChoice=new QComboBox;methodChoice->setObjectName("sweepMethod");
-    methodChoice->addItems({"主机低频（兼容 0.2–4 Hz）","设备快速多正弦（200 ms 采集）","设备逐频正弦（精测）","设备线性 Chirp（4 s 采集）"});l->addWidget(methodChoice);
-    auto help = new QLabel("设备辨识：CST / 零给定开始 · 快速法 20 Hz 栅格 · 逐频法整周期平均 · 完成自动失能\n需要配套 FRA 固件。幅值为总峰值上限；起始 >40 Hz 时保留 20/40 Hz 基准点。低相干性频点需复测。",this);
+    methodChoice->addItem("设备周期线性 Chirp · 上位机频响分析（4 s）",3);
+    methodChoice->addItem("设备逐频正弦（精测）· 上位机频响分析",2);l->addWidget(methodChoice);
+    auto help = new QLabel("CST / 零给定开始 · 设备只生成 Chirp、同步采样并上传，完成自动失能\n1 s 周期重复 4 次：首周期稳定，后三周期在上位机计算原始 H1 / 相干性。起始 >40 Hz 时实际从 20 Hz 扫起并保留 20/40 Hz 基准。低相干性频点不计算带宽；可导入历史逐频数据对照。",this);
     help->setWordWrap(true);
     l->addWidget(help);
     auto settings = new QHBoxLayout;
@@ -571,13 +567,14 @@ public:
       settings->addWidget(w);
       return w;
     };
-    startHz = spin("起始 Hz", .2, 4, .5);
-    endHz = spin("结束 Hz", .2, 4, 4);
+    startHz = spin("起始 Hz", 20, 2000, 20);
+    endHz = spin("结束 Hz", 20, 2000, 2000);
     amplitude = spin("幅值 A", .005, .5, .05);
     settings->addWidget(new QLabel("对数频点"));
     count = new QSpinBox;
-    count->setRange(3, 30);
-    count->setValue(10);
+    count->setRange(3, 16);
+    count->setValue(16);
+    startHz->setDecimals(0);endHz->setDecimals(0);
   startHz->setObjectName("sweepStartHz"); endHz->setObjectName("sweepEndHz"); amplitude->setObjectName("sweepAmplitude"); count->setObjectName("sweepCount");
     settings->addWidget(count);
     l->addLayout(settings);
@@ -591,20 +588,18 @@ public:
       connect(b, &QPushButton::clicked, this, fn);
       return b;
     };
-    start = btn("开始逐频点测试", [this] { begin(); });
+    start = btn("开始 Chirp 测试", [this] { begin(); });
     start->setObjectName("startSweep");
+    const QString chirpHelp=help->text();
+    connect(methodChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this,help,chirpHelp]{
+      const bool stepped=methodChoice->currentData().toInt()==2;
+      start->setText(stepped?"开始逐频精测":"开始 Chirp 测试");
+      help->setText(stepped?"CST / 零给定开始 · 设备只生成逐频正弦、同步采样并上传，完成自动失能。\n每点稳定至少 20 ms 且至少 4 周期（向上取整周期），再采集 4 段 × 4 周期；上位机计算原始 H1 / 相干性。起始 >40 Hz 保留 20/40 Hz 基准；实际频率按整数采样周期量化，相邻频点避开重复周期，可用周期不足时拒绝。滤波对照仅适用于 Chirp。":chirpHelp);
+    });
     safe->setObjectName("sweepSafe");
     btn("停止并失能", [this] { finish("已停止"); });
     import = btn("导入扫频采样 CSV", [this] { load(); });
     btn("导出频响与原始数据", [this] { save(); });
-    btn("转逐频精测",[this]{
-      if(running)return;
-      double lo=200,hi=1600;
-      if(deviceData && results.size()>2){double threshold=(results[0].gainDb+results[1].gainDb)/2-3;
-        for(size_t i=1;i<results.size();++i)if(results[i-1].valid&&results[i].valid&&results[i].gainDb<=threshold){lo=std::max(20.,results[i-1].hz*.5);hi=std::min(2000.,results[i].hz*1.5);break;}}
-      methodChoice->setCurrentIndex(2);startHz->setValue(lo);endHz->setValue(hi);count->setValue(16);
-      status->setText("已设置精测频段；重新确认零给定与使能后点击开始，不自动启动运动");
-    });
     l->addLayout(row);
     status = new QLabel("等待测试或导入");
     status->setWordWrap(true);
@@ -612,17 +607,29 @@ public:
     bandwidth = new QLabel;
     bandwidth->setWordWrap(true);
     l->addWidget(bandwidth);
+    auto filterRow=new QHBoxLayout;filterRow->addWidget(new QLabel("反馈 Iq 对照"));
+    filterChoice=new QComboBox;filterChoice->setObjectName("sweepFeedbackFilter");filterChoice->addItems({"不滤波（原始）","16 点均值对照","Butterworth LPF 对照"});filterRow->addWidget(filterChoice);
+    filterRow->addWidget(new QLabel("LPF 单程截止"));filterCutoff=new QDoubleSpinBox;filterCutoff->setObjectName("sweepLpfCutoff");filterCutoff->setRange(20,8999);filterCutoff->setValue(3000);filterCutoff->setSuffix(" Hz");filterCutoff->setEnabled(false);filterRow->addWidget(filterCutoff);
+    filterRow->addWidget(new QLabel("原始 H1 判定带宽；滤后仅对照"));filterRow->addStretch();l->addLayout(filterRow);
+    meanNote=new QLabel("给定与反馈共用电流纵轴；原始录波始终保留。16 点均值仅适用于 Chirp。");meanNote->setWordWrap(true);l->addWidget(meanNote);
     auto traceRow=new QHBoxLayout;
     recordStatus=new QLabel("等待设备同步录波");recordStatus->setWordWrap(true);traceRow->addWidget(recordStatus,1);
     resultChoice=new QComboBox;resultChoice->setObjectName("sweepResultSource");
-    resultChoice->addItems({"设备 H1","完整录波复算 H1"});resultChoice->setEnabled(false);traceRow->addWidget(resultChoice);
+    resultChoice->addItems({"上位机原始 H1","历史录波复算 H1"});resultChoice->setEnabled(false);traceRow->addWidget(resultChoice);
+    auto offline=new QPushButton("Chirp 离线分析");offline->setObjectName("chirpOfflineOpen");traceRow->addWidget(offline);
+    connect(offline,&QPushButton::clicked,this,[this]{
+      if(running){status->setText("请在当前采集结束后打开离线分析");return;}
+      SweepCapture c{recording,recordMethod,recordFs,recordExpected,deviceCompleted,source,results};
+      createChirpAnalysisDialog(this,c)->show();
+    });
     auto fit=new QPushButton("录波全览");traceRow->addWidget(fit);l->addLayout(traceRow);
     auto plots=new QSplitter(Qt::Horizontal);
     auto wavePanel=new QWidget;auto waveLayout=new QVBoxLayout(wavePanel);waveLayout->setContentsMargins(0,0,0,0);
-    waveLayout->addWidget(new QLabel("设备时域 / A · 蓝：给定 · 绿：Iq反馈 · 滚轮缩放，拖动平移"));
-    wave=new Scope;wave->setObjectName("sweepWaveform");wave->setMinimumSize(280,300);
+    waveLayout->addWidget(new QLabel("设备时域 / A · 蓝：给定 · 绿：Iq反馈 · 共用纵轴 · 滚轮缩放，拖动平移"));
+    wave=new Scope;wave->sampledTraces=true;wave->setObjectName("sweepWaveform");wave->setMinimumSize(280,300);
     wave->timeAxisLabel="设备采样时间 / s · 采样序号 ÷ 采样率";
-    wave->aliases=channelNames;wave->aliases[0]="同步给定 / A";wave->aliases[1]="Iq 反馈 / A";
+    wave->aliases=channelNames;wave->aliases[0]="同步给定 / A";wave->aliases[11]="Iq 反馈（原始）/ A";
+    wave->visible.fill(false);wave->visible[0]=wave->visible[11]=true;wave->colors[11]=QColor("#5fc992");
     waveLayout->addWidget(wave,1);plots->addWidget(wavePanel);
     plot = new BodePlot;plot->setObjectName("sweepBode");plot->setMinimumWidth(350);plots->addWidget(plot);
     plots->setSizes({500,500});l->addWidget(plots,2);
@@ -637,21 +644,14 @@ public:
         QHeaderView::ResizeToContents);
     table->horizontalHeader()->setStretchLastSection(true);
     l->addWidget(table, 1);
-    connect(methodChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this,help](int mode){
-      help->setText(mode==3
-        ? "设备 Chirp：CST / 零给定开始 · 连续线性扫频，1 s 稳定 + 3 × 1 s 同步 H1 估计 · 完成自动失能\n起始 >40 Hz 时实际从 20 Hz 扫至结束频率，保留 20/40 Hz 基准；结果为 1 Hz 栅格的选定谱线。幅值为总峰值上限，每条谱线能量低于逐频法；低相干性及交点需逐频复核。"
-        : "设备辨识：CST / 零给定开始 · 快速法 20 Hz 栅格 · 逐频法整周期平均 · 完成自动失能\n需要配套 FRA 固件。幅值为总峰值上限；起始 >40 Hz 时保留 20/40 Hz 基准点。低相干性频点需复测。");
-      start->setText(mode==3?"开始 Chirp 测试":"开始逐频点测试");
-      startHz->setRange(mode?20:.2,mode?2000:4);endHz->setRange(mode?20:.2,mode?2000:4);
-      startHz->setValue(mode?20:.5);endHz->setValue(mode?2000:4);count->setRange(3,mode?16:30);count->setValue(mode?16:10);
-    });
+    connect(filterChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{updateMeanResults();drawRecording(true);render();});
+    connect(filterCutoff,&QDoubleSpinBox::editingFinished,this,[this]{updateMeanResults();drawRecording(true);render();});
     connect(&session,&Session::replied,this,[this](quint64 t,quint32 n,int c,QJsonObject o){deviceReply(t,n,c,o);});
-    methodChoice->setCurrentIndex(1);
     timer.setTimerType(Qt::PreciseTimer);
     connect(&timer, &QTimer::timeout, this, [this] { tick(); });
     connect(&session, &Session::commandFailed, this,
             [this](quint64 token, QString reason) {
-              if (running && ((deviceMode && token==deviceToken) || (!deviceMode && token >= firstToken && token <= lastToken)))
+              if (running && (deviceMode && token==deviceToken))
                 finish("指令失败：" + reason);
             });
     auto emergency = new QShortcut(QKeySequence("Ctrl+Shift+E"), this);

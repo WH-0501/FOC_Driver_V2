@@ -198,7 +198,9 @@ void wk_adc2_init(void)
 
   /* When "ADC_PREEMPT_TRIG_EDGE_NONE" is selected, the external trigger source is invalid, and user can only use software trigger. \
   The software trigger function is adc_preempt_software_trigger_enable(ADCx, TRUE); */
-  adc_preempt_conversion_trigger_set(ADC2, ADC_PREEMPT_TRIG_TMR1CH4, ADC_PREEMPT_TRIG_EDGE_RISING);
+  /* TRGOUT = CH4 PWM-B reference: rising on the up-count half-cycle.
+   * A CH4 compare event is not the same signal as the PWM reference. */
+  adc_preempt_conversion_trigger_set(ADC2, ADC_PREEMPT_TRIG_TMR1TRGOUT, ADC_PREEMPT_TRIG_EDGE_RISING);
 
   /* enable preempted channels conversion end interrupt */
   adc_interrupt_enable(ADC2, ADC_PCCE_INT, TRUE);

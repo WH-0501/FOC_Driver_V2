@@ -392,6 +392,20 @@ QJsonObject response(quint8 c, const QByteArray &p, Version) {
             o["run"]=u16(p,2);o["index"]=quint8(p[4]);o["state"]=quint8(p[5]);o["flags"]=u16(p,6);o["blocks"]=u16(p,32);
             QStringList keys={"hz","input","output","real","imag","coherence"};
             for(int i=0;i<6;i++){quint32 bits=qFromBigEndian<quint32>(p.constData()+8+4*i);float v;memcpy(&v,&bits,4);if(!std::isfinite(v))return {{"valid",false}};o[keys[i]]=v;}
+            if(p.size()>=56 && quint8(p[34])==0xab && p[35]==1 && quint8(p[37])==quint8(p[4]) && quint8(p[4])<3) {
+                o["spike_present"]=p[36]==1; o["spike_page"]=quint8(p[37]);
+                auto fl=[&](int at){quint32 b=qFromBigEndian<quint32>(p.constData()+at);float v;memcpy(&v,&b,4);return double(v);};
+                if(p[37]==0) {
+                    o["spike_sample"]=double(qFromBigEndian<quint32>(p.constData()+38));
+                    o["spike_iq"]=fl(42);o["spike_id"]=fl(46);o["spike_theta"]=fl(50);
+                } else if(p[37]==1) {
+                    for(int i=0;i<3;++i){o[QString("spike_adc%1").arg(i)]=u16(p,38+2*i);o[QString("spike_offset%1").arg(i)]=u16(p,44+2*i);o[QString("spike_previous_adc%1").arg(i)]=u16(p,50+2*i);}
+                } else {
+                    for(int i=0;i<3;++i)o[QString("spike_ccr%1").arg(i)]=u16(p,38+2*i);
+                    o["spike_counter"]=u16(p,44);o["spike_timer_ctrl"]=u16(p,46);
+                    o["spike_shaft"]=u16(p,48);o["spike_previous_shaft"]=u16(p,50);o["spike_previous_theta"]=fl(52);
+                }
+            }
         } else {
             o["state"]=quint8(p[2]);o["method"]=quint8(p[3]);o["run"]=u16(p,4);o["count"]=quint8(p[6]);o["progress"]=quint8(p[7]);
             o["fs"]=double(qFromBigEndian<quint32>(p.constData()+8));o["samples"]=double(qFromBigEndian<quint32>(p.constData()+12));o["flags"]=u16(p,16);o["max_us"]=u16(p,18);
@@ -405,6 +419,11 @@ QJsonObject response(quint8 c, const QByteArray &p, Version) {
         if(c!=0xbe && p.size()>=43 && quint8(p[40])==0xa9 && p[41]==1)
         {
             o["recording"]=p[42]==1;
+            if(p.size()>=56 && quint8(p[52])==0xac && p[53]==1) {
+                o["host_h1"]=(quint8(p[54])&1)!=0;
+        o["host_stepped"]=(quint8(p[54])&2)!=0;
+                o["chirp_periods"]=quint8(p[55]);
+            }
             if(p.size()>=52 && quint8(p[43])==0xaa) {
                 o["record_dropped"]=double(qFromBigEndian<quint32>(p.constData()+44));
                 o["record_submitted"]=double(qFromBigEndian<quint32>(p.constData()+48));

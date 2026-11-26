@@ -1,0 +1,83 @@
+Current sampling audit / 2026-11-25 / develop-V3.0
+
+Evidence and limits
+-------------------
+Run 18588: 80000 consecutive input/Iq samples. Device H1 agrees with independent
+DFT (max 0.0027 dB); 130 isolated |Iq|>0.2 A samples, extremes -0.3798/+0.4136 A.
+This capture does NOT contain individual phase ADC, instantaneous PWM CCRs or
+electrical angle; it cannot uniquely establish the physical source of spikes.
+
+Verified software defects and corrections
+-----------------------------------------
+1. Three-phase measurements used alpha=Ia, beta=(Ib-Ic)/sqrt(3). A common-mode
+   input of 0.3 A at theta=pi/2 produces false Iq=-0.3 A. Full Clarke removes
+   zero-sequence spatially, with no time filtering, discarded samples or extra
+   delay. Raw phase-current values used for protection remain unchanged.
+2. PWM update gating and bottom-layer duty validity checks were commented out.
+   Reinstated OVFEN around all three preload writes while preserving PRIMASK
+   and previous OVFEN. A hardware update injected between writes fails the old
+   implementation and passes the fixed one (vendor/direct paths). Invalid
+   duties, NaN, infinity, null inputs and wrong limits stop phase outputs.
+3. Sampling timing assumed the PWM-B reference rising edge, but configured
+   ADC TMR1_CH4 compare event. Route CH4 reference through TMR1 TRGOUT instead.
+   Timer mode 1 qualifies channel flags on down-count; an event pulse must not
+   be equated with the PWM reference edge. Explicit TRGOUT removes ambiguity.
+   PWM/sample frequency, ADC 12-bit resolution, 13.5-cycle acquisition, four
+   channel order (7,8,10,5) and 2 us configured margins are unchanged.
+   At 90 MHz timer / 30 MHz ADC: sequence budget 321 ticks, trigger 2088,
+   max CCR 1908, margins 180/181 ticks. Analog PCB settling remains unqualified.
+4. Clear ADC sequence completion before the callback, so an event that arrives
+   during an overrun is not erased on callback exit. Timing abort checks stay.
+5. angle_normalize(0) and negative whole-turn boundaries could yield 2*pi;
+   fixed floor handling for bounded encoder/config angles. Unit gain and wrap
+   continuity verified, without enabling a new encoder filter or changing
+   CRC handling, direction, pole-pair or electrical-offset conventions.
+
+Audited and unchanged
+---------------------
+ADC2 PCCE is end-of-sequence with sequence mode enabled; pdt1/2/3 mapping agrees
+with ranks. ADC1 bus/temperature DMA is separate. ADC2 ISR is highest priority.
+Current scaling is signed (uint16 operands promote to int): ADC LSB*9200/3300
+and configured polarity, approximately 2.25 mA/LSB. No unsigned-underflow bug
+was found. Sequential phase acquisition is not simultaneous; no unverified
+interpolation or longer ADC aperture was introduced.
+KTH71 CRC-failed reads do not update accepted position; Park is a rotation and
+does not itself amplify current-vector norm. The original bounded-angle
+trigonometric approximation is retained. High-speed angle timing still needs
+physical validation; a static Iq-only trace cannot certify it.
+Existing motor-temperature placeholder (25 C) is unchanged: real motor thermal
+feedback is NOT restored by this change. Other protection code/thresholds,
+PID, sweep arithmetic, raw float recording and CAN transport are unchanged.
+
+Build / validation
+------------------
+APP binary: 54048 B including alignment (map ROM 54044 B), limit 55296 B,
+remaining 1248 B. EFW: 54080 B including 32 B container header, checksum verified.
+Static RAM: 14088 B (no added data); main region free 336 B. Encoder RAM code
+grows 32 B within its reserved region; all scatter regions fit.
+No FOC-loop buffering, dynamic allocations or transcendentals were added.
+Clarke adds a few single-precision operations; PWM guarding adds bounded
+register/validation operations. Actual worst-case ISR time has NOT been
+measured on hardware. The original sweep timing guard and 20 kHz rate remain.
+See validation.json beside the delivered package for checksum and tests.
+The old broad encoder suite references removed profiling fields and assumes
+variable-period velocity behavior; left unchanged. A new production-code
+electrical-angle/CRC suite validates this scope. No claim that the old suite passes.
+
+Hardware acceptance still required
+---------------------------------
+Use the host upgrade path, read back PID after upgrade, then repeat the same
+0.05 A test under the user's normal safe test procedure. Compare flags, 20 kHz
+sample interval, worst ISR time, complete sample counts and raw Iq extremes;
+do not relax coherence/protection thresholds. This package has not been flashed.
+If spikes remain, capture SOA/SOB/SOC and PWM/ADC trigger on a scope or obtain
+synchronous raw phase ADC plus CCR and angle diagnostics. Only then distinguish
+analog/common-mode noise, real current transients and electrical-angle errors.
+
+Primary references
+------------------
+AT32M412/M416 RM Rev 2.02: sections 14.1.4 (PWM, overflow, TRGOUT), 18.4.2.2
+(trigger sources), 18.4.3.1 (sequence), ADC_CTRL1 SQEN/PCCEIEN.
+https://www.arterytek.com/download/RM/RM_AT32M412_416_V2.02_EN.pdf
+MP6540 datasheet: low-side current sensing and nominal 1/9200 sense ratio.
+https://www.monolithicpower.com/en/documentview/productdocument/index/version/2/document_type/Datasheet/lang/en/sku/MP6540/document_id/4418/

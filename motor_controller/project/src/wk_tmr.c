@@ -92,7 +92,9 @@ void wk_tmr1_init(void)
 
   /* configure primary mode settings */
   tmr_sub_sync_mode_set(TMR1, FALSE);
-  tmr_primary_mode_select(TMR1, TMR_PRIMARY_SEL_RESET);
+  /* Route the actual PWM-B reference edge, not the direction-qualified
+   * channel compare event, to ADC2. One rising edge before the counter peak. */
+  tmr_primary_mode_select(TMR1, TMR_PRIMARY_SEL_C4ORAW);
   tmr_primary_mode2_select(TMR1, TMR_PRIMARY_SEL_RESET);
 
   /* S02: CH1-3 preload transfers on natural overflow/underflow events.

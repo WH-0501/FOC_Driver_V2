@@ -151,7 +151,7 @@ void Scope::paintEvent(QPaintEvent *) {
     QString key = QString::number(width()) + ':' + QString::number(height()) + ':' +
                   QString::number(devicePixelRatioF()) + ':' + QString::number(view) + ':' +
                   QString::number(windowSeconds, 'g', 17) + ':' + QString::number(end_, 'g', 17) + ':' +
-                  QString::number(decimation) + ":" + QString::number(axisChannel);
+                  QString::number(decimation) + ":" + QString::number(axisChannel) + ":" + QString::number(sampledTraces);
     for (int c = 0; c < channelCount; ++c)
         key += QString::number(visible[c]) + colors[c].name() + aliases.value(c);
     if (dirty_ || key != cacheKey_ || base_.isNull()) {
@@ -256,7 +256,7 @@ void Scope::drawBase(QPainter &p) {
             else
                 path.lineTo(q);
         }
-        p.setPen(QPen(colors[c], 1, (debugProfile ? c == 11 : c >= 9) ? Qt::DashLine : Qt::SolidLine));
+        p.setPen(QPen(colors[c], 1, (!sampledTraces && (debugProfile ? c == 11 : c >= 9)) ? Qt::DashLine : Qt::SolidLine));
         p.drawPath(path);
         p.drawText(QPointF(plot_.left(), height() - 16), QString("0 → %1 Hz  |  peak %2  |  %3")
                                                              .arg(bins.back().first, 0, 'f', 1)
@@ -341,7 +341,7 @@ void Scope::drawBase(QPainter &p) {
             }
             int pixels = int(frame_.bins.size());
             p.setClipRect(plot_);
-            p.setPen(QPen(colors[c], 1, (debugProfile ? c == 11 : c >= 9) ? Qt::DashLine : Qt::SolidLine));
+            p.setPen(QPen(colors[c], 1, (!sampledTraces && (debugProfile ? c == 11 : c >= 9)) ? Qt::DashLine : Qt::SolidLine));
             QPainterPath path;
             QVector<QLineF> peaks;
             peaks.reserve(pixels);
@@ -350,6 +350,19 @@ void Scope::drawBase(QPainter &p) {
             double typicalDt = frame_.typicalDt;
             double maxPixelGap = std::max(2.0, typicalDt * 2.5 / windowSeconds * pixels);
             auto y = [&](double v) { return plot_.bottom() - (v - lo) / (hi - lo) * plot_.height(); };
+            if (sampledTraces && (!history_ || source_)) {
+                // Keep the device-time vertices and explicit missing-sample markers.
+                // Channel 11 shares the Iq scale but is NOT a held target here.
+                auto begin = std::lower_bound(data_.begin(), data_.end(), start,
+                    [](const auto &s, double t) { return s.time < t; });
+                for (auto it = begin; it != data_.end() && it->time <= end_; ++it) {
+                    if (!std::isfinite(it->values[c])) { first = true; continue; }
+                    QPointF q(plot_.left() + (it->time - start) / windowSeconds * plot_.width(),
+                              y(it->values[c]));
+                    if (first) { path.moveTo(q); first = false; }
+                    else path.lineTo(q);
+                }
+            } else {
             for (int x = 0; x < pixels; x++)
                 if (std::isfinite(frame_.bins[size_t(x)].values.low[c])) {
                     double low = frame_.bins[size_t(x)].values.low[c],
@@ -368,7 +381,8 @@ void Scope::drawBase(QPainter &p) {
                     if (high > low)
                         peaks.append(QLineF(pixelX, y(low), pixelX, y(high)));
                 }
-            if (!debugProfile && c >= 9 && c < 12 && !hostEvents.empty()) {
+            }
+            if (!sampledTraces && !debugProfile && c >= 9 && c < 12 && !hostEvents.empty()) {
                 QPainterPath steps;
                 bool started = false;
                 double lastValue = 0;

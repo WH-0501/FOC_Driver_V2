@@ -37,13 +37,36 @@ bool SweepRecording::complete(quint32 expected) const {
   return expected>0 && !missing && !rejected && samples.size()==expected &&
          samples.front().index==0 && samples.back().index==expected-1;
 }
-QString SweepRecording::summary(quint32 expected, bool supported) const {
+QString SweepRecording::summary(quint32 expected, bool supported, bool measurementCompleted) const {
   if(!supported) return "固件未确认录波上传；保留设备频响，需更新配套固件";
+  if(!samples.empty()&&samples.back().index+1>expected)
+    return QString("同步录波已收 %1 点 · 序号覆盖 %2 点 · 缺样 %3 · 拒收帧 %4 · 设备状态快照 %5 点已落后，未确认完整，不用于带宽估计")
+      .arg(samples.size()).arg(samples.back().index+1).arg(missing).arg(rejected).arg(expected);
   quint64 tail=expected && (samples.empty() || samples.back().index+1<expected)
       ? expected-(samples.empty()?0:samples.back().index+1) : 0;
   return QString("同步录波 %1 / %2 点 · 缺样 %3 · 拒收帧 %4 · %5")
       .arg(samples.size()).arg(expected).arg(missing+tail).arg(rejected)
-      .arg(complete(expected)?"完整，可复算 H1":"尚未完整，不用于录波带宽估计");
+      .arg(complete(expected)?(measurementCompleted?"测量完成且录波齐全，可复算 H1":"已产生数据收齐；测量未完成，不用于带宽估计"):"尚未完整，不用于录波带宽估计");
+}
+std::vector<SweepPoint> steppedFrequencyGrid(double low,double high,unsigned count,double fs) {
+  if(!std::isfinite(low)||!std::isfinite(high)||!std::isfinite(fs)||fs<10000||fs>40000||
+     fs!=std::floor(fs)||low<20||high<=low||high>std::min(2000.,fs*.1)||count<3||count>16)return {};
+  std::vector<SweepPoint> out;
+  auto add=[&](double f){auto p=std::llround(fs/f);double hz=fs/p;
+    if(p<10||hz>2000||(!out.empty()&&hz<=out.back().hz))return false;
+    SweepPoint point;point.hz=hz;point.status="等待完整逐频录波";out.push_back(point);return true;};
+  unsigned anchors=low>40?2:0;
+  if(anchors){if(count<4||!add(20)||!add(40))return {};}
+  unsigned tones=count-anchors;
+  auto first=std::llround(fs/low),last=std::llround(fs/high),previous=first+1;
+  if(first-last+1<tones)return {};
+  for(unsigned i=0;i<tones;++i) {
+    double requested=i==0?low:i+1==tones?high:std::exp(std::log(low)+(std::log(high)-std::log(low))*i/(tones-1));
+    auto period=std::clamp(std::llround(fs/requested),last+tones-1-i,previous-1);
+    if(!add(fs/period))return {};
+    previous=period;
+  }
+  return out;
 }
 std::vector<SweepPoint> recordingH1(const SweepRecording &r,int method,double fs,
                                   const std::vector<SweepPoint> &points,quint32 expected) {
@@ -54,7 +77,7 @@ std::vector<SweepPoint> recordingH1(const SweepRecording &r,int method,double fs
     if(!std::isfinite(original.hz)||original.hz<=0||original.hz>fs*.1)return {};
     size_t period=size_t(std::llround(fs/original.hz));
     size_t length=method==2?4*period:size_t(std::llround(fs*(method==3?1.:.05)));
-    size_t settle=method==2?((std::max(size_t(fs*.02),length)+period-1)/period)*period:length;
+    size_t settle=method==2?((std::max((size_t(std::llround(fs))+49)/50,length)+period-1)/period)*period:length;
     unsigned blocks=method==2?4:3;
     if(!length||offset+settle+blocks*length>r.samples.size())return {};
     double xx=0,yy=0,xa=0,ya=0;std::complex<double> cross=0;

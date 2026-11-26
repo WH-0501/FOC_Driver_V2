@@ -262,9 +262,10 @@ void ADC1_2_IRQHandler(void)
   if(adc_interrupt_flag_get(ADC2, ADC_PCCE_FLAG) != RESET)
   {
     /* add user code begin ADC2_ADC_PCCE_FLAG */
-    CURRENT_LOOP_IRQ_HANDLER(ADC2);
-    /* clear flag */
+    /* Acknowledge this sequence before control work. Clearing on exit could
+     * erase a fresh conversion if the callback ever overruns its period. */
     adc_flag_clear(ADC2, ADC_PCCE_FLAG);
+    CURRENT_LOOP_IRQ_HANDLER(ADC2);
     /* add user code end ADC2_ADC_PCCE_FLAG */ 
   }
 

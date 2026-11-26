@@ -33,32 +33,33 @@ bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
     else if (!p[1]) foc_sweep_stop(m, SWEEP_STOP); /* stop never depends on a stale run id */
     else {
       sweep_config_t cfg;
+      unsigned i;
+      memset(&cfg,0,sizeof(cfg));
       cfg.method = p[1]; cfg.count = p[8];
       cfg.low_hz = (float)read16(p + 4); cfg.high_hz = (float)read16(p + 6);
       cfg.peak = (float)read16(p + 9) * 0.001f;
       cfg.sample_hz = (float)FOC_CURRENT_LOOP_FS_HZ;
-      out[1] = (uint8_t)foc_sweep_start_recorded(m, &cfg, read16(p + 2), &rejection,
+      if(cfg.method==SWEEP_STEPPED) {
+        if(cfg.count>SWEEP_MAX_POINTS || length<17u+2u*cfg.count ||
+           p[13]!=0xadu || p[14]!=1u || read16(p+15)!=FOC_CURRENT_LOOP_FS_HZ) out[1]=2u;
+        else for(i=0;i<cfg.count;++i) cfg.periods[i]=read16(p+17u+2u*i);
+      }
+      if(!out[1]) out[1] = (uint8_t)foc_sweep_start_recorded(m, &cfg, read16(p + 2), &rejection,
                                 length >= 13u && p[11] == 0xa9u && p[12] == 1u);
     }
   }
   foc_sweep_status(&s);
   if (cmd == SWEEP_CMD_RESULT) {
-    sweep_result_t r;
+    /* Retired device estimator: typed unsupported response, never fake H1.
+     * Old hosts can still stop/query and decode recording frames. */
     uint16_t requested_run = p && length >= 3u ? read16(p) : 0u;
-    uint8_t index = p && length >= 3u ? p[2] : 0u;
-    out[1] = p && length >= 3u ? (uint8_t)foc_sweep_result(requested_run, index, &r) : 2u;
-    write16(out + 2, requested_run); out[4] = index; out[5] = s.state;
-    write16(out + 6, s.flags);
-    if (!out[1]) {
-      write_float(out + 8, r.hz); write_float(out + 12, r.input);
-      write_float(out + 16, r.output); write_float(out + 20, r.real);
-      write_float(out + 24, r.imag); write_float(out + 28, r.coherence);
-      write16(out + 32, r.blocks);
-    }
-    reply(cmd, out, 34u);
+    out[1] = p && length >= 3u ? 3u : 2u;
+    write16(out+2, requested_run); out[4]=p && length>=3u?p[2]:0u;
+    out[5]=s.state; write16(out+6,s.flags);
+    reply(cmd,out,34u);
   } else {
     out[2] = s.state; out[3] = s.method; write16(out + 4, s.run);
-    out[6] = s.count; out[7] = s.progress; write32(out + 8, s.sample_hz);
+    out[6] = s.count; out[7] = s.progress; write32(out + 8, s.sample_hz?s.sample_hz:FOC_CURRENT_LOOP_FS_HZ);
     write32(out + 12, s.samples); write16(out + 16, s.flags); write16(out + 18, s.max_us);
     write16(out + 20, s.interval_min_us); write16(out + 22, s.interval_max_us);
     write16(out + 24, s.interval_last_us); out[26] = s.timing_reason; out[27] = 0xa5;
@@ -85,7 +86,10 @@ bool sweep_protocol_handle(motor_handle_t *m, uint8_t cmd, const uint8_t *p,
       out[43]=0xaau;
       write32(out+44, sweep_record_dropped());
       write32(out+48, sweep_record_submitted());
-      reply(cmd, out, 52u);
+      /* Optional capability tail. Bytes 0..51 and raw 0xBF are unchanged.
+       * AC/1, bit0: host H1; bit1: AD/1 stepped plan. Byte55: 4 Chirp periods / stepped blocks. */
+      out[52]=0xacu; out[53]=1u; out[54]=3u; out[55]=4u;
+      reply(cmd, out, 56u);
     }
   }
   return true;

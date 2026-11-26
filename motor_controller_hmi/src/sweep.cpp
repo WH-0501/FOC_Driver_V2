@@ -167,6 +167,7 @@ QString sweepAbortMessage(const QJsonObject &o) {
   } else if(flags&2) detail="电流、电压或温度限制介入";
   else if(flags&8) detail="外部控制命令中止扫频";
   else if(flags&32) detail="反馈出现非有限值";
+  else if(flags&64) detail="录波队列丢样，已中止 Chirp 采集；需检查上传与主循环调度";
   else detail="停止或运行条件变化";
   return QString("设备中止：%1 · flags=0x%2 · 中止前已执行 %3 个采样周期")
       .arg(detail).arg(flags,0,16).arg(o["samples"].toDouble(),0,'f',0);

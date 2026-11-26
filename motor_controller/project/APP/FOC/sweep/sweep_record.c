@@ -6,9 +6,9 @@
 #include "sweep_record.h"
 #include "board.h"
 #include <string.h>
-#define CAPACITY 4u
+#define CAPACITY 16u
 #define PAIRS 6u
-/* 224 bytes of wire-ready slots + 16 bytes of state/diagnostics. Full 20 kHz binary32 pairs.
+/* 896 bytes of wire-ready slots + 16 bytes of state/diagnostics. Full 20 kHz binary32 pairs.
  * Head/tail are monotonic uint8 counters; occupancy never exceeds CAPACITY. */
 static union { uint32_t words[14]; uint8_t bytes[56]; } slots[CAPACITY];
 static uint32_t wire32(uint32_t v)
@@ -28,17 +28,18 @@ void sweep_record_begin(uint16_t run, bool on)
   dropped = submitted = 0;
 }
 bool sweep_record_enabled(void) { return enabled; }
+bool sweep_record_pending(void) { return head != tail || used != 0u; }
 void sweep_record_end(void)
 {
   if (!used) return;
   slots[head & (CAPACITY-1u)].bytes[1] = used;
   __DMB(); ++head; used = 0;
 }
-void sweep_record_push(uint32_t index, float input, float output)
+bool sweep_record_push(uint32_t index, float input, float output)
 {
   unsigned slot; uint32_t bits;
-  if (!enabled) return;
-  if ((uint8_t)(head-tail) >= CAPACITY) { ++dropped; return; }
+  if (!enabled) return true;
+  if ((uint8_t)(head-tail) >= CAPACITY) { ++dropped; return false; }
   slot = head & (CAPACITY-1u);
   if (!used) {
     slots[slot].words[0] = wire32(0x01000000u | run_id);
@@ -49,6 +50,7 @@ void sweep_record_push(uint32_t index, float input, float output)
   memcpy(&bits, &input, 4); slots[slot].words[2u+2u*used] = wire32(bits);
   memcpy(&bits, &output, 4); slots[slot].words[3u+2u*used] = wire32(bits);
   if (++used == PAIRS) sweep_record_end();
+  return true;
 }
 bool sweep_record_poll(uint32_t node,
     bool (*send)(uint32_t, uint8_t, const uint8_t *, uint8_t))
@@ -56,10 +58,14 @@ bool sweep_record_poll(uint32_t node,
   unsigned slot;
   if (head == tail) return false;
   __DMB(); slot = tail & (CAPACITY-1u);
-  /* Retry the same immutable wire image if the shared transport is busy. */
+  /* No spectral work in the transport service. A failed send never consumes
+   * data or advances the tail; the next attempt sends the identical image. */
   if (send && send(node, 0xBFu, slots[slot].bytes,
                   (uint8_t)(8u+8u*slots[slot].bytes[1]))) {
-    submitted += slots[slot].bytes[1]; __DMB(); ++tail; return true;
+    submitted += slots[slot].bytes[1];
+    /* Transport has copied the frame. Release only after acceptance. */
+    __DMB(); ++tail;
+    return true;
   }
   return false;
 }

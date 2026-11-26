@@ -28,6 +28,7 @@ class Scope : public QWidget {
     QStringList aliases = channelNames;
     int view = 0;
     bool debugProfile = false;
+    bool sampledTraces = false; // Captured sample pairs: solid linear traces, NaN marks a gap.
     QString timeAxisLabel; // Optional acquisition-clock label for imported/captured data.
     int axisChannel = 0; // Numeric Y ticks for this channel; other scales remain independent.
     double windowSeconds = 5, t1 = 0, t2 = 0;

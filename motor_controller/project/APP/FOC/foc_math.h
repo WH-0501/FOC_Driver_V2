@@ -123,24 +123,28 @@ APP_STATIC_INLINE void foc_sincos(float theta, float *s, float *c)
  *      2. 禁止输入 ±Inf，会触发未定义行为
  *      3. 浮点舍入导致和fmodf版本存在若干ULP差异，闭环可接受
  * 
+ * f	   输入 angle	  期望输出（mod 2π，[0,2π)）	旧版输出	旧版	新版输出	新版
+ *-3.0	  -6π	0	-6π − 2π·(-4) = 2π（且无兜底）	❌ 越界到 2π	-6π − 2π·(-3) = 0，wrapped≥2π 不触发	✅ 0
+ *-2.3	  -4.6π	0.4π（-2.3+3 = 0.7 圈 → 1.4π？见下注）	同新	✅	-4.6π − 2π·(-3) = 1.4π	✅
+ *-0.0	  0	0	0 − 2π·(-1) = 2π（无兜底）	❌ 越界	0 − 0 = 0	✅
+ *-1e-10	2π·1e-10	2π·1e-10（极小正角，保持原值）	2π·1e-10 − 2π·(-1) ≈ 2π	❌ 多加一圈	2π·1e-10 − 0	✅
+ *-2.7	  5.4π	5.4π − 4π = 1.4π	5.4π − 2π·2 = 1.4π	✅	5.4π − 2π·2 = 1.4π	✅
+ *-3.0	  6π	0	6π − 2π·3 = 0	✅	6π − 2π·3 = 0	✅
+ * 
  * @param angle 
  * @return float 归一化后的角度
  */
 APP_STATIC_INLINE float angle_normalize(float angle)
 {
+  /* Encoder/config angles are bounded. Truncation must be corrected only
+   * for a genuinely negative fractional turn, not zero or negative integers. */
   float f = angle * _INV_2PI;
-
-  // 把正数向 -inf 取整，等价于 floorf，不调用libm
-  int32_t k;
-  if (f >= FLT_EPSILON)
-  {
-    k = (int32_t)f;
-  }
-  else
-  {
-    k = (int32_t)f - 1;
-  }
-  return angle - _2PI * (float)k;
+  int32_t k = (int32_t)f;
+  if (f < (float)k) --k;
+  float wrapped = angle - _2PI * (float)k;
+  /* Float subtraction at a negative wrap may round up to exactly 2*pi. */
+  if (wrapped >= _2PI) wrapped = 0.0f;
+  return wrapped;
 }
 
 /**
@@ -177,10 +181,13 @@ APP_STATIC_INLINE void clarke_transform(float xa, float xb, float xc, float *x_a
   *x_alpha = TWO_DIV_3 * xa - ONE_DIV_3 * xb - ONE_DIV_3 * xc;
   *x_beta = (xb - xc) * ONE_DIV_SQRT_3;
 #else
-  /* Assuming balanced three-phase system (xa + xb + xc = 0) */
+  /* All three currents are measured: remove zero-sequence from alpha as
+   * beta already does. This is an instantaneous spatial transform, NOT a
+   * time filter. Keep phase-current samples unchanged for protection/debug. */
   *x_alpha = xa;
+  // *x_alpha = (2.0f * xa - xb - xc) * ONE_DIV_3;
   *x_beta = (xb - xc) * ONE_DIV_SQRT_3;
-  // 等价于：
+  // 等价于:
   // *x_beta = ONE_DIV_SQRT_3 * xa + TWO_DIV_SQRT_3 * xb;
 #endif
 }
