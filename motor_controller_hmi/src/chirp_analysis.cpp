@@ -1,3 +1,4 @@
+#include "sweep_policy.h"
 #include "chirp_analysis.h"
 #include <algorithm>
 #include <cmath>
@@ -109,7 +110,7 @@ QString feedbackMean16Description(double fs) {
 }
 std::vector<SweepPoint> chirpFrequencyGrid(double low,double high,unsigned count) {
   std::vector<SweepPoint> out;
-  if(!std::isfinite(low)||!std::isfinite(high)||low<20||high>2000||high<=low||count<3||count>16)return out;
+  if(!std::isfinite(low)||!std::isfinite(high)||low<sweepPolicy::minHz||high>sweepPolicy::maxHz||high<=low||count<sweepPolicy::minPoints||count>sweepPolicy::maxPoints)return out;
   double step=std::pow(high/low,1./(count-1)),next=low,previous=0;
   for(unsigned i=0;i<count;++i){double f=i==count-1?high:next;next*=step;
     f=std::max(std::round(f),previous+1);
@@ -117,6 +118,26 @@ std::vector<SweepPoint> chirpFrequencyGrid(double low,double high,unsigned count
     SweepPoint p;p.hz=f;p.status="待完整录波后计算";out.push_back(p);previous=f;
   }
   return out;
+}
+std::vector<SweepPoint> sweepMeasurementGrid(int method,double low,double high,
+    unsigned count,double fs,bool localRetest) {
+  using namespace sweepPolicy;
+  if(method!=2 && method!=3)return {};
+  if(count<minPoints || count>maxPoints)return {};
+  if(!localRetest)low=baselineStartHz;
+  for(unsigned n=count;n<=maxPoints;++n) {
+    auto grid=method==2?steppedFrequencyGrid(low,high,n,fs):chirpFrequencyGrid(low,high,n);
+    if(localRetest)return grid;
+    if(grid.empty())continue;
+    size_t baseline=1;bool covered=true;
+    for(size_t i=1;i<grid.size();++i) {
+      if(grid[i].hz/grid[i-1].hz>maxAdjacentRatio)covered=false;
+      if(grid[i].hz<=grid.front().hz*baselineMaxRatio)++baseline;
+    }
+    if(covered && baseline>=baselineMinPoints && baseline<grid.size() &&
+       grid[baseline-1].hz/grid.front().hz>=baselineMinRatio)return grid;
+  }
+  return {};
 }
 ChirpAnalysis analyzeChirp(const SweepCapture &capture,const ChirpAnalysisOptions &options,const std::vector<SweepPoint> &reference){
   ChirpAnalysis out;auto fail=[&](QString s){out.error=s;return out;};

@@ -63,12 +63,15 @@ public:
     return out;
   }
 };
+struct PlanProbe { QMutex mutex; QByteArray request; };
 // Accelerated 28-second capture through the real worker, decoder and dialog.
 class TimedCaptureBackend:public CanBackend {
+  std::shared_ptr<PlanProbe> probe;
   std::vector<Frame> replies;quint32 cursor=0;quint16 run=0;quint8 sequence=0;
-  int state=0;bool enabled=true;double feedback=0;
+  int state=0,plannedCount=8;bool enabled=true;double feedback=0;
   void queue(int cmd,const QByteArray &p){replies.push_back({1,pack(sequence++,cmd,p),0});}
 public:
+  explicit TimedCaptureBackend(std::shared_ptr<PlanProbe> p={}):probe(std::move(p)){}
   void open(const Connection &) override {}
   void close() override {}
   void send(const Frame &f) override {
@@ -76,13 +79,14 @@ public:
     if(cmd==0xbc||cmd==0xbd){
       int error=0;
       if(cmd==0xbc&&p.size()>1&&p[1]) {
+        if(probe){QMutexLocker lock(&probe->mutex);probe->request=p;return;}
         if(p.size()<19||p.mid(13,6)!=QByteArray::fromHex("ae020fa00106"))error=2;
-        else {run=u16(p,2);state=1;cursor=0;}
+        else {run=u16(p,2);state=1;cursor=0;plannedCount=quint8(p[8]);}
       }
       if(cmd==0xbc&&p.size()>1&&!p[1]){state=3;enabled=false;}
       if(state==1&&cursor==560000){state=2;enabled=false;}
       QByteArray out(62,0);out[0]=1;out[1]=char(error);out[2]=char(state);out[3]=3;
-      qToBigEndian(run,out.data()+4);out[6]=8;out[7]=state==2?8:0;
+      qToBigEndian(run,out.data()+4);out[6]=char(plannedCount);out[7]=state==2?out[6]:0;
       qToBigEndian<quint32>(20000,out.data()+8);qToBigEndian(cursor,out.data()+12);
       out[40]=char(0xa9);out[41]=1;out[42]=state?1:0;out[43]=char(0xaa);qToBigEndian(cursor,out.data()+48);
       out[52]=char(0xac);out[53]=1;out[54]=7;out[55]=7;
@@ -110,6 +114,36 @@ private slots:
    QFile f(qEnvironmentVariable("MOTORTUNE_SWEEP_STYLE"));
    if(f.open(QIODevice::ReadOnly))qApp->setStyleSheet(QString::fromUtf8(f.readAll()));
  }
+
+ void outgoingPlanPreservesWireContract() {
+   for(int method:{2,3})for(bool local:{false,true}) {
+     auto probe=std::make_shared<PlanProbe>();
+     Session session(nullptr,[probe](const Connection &){return std::make_unique<TimedCaptureBackend>(probe);});
+     session.open({});QTRY_VERIFY(session.telemetryFresh(1));QWidget parent;
+     QTimer::singleShot(20,&parent,[&]{
+       auto d=parent.findChild<QDialog*>("sweepDialog");QVERIFY(d);
+       d->findChild<QComboBox*>("sweepMethod")->setCurrentIndex(method==2?1:0);
+       d->findChild<QComboBox*>("sweepPurpose")->setCurrentIndex(local?1:0);
+       d->findChild<QDoubleSpinBox*>("sweepStartHz")->setValue(600);
+       d->findChild<QDoubleSpinBox*>("sweepEndHz")->setValue(1500);
+       d->findChild<QSpinBox*>("sweepCount")->setValue(3);
+       d->findChild<QCheckBox*>("sweepSafe")->setChecked(true);
+       d->findChild<QPushButton*>("startSweep")->click();
+       QTimer::singleShot(500,d,&QDialog::reject);
+     });
+     showSweepDialog(session,Version::V2,1,&parent);session.shutdown();
+     QMutexLocker lock(&probe->mutex);const auto &p=probe->request;
+     QVERIFY(p.size()>=19);QCOMPARE(quint8(p[1]),method);
+     QCOMPARE(u16(p,4),local?600:20);QCOMPARE(u16(p,6),1500);
+     QCOMPARE(quint8(p[8]),local?3:9);QCOMPARE(quint8(p[14]),2);
+     if(method==2) {
+       QCOMPARE(quint8(p[13]),0xad);const int payloadSize=17+2*(local?3:9);
+       QVERIFY(p.size()>=payloadSize);QCOMPARE(p.mid(payloadSize),QByteArray(p.size()-payloadSize,0));
+       QCOMPARE(u16(p,15),20000);QCOMPARE(u16(p,17),local?33:1000);
+       QCOMPARE(u16(p,payloadSize-2),13);
+     } else {QCOMPARE(quint8(p[13]),0xae);QCOMPARE(p.mid(19),QByteArray(p.size()-19,0));}
+   }
+ }
  void deviceTimingLongCapture_data() {QTest::addColumn<bool>("local");QTest::newRow("full")<<false;QTest::newRow("local")<<true;}
  void deviceTimingLongCapture() {
    QFETCH(bool,local);
@@ -131,7 +165,7 @@ private slots:
      });poll.start(100);
    });
    showSweepDialog(session,Version::V2,1,&parent);
-   QVERIFY(complete);QVERIFY(timing);QCOMPARE(rows,8);QCOMPARE(blocks,6);QCOMPARE(session.sweepRecording().samples.size(),560000u);
+   QVERIFY(complete);QVERIFY(timing);QCOMPARE(rows,local?8:10);QCOMPARE(blocks,6);QCOMPARE(session.sweepRecording().samples.size(),560000u);
  }
  void simultaneousWaveAndBode_data(){
    QTest::addColumn<int>("method");QTest::addColumn<bool>("drop");QTest::addColumn<bool>("abort");

@@ -19,7 +19,10 @@
 #define SWEEP_STEPPED_MEASURE_CYCLES \
     (SWEEP_STEPPED_BLOCKS * SWEEP_STEPPED_CYCLES_PER_BLOCK) ///< stepped 扫频 采样周期 16 个周期
 
-/* Admission limits; the requested frequency range is used without anchors. These describe the existing
+/* Admission limits; the explicit host-planned range is used without anchors.
+ * Full/local measurement coverage and baseline selection belong to the host;
+ * do not silently extend this range or duplicate its baseline configuration.
+ * These describe the existing
  * wire/host contract, not substitutes for motor current/motion protections. */
 #define SWEEP_MAX_POINTS                 16u ///< 扫频点数最大值 16
 #define SWEEP_MIN_POINTS                 3u ///< 扫频点数最小值 3

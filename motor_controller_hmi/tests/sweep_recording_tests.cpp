@@ -1,3 +1,4 @@
+#include "sweep_policy.h"
 #include "sweep_recording.h"
 #include "chirp_analysis.h"
 #include "protocol.h"
@@ -18,6 +19,43 @@ static QByteArray packet(quint32 first, unsigned n=6,quint16 run=42) {
 class RecordingTests:public QObject {
  Q_OBJECT
 private slots:
+  void measurementCoveragePlanning() {
+    using namespace sweepPolicy;
+    for(int method:{2,3})for(double fs:{20000.,40000.}) {
+      auto local=sweepMeasurementGrid(method,600,1500,16,fs,true);
+      auto exact=method==2?steppedFrequencyGrid(600,1500,16,fs):chirpFrequencyGrid(600,1500,16);
+      QCOMPARE(local.size(),exact.size());
+      for(size_t i=0;i<local.size();++i)QCOMPARE(local[i].hz,exact[i].hz);
+      for(double end:{200.,500.,1500.,2000.})for(unsigned count:{3u,8u,16u}) {
+        auto full=sweepMeasurementGrid(method,600,end,count,fs,false);
+        QVERIFY(!full.empty());QVERIFY(full.size()>=count);QVERIFY(full.size()<=maxPoints);
+        QCOMPARE(full.front().hz,baselineStartHz);
+        size_t baseline=0;
+        for(size_t i=0;i<full.size();++i) {
+          if(full[i].hz<=full[0].hz*baselineMaxRatio)++baseline;
+          if(i)QVERIFY(full[i].hz/full[i-1].hz<=maxAdjacentRatio);
+          // A known low-pass response still goes through the unmodified H1 gates.
+          double ratio=full[i].hz/(end*.6);
+          full[i].gainDb=-10*std::log10(1+ratio*ratio);
+          full[i].phaseDeg=-std::atan(ratio)*180/std::numbers::pi;
+          full[i].inputFit=.99;full[i].valid=true;
+        }
+        QVERIFY(baseline>=baselineMinPoints);QVERIFY(baseline<full.size());
+        QVERIFY(full[baseline-1].hz/full.front().hz>=baselineMinRatio);
+        // Narrow low-band plans may lack a measured flat platform: planning must
+        // never bypass the measured validity tests to force a bandwidth.
+        if(end>=500 && count==16) {
+          QVERIFY(sweepBandwidthResult(full).found);
+          auto invalid=full;invalid[baseline].valid=false;QVERIFY(!sweepBandwidthResult(invalid).found);
+          auto incoherent=full;incoherent[baseline].inputFit=.89;QVERIFY(!sweepBandwidthResult(incoherent).found);
+          QVERIFY(!sweepBandwidthResult(full,true).found);
+        }
+      }
+      QVERIFY(sweepMeasurementGrid(method,600,25,16,fs,false).empty());
+      QVERIFY(sweepMeasurementGrid(method,600,500,16,fs,true).empty());
+    }
+  }
+
  void historicalRecordingsPreserveH1() {
   auto dir=qEnvironmentVariable("MOTORTUNE_RANGE_RECORDINGS");if(dir.isEmpty())QSKIP("Optional historical capture directory");
   for(int run=1;run<=3;++run){

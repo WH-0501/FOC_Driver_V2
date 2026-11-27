@@ -2,6 +2,11 @@
 #include "sweep_recording.h"
 #include <array>
 namespace mt {
+// Full measurements start at the configured current-loop baseline, with
+// sufficient logarithmic coverage. Local retests preserve the requested grid.
+// Empty means the range/grid cannot satisfy the acquisition contract.
+std::vector<SweepPoint> sweepMeasurementGrid(int method,double low,double high,
+    unsigned count,double fs,bool localRetest);
 enum class ChirpFilter { Off, Both, FeedbackOnly, FeedbackMean16, FeedbackLpf };
 struct ChirpAnalysisOptions {
   ChirpFilter filter=ChirpFilter::Off;

@@ -1,3 +1,4 @@
+#include "sweep_policy.h"
 #include "sweep.h"
 #include <algorithm>
 #include <array>
@@ -176,17 +177,16 @@ SweepBandwidthResult sweepBandwidthResult(const std::vector<SweepPoint> &p,bool 
   SweepBandwidthResult result;
   auto reject=[&](QString message){result.message=message;return result;};
   if(localRetest)return reject("局部复测：仅显示原始 H1，未建立本次低频基准，不判定绝对带宽");
-  if(p.size()<4)return reject("未测得带宽：至少需要 3 个低频平台点及后续响应点");
+  if(p.size()<sweepPolicy::baselineMinPoints+1)return reject(QString("未测得带宽：至少需要 %1 个低频平台点及后续响应点").arg(sweepPolicy::baselineMinPoints));
   for(size_t i=0;i<p.size();++i)
     if(!std::isfinite(p[i].hz)||p[i].hz<=0||(i&&p[i].hz<=p[i-1].hz))
       return reject("未测得带宽：频点必须为有限递增正数");
   // Unit-gain current tracking only. These are baseline qualification limits,
   // not filters or relaxed H1 validity gates; never skip an invalid first point.
-  constexpr double flatDb=.5, phaseLimitDeg=15., unityToleranceDb=1.;
-  constexpr double maxBaselineRatio=3., minBaselineRatio=1.5, maxAdjacentRatio=2.;
+  using namespace sweepPolicy;
   auto valid=[](const SweepPoint &v){return v.valid&&std::isfinite(v.gainDb)&&std::isfinite(v.phaseDeg)&&std::isfinite(v.inputFit)&&v.inputFit>=.9;};
   std::vector<double> gains;double lo=0,hi=0;
-  for(size_t i=0;i<p.size()&&p[i].hz<=p[0].hz*maxBaselineRatio;++i){
+  for(size_t i=0;i<p.size()&&p[i].hz<=p[0].hz*baselineMaxRatio;++i){
     const auto &v=p[i];
     if(!valid(v)||std::abs(std::remainder(v.phaseDeg,360.))>phaseLimitDeg||
        std::abs(v.gainDb)>unityToleranceDb||(i&&v.hz/p[i-1].hz>maxAdjacentRatio))break;
@@ -194,8 +194,9 @@ SweepBandwidthResult sweepBandwidthResult(const std::vector<SweepPoint> &p,bool 
     if(b-a>flatDb)break;
     gains.push_back(v.gainDb);lo=a;hi=b;
   }
-  if(gains.size()<3||p[gains.size()-1].hz/p[0].hz<minBaselineRatio)
-    return reject("未测得带宽：低频平台不足（需连续有效 ≥3 点、跨度 ≥1.5 倍、波动 ≤0.5 dB、相位 ≤15°、增益接近 0 dB）；请降低起点或改用局部复测");
+  if(gains.size()<baselineMinPoints||p[gains.size()-1].hz/p[0].hz<baselineMinRatio)
+    return reject(QString("未测得带宽：低频平台不足（需连续有效 ≥%1 点、跨度 ≥%2 倍、波动 ≤%3 dB、相位 ≤%4°、增益接近 0 dB）；请核对低频覆盖及平台有效性，或选择局部复测")
+      .arg(baselineMinPoints).arg(baselineMinRatio).arg(flatDb).arg(phaseLimitDeg));
   result.baselineCount=unsigned(gains.size());result.baselineLowHz=p[0].hz;result.baselineHighHz=p[gains.size()-1].hz;
   std::sort(gains.begin(),gains.end());size_t mid=gains.size()/2;
   result.baselineDb=gains.size()%2?gains[mid]:(gains[mid-1]+gains[mid])/2;

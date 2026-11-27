@@ -44,7 +44,7 @@ class OperationUiTests : public QObject {
         QTest::qWait(150);
         QCOMPARE(w.session.txCount.load(),after);
     }
-    void deviceChirpCompletesInDemo() {
+    void deviceSweepPlansCompleteInDemo() {
         for(bool local:{false,true}) {
             const int method=3;
             Window w(false,false,true);w.startDemo();
@@ -54,27 +54,31 @@ class OperationUiTests : public QObject {
             int rows=0;bool bandwidth=false;
             QTimer::singleShot(50,&w,[&]{
                 auto d=w.findChild<QDialog*>("sweepDialog");if(!d){QApplication::closeAllWindows();return;}
-                d->findChild<QComboBox*>("sweepMethod")->setCurrentIndex(0);
+                d->findChild<QComboBox*>("sweepMethod")->setCurrentIndex(method==2?1:0);
                 d->findChild<QComboBox*>("sweepPurpose")->setCurrentIndex(local?1:0);
-                if(local){d->findChild<QDoubleSpinBox*>("sweepStartHz")->setValue(300);d->findChild<QDoubleSpinBox*>("sweepEndHz")->setValue(1200);}
+                auto low=d->findChild<QDoubleSpinBox*>("sweepStartHz");
+                QCOMPARE(low->isEnabled(),local);
+                low->setValue(600); // Full scope must normalize even a stale/programmatic value.
+                d->findChild<QDoubleSpinBox*>("sweepEndHz")->setValue(1500);
+                d->findChild<QSpinBox*>("sweepCount")->setValue(local?16:3);
                 d->findChild<QCheckBox*>("sweepSafe")->setChecked(true);
                 d->findChild<QPushButton*>("startSweep")->click();
                 QTimer::singleShot(method==1?1500:5000,d,[&,d]{
                     auto t=d->findChild<QTableWidget*>();rows=t->rowCount();
                     for(auto label:d->findChildren<QLabel*>())if(label->text().contains("带宽 ≈"))bandwidth=true;
-                    if(method==3 && rows>0) {
-                        QCOMPARE(t->item(0,0)->text().toDouble(),local?300.:20.);
+                    if(rows>0) {
+                        QCOMPARE(t->item(0,0)->text().toDouble(),local?(method==2?606.061:600.):20.);
                         QVERIFY(t->item(1,0)->text().toDouble()>t->item(0,0)->text().toDouble());
-                        QCOMPARE(t->item(0,6)->text().toDouble(),3.0);
+                        QCOMPARE(t->item(0,6)->text().toDouble(),method==2?4.0:3.0);
                         QVERIFY(t->item(0,8)->text().contains("原始 H1"));
                     }
                     auto path=qEnvironmentVariable("MOTORTUNE_FRA_PREVIEW");
-                    if(!path.isEmpty())d->grab().save(path+QString::number(method)+".png");
+                    if(!path.isEmpty())d->grab().save(path+QString::number(method)+(local?"-local":"-full")+".png");
                     d->reject();
                 });
             });
             showSweepDialog(w.session,Version::V2,1,&w);
-            QCOMPARE(rows,16);QCOMPARE(bandwidth,!local);QTRY_VERIFY(!w.session.latest(1)->enabled);
+            QCOMPARE(rows,local?16:9);QCOMPARE(bandwidth,!local);QTRY_VERIFY(!w.session.latest(1)->enabled);
         }
     }
     void pausedDebugSurvivesOverwriteAndZoom() {

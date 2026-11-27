@@ -1,3 +1,4 @@
+#include "sweep_policy.h"
 #include "sweep_recording.h"
 #include <QtEndian>
 #include <QJsonArray>
@@ -74,10 +75,10 @@ QString SweepRecording::summary(quint32 expected, bool supported, bool measureme
 }
 std::vector<SweepPoint> steppedFrequencyGrid(double low,double high,unsigned count,double fs) {
   if(!std::isfinite(low)||!std::isfinite(high)||!std::isfinite(fs)||fs<10000||fs>40000||
-     fs!=std::floor(fs)||low<20||high<=low||high>std::min(2000.,fs*.1)||count<3||count>16)return {};
+     fs!=std::floor(fs)||low<sweepPolicy::minHz||high<=low||high>std::min(sweepPolicy::maxHz,fs*.1)||count<sweepPolicy::minPoints||count>sweepPolicy::maxPoints)return {};
   std::vector<SweepPoint> out;
   auto add=[&](double f){auto p=std::llround(fs/f);double hz=fs/p;
-    if(p<10||hz>2000||(!out.empty()&&hz<=out.back().hz))return false;
+    if(p<10||hz>sweepPolicy::maxHz||(!out.empty()&&hz<=out.back().hz))return false;
     SweepPoint point;point.hz=hz;point.status="等待完整逐频录波";out.push_back(point);return true;};
   unsigned tones=count;
   auto first=std::llround(fs/low),last=std::llround(fs/high),previous=first+1;

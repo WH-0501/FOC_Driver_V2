@@ -1,3 +1,4 @@
+#include "sweep_policy.h"
 #include "sweep_dialog.h"
 #include "sweep.h"
 #include "scope.h"
@@ -201,7 +202,7 @@ class SweepDialog : public QDialog {
     updateMeanResults();drawRecording();
     running=false;timer.stop();deviceToken=0;
     start->setEnabled(true);import->setEnabled(true);methodChoice->setEnabled(true);purposeChoice->setEnabled(true);
-    startHz->setEnabled(true);endHz->setEnabled(true);amplitude->setEnabled(true);count->setEnabled(true);
+    startHz->setEnabled(purposeChoice->currentIndex()==1);endHz->setEnabled(true);amplitude->setEnabled(true);count->setEnabled(true);
     resultChoice->setEnabled(!recordedResults.empty());
     status->setText(analysisError.isEmpty()?QString("设备辨识完成并失能 · 含上传、分析与显示 %1 ms").arg(clock.elapsed()):"采集/分析未完成："+analysisError);render();
   }
@@ -230,6 +231,10 @@ class SweepDialog : public QDialog {
       .arg(v("spike_previous_theta"),0,'g',9).arg(v("spike_theta"),0,'g',9)
       .arg(v("spike_previous_shaft")).arg(v("spike_shaft"));
   }
+  void updateRangeControls() {
+    if(purposeChoice->currentIndex()==0)startHz->setValue(sweepPolicy::baselineStartHz);
+    startHz->setEnabled(!running && purposeChoice->currentIndex()==1);
+  }
   QByteArray deviceRequest(int action) {
     QByteArray p; p.append(char(1));p.append(char(action));p+=be16(runId);
     p+=be16(int(startHz->value()));p+=be16(int(endHz->value()));p.append(char(count->value()));p+=be16(qRound(amplitude->value()*1000));
@@ -246,9 +251,10 @@ class SweepDialog : public QDialog {
       status->setText("设备辨识要求 V2 固件、CST 已使能、零给定及工作区确认");return;
     }
     localRetest=purposeChoice->currentIndex()==1;
+    updateRangeControls();
     awaitingPlan=true;recordTiming={};acquisitionDeadlineMs=60000;
-    requestedPoints=methodChoice->currentData().toInt()==2?std::vector<SweepPoint>{}:chirpFrequencyGrid(startHz->value(),endHz->value(),unsigned(count->value()));
-    if(methodChoice->currentData().toInt()==3 && requestedPoints.empty()){status->setText("频段或频点数无效：请减少频点数量或扩大频段");return;}
+    requestedPoints=methodChoice->currentData().toInt()==2?std::vector<SweepPoint>{}:sweepMeasurementGrid(3,startHz->value(),endHz->value(),unsigned(count->value()),0,localRetest);
+    if(methodChoice->currentData().toInt()==3 && requestedPoints.empty()){status->setText("频段无法形成测量网格；完整测量需覆盖低频平台及后续频段，请扩大结束频率或选择局部复测");return;}
     runId=quint16(QRandomGenerator::global()->bounded(1,65536));
     results.clear();meanResults.clear();meanError.clear();comparisonWave.clear();raw.clear();deviceAbortDetail.clear();deviceMode=deviceData=true;running=true;nextPoint=0;deviceCount=0;
     spikeSnapshot={};spikePages=0;
@@ -273,8 +279,9 @@ class SweepDialog : public QDialog {
         finish("固件不支持按请求频段测量或时序不兼容；未启动采集，请更新配套固件");return;
       }
       planFs=o["fs"].toDouble();
-      if(recordMethod==2)requestedPoints=steppedFrequencyGrid(startHz->value(),endHz->value(),unsigned(count->value()),planFs);
-      if(requestedPoints.empty()){finish("频段可用频点不足或参数无效，请减少点数或扩大频段");return;}
+      requestedPoints=sweepMeasurementGrid(recordMethod,startHz->value(),endHz->value(),unsigned(count->value()),planFs,localRetest);
+      if(requestedPoints.empty()){finish("频段无法形成测量网格：完整测量需低频平台及中间频段；局部复测请检查范围与点数");return;}
+      count->setValue(int(requestedPoints.size()));
       if(recordMethod==3) {
         acquisitionDeadlineMs=qint64(recordTiming.periodMs)*(recordTiming.settlePeriods+recordTiming.measurePeriods)+15000;
         source="设备 Chirp 时序："+recordTiming.description();render();
@@ -395,7 +402,7 @@ class SweepDialog : public QDialog {
     timer.stop();
     start->setEnabled(true);
     import->setEnabled(true);
-    startHz->setEnabled(true);
+    startHz->setEnabled(purposeChoice->currentIndex()==1);
     endHz->setEnabled(true);
     amplitude->setEnabled(true);
     count->setEnabled(true);
@@ -579,10 +586,10 @@ public:
     methodChoice->addItem("设备逐频正弦（精测）· 上位机频响分析",2);
     purposeChoice=new QComboBox;purposeChoice->setObjectName("sweepPurpose");
     purposeChoice->addItems({"完整带宽测量","局部频响复测"});
-    purposeChoice->setToolTip("完整测量：验证本次有效低频平台后判断带宽。局部复测：只测指定频段并显示原始 H1，不借用历史基准、不判定绝对带宽。");
+    purposeChoice->setToolTip("完整测量：从配置的电流环基准频率起测，覆盖中间频段；必要时自动增加频点数。局部复测：保留指定范围，只显示原始 H1，不判定绝对带宽。");
     auto topRow=new QHBoxLayout;topRow->addWidget(methodChoice,1);topRow->addWidget(new QLabel("测量用途"));topRow->addWidget(purposeChoice);topRow->addWidget(new QLabel("图表显示"));
     auto viewChoice=new QComboBox;viewChoice->setObjectName("sweepView");viewChoice->addItems({"录波与频响并排","仅录波 · 放大","仅频响 · 放大"});topRow->addWidget(viewChoice);l->addLayout(topRow);
-    auto help = new QLabel("CST / 零给定开始 · 设备只生成 Chirp、同步采样并上传，完成自动失能\n启动前读取设备的单周期时长、稳定周期数和测量周期数；按设备窗口计算原始 H1 / 相干性。严格按设置的起止频率扫频，不补入 20/40 Hz。完整测量需覆盖有效低频平台；局部复测只看频响。低相干性频点不计算带宽；可导入历史逐频数据对照。",this);
+    auto help = new QLabel("CST / 零给定开始 · 设备只生成 Chirp、同步采样并上传，完成自动失能\n启动前读取设备的单周期时长、稳定周期数和测量周期数；按设备窗口计算原始 H1 / 相干性。完整测量从配置基准频率扫到结束频率，覆盖中间频段，频点不足时自动补足（上限 16 点）；平台仍须实测合格。局部复测保留指定范围，只看频响。低相干性频点不计算带宽；可导入历史逐频数据对照。",this);
     help->setWordWrap(true);
 
     auto settings = new QHBoxLayout;settings->setSpacing(12);
@@ -599,15 +606,17 @@ public:
       field(title,w);
       return w;
     };
-    startHz = spin("起始 Hz", 20, 2000, 20);
-    endHz = spin("结束 Hz", 20, 2000, 2000);
+    startHz = spin("起始 Hz", sweepPolicy::minHz, sweepPolicy::maxHz, sweepPolicy::baselineStartHz);
+    endHz = spin("结束 Hz", sweepPolicy::minHz, sweepPolicy::maxHz, sweepPolicy::maxHz);
     amplitude = spin("幅值 A", .005, .5, .05);
 
     count = new QSpinBox;
-    count->setRange(3, 16);
-    count->setValue(16);
+    count->setRange(sweepPolicy::minPoints, sweepPolicy::maxPoints);
+    count->setValue(sweepPolicy::maxPoints);
     startHz->setDecimals(0);endHz->setDecimals(0);
   startHz->setObjectName("sweepStartHz"); endHz->setObjectName("sweepEndHz"); amplitude->setObjectName("sweepAmplitude"); count->setObjectName("sweepCount");
+    startHz->setToolTip("完整测量：使用集中配置的电流环基准起点；局部复测：可编辑指定起点。");
+    count->setToolTip("完整测量自动补足低频平台和中间频段所需点数，显示实际数量；局部复测保持指定点数。");
     field("对数频点 / 点",count);
     filterChoice=new QComboBox;filterChoice->setObjectName("sweepFeedbackFilter");filterChoice->addItems({"不滤波（原始）","16 点均值对照","Butterworth LPF 对照"});
     filterChoice->setToolTip("仅用于 Chirp 的反馈波形及频响对照；原始 H1 决定带宽。逐频模式使用原始反馈。");field("反馈 Iq 滤波（仅 Chirp）",filterChoice,2);
@@ -630,7 +639,7 @@ public:
       const bool stepped=methodChoice->currentData().toInt()==2;
       start->setText(stepped?"开始逐频精测":"开始 Chirp 测试");
       filterChoice->setEnabled(!stepped && (recordMethod!=2 || !deviceData));filterCutoff->setEnabled(lpfSelected() && filterChoice->isEnabled());
-      help->setText(stepped?"CST / 零给定开始 · 设备只生成逐频正弦、同步采样并上传，完成自动失能。\n每点稳定至少 20 ms 且至少 4 周期（向上取整周期），再采集 4 段 × 4 周期；上位机计算原始 H1 / 相干性。不补入 20/40 Hz；完整测量需覆盖有效低频平台；实际频率按整数采样周期量化，相邻频点避开重复周期，可用周期不足时拒绝。滤波对照仅适用于 Chirp。":chirpHelp);
+      help->setText(stepped?"CST / 零给定开始 · 设备只生成逐频正弦、同步采样并上传，完成自动失能。\n每点稳定至少 20 ms 且至少 4 周期（向上取整周期），再采集 4 段 × 4 周期；上位机计算原始 H1 / 相干性。完整测量覆盖配置的低频基准至结束频率，必要时自动补足点数；局部复测保留指定范围；实际频率按整数采样周期量化，相邻频点避开重复周期，可用周期不足时拒绝。滤波对照仅适用于 Chirp。":chirpHelp);
     });
     safe->setObjectName("sweepSafe");
     btn("停止并失能", [this] { finish("已停止"); });
@@ -691,7 +700,8 @@ public:
     connect(filterChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{updateMeanResults();drawRecording(true);render();});
     connect(filterCutoff,&QDoubleSpinBox::editingFinished,this,[this]{updateMeanResults();drawRecording(true);render();});
     connect(&session,&Session::replied,this,[this](quint64 t,quint32 n,int c,QJsonObject o){deviceReply(t,n,c,o);});
-    connect(purposeChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{localRetest=purposeChoice->currentIndex()==1;render();});
+    connect(purposeChoice,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{localRetest=purposeChoice->currentIndex()==1;updateRangeControls();render();});
+    updateRangeControls();
     timer.setTimerType(Qt::PreciseTimer);
     connect(&timer, &QTimer::timeout, this, [this] { tick(); });
     connect(&session, &Session::commandFailed, this,
