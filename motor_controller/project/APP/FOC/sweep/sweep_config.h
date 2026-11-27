@@ -71,7 +71,7 @@
 /* Commissioning protections, at the MOTOR SHAFT. Values are unchanged.
  * A configuration refactor is not authorization to relax these limits. */
 #ifndef FOC_SWEEP_ENABLED
-#define FOC_SWEEP_ENABLED                 1
+#define FOC_SWEEP_ENABLED                 0
 #endif
 /* Sweep-only displacement abort, independent of the speed guard.
  * 0 skips only displacement from the sweep origin; finite-value checks,

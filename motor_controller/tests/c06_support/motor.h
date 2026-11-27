@@ -17,6 +17,7 @@ typedef struct {
 motor_handle_t *motor_get_handler(void);
 motor_runtime_t *motor_runtime(motor_handle_t *m);
 bool motor_is_armed(const motor_handle_t *m);
+void motor_arm(motor_handle_t *m);
 void motor_disarm(motor_handle_t *m);
 void motor_shutdown(motor_handle_t *m);
 void motor_sync_arm_with_mode(motor_handle_t *m);

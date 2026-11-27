@@ -604,6 +604,21 @@
               <FilePath>..\APP\FOC\foc_calibration.c</FilePath>
             </File>
             <File>
+              <FileName>ident_engine.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\FOC\identification\ident_engine.c</FilePath>
+            </File>
+            <File>
+              <FileName>foc_identification.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\FOC\identification\foc_identification.c</FilePath>
+            </File>
+            <File>
+              <FileName>ident_protocol.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\FOC\identification\ident_protocol.c</FilePath>
+            </File>
+            <File>
               <FileName>foc_fault.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\FOC\foc_fault.c</FilePath>

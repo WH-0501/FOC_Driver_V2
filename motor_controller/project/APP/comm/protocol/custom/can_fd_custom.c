@@ -4,6 +4,7 @@
 #endif
 #include <math.h>
 #include "can_fd_custom.h"
+#include "identification/ident_protocol.h"
 #include "sweep/sweep_protocol.h"
 #if FOC_SWEEP_ENABLED
 #include "sweep/sweep_record.h"
@@ -123,7 +124,7 @@ static void can_fd_custom_reply(uint8_t cmd, const uint8_t *payload, uint8_t pay
 
 static bool can_fd_custom_require_disabled(void)
 {
-  return !mc_is_enabled();
+  return mc_get_fsm_state() == STATE_IDLE && !motor_is_armed(s_motor);
 }
 
 static bool can_fd_custom_motor_id_match(uint8_t motor_id)
@@ -597,6 +598,8 @@ static void can_fd_custom_handle_command(uint8_t cmd, const uint8_t *payload, ui
   {
     return;
   }
+
+  if (s_request_unicast && ident_protocol_handle(m, cmd, payload, payload_len, can_fd_custom_reply)) return;
 
   if (s_request_unicast && sweep_protocol_handle(m, cmd, payload, payload_len, can_fd_custom_reply)) return;
 
@@ -1096,6 +1099,7 @@ static void can_fd_custom_on_rx(const comm_frame_t *frame)
   {
     if (cmd >= CAN_FD_CMD_IAP_ENTER)
     {
+      foc_ident_stop(s_motor);
       foc_sweep_stop(s_motor, SWEEP_STOP);
       can_fd_iap_on_rx(frame);
     }
@@ -1104,11 +1108,13 @@ static void can_fd_custom_on_rx(const comm_frame_t *frame)
 
   if (cmd >= CAN_FD_CMD_IAP_ENTER)
   {
+    foc_ident_stop(s_motor);
     foc_sweep_stop(s_motor, SWEEP_STOP);
     can_fd_iap_on_rx(frame);
     return;
   }
 
+  if (cmd >= IDENT_CMD_CONTROL && cmd <= IDENT_CMD_APPLY && frame->id != s_node_id) return;
   if (cmd == CAN_FD_CMD_VERIFY_ELECTRICAL && frame->id != s_node_id) return;
   if ((cmd == CAN_FD_CMD_GET_SPEED_LIMITS || cmd == CAN_FD_CMD_SET_CURRENT_SOFT_SPEED) && frame->id != s_node_id) return;
   if (cmd >= SWEEP_CMD_CONTROL && cmd <= SWEEP_CMD_RESULT && frame->id != s_node_id) return;

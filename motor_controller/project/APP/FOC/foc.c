@@ -1,4 +1,5 @@
 #include "foc.h"
+#include "identification/foc_identification.h"
 #include "sweep/foc_sweep.h"
 #include "common.h"
 #include "foc_modulation.h"
@@ -440,6 +441,7 @@ void foc_control_loop(motor_handle_t *m)
   }
 
   foc_fsm_loop(m);
+  if (foc_ident_active(m)) foc_ident_run_isr(m);
   if (m->fsm == STATE_RUNNING)
   {
     uint32_t ctrl_start_ticks = profile_cst ? dwt_get_ticks() : 0u;

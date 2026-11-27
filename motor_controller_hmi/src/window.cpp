@@ -1,4 +1,5 @@
 #include "window.h"
+#include "identification_dialog.h"
 #include "sweep_dialog.h"
 #include <QJsonDocument>
 #include <QSaveFile>
@@ -1173,6 +1174,18 @@ QWidget *Window::configPage() {
         safeAction(0xab, QByteArray(1, char(method->currentIndex())), "电角对齐会转动电机，确认执行？", show);
     });
     form->addRow("电角对齐", align);
+    auto identRow = new QHBoxLayout;
+    button(identRow, "参数辨识 · Rs / Ld / Lq / 磁链", [this] {
+        if (experimentTimer_.isActive() || testsRunning_ || session.upgrading()) {
+            log("WARNING", "请先停止其他实验、测试或升级任务"); return;
+        }
+        IdentificationDialog dialog(session, connection_.version, node(), connection_.backend == "Demo", this);
+        connect(&dialog, &IdentificationDialog::parametersSaved, this, [this](QJsonObject) {
+            log("INFO", "辨识参数已通过设备专用应答确认保存");
+        });
+        dialog.exec();
+    })->setObjectName("openIdentification");
+    form->addRow("电机参数", identRow);
     auto temp = number(-40, 150, 25, 2);
     auto tempRow = new QHBoxLayout;
     tempRow->addWidget(temp);
@@ -1241,7 +1254,7 @@ QWidget *Window::configPage() {
     });
     button(kth, "停止 KTH71", [this] { request(0xaf); });
     l->addLayout(kth);
-    auto missing = new QLabel("固件未提供：写机型、齿槽补偿、HoldStall、Rs/Ls/磁链辨识入口。\n0x53 "
+    auto missing = new QLabel("固件未提供：写机型、齿槽补偿、HoldStall。\n0x53 "
                               "是本体参数读取；0x54 恢复 PID；0xAE 是 KTH71 状态。不会复用冲突命令。");
     missing->setWordWrap(true);
     missing->setObjectName("warning");

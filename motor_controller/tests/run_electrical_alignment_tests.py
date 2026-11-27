@@ -21,6 +21,7 @@ stub=r'''
 #define _PI 3.14159265358979323846f
 #define _2PI (2.0f*_PI)
 #define _3PI_2 (1.5f*_PI)
+static void foc_sincos_shared(float x,float *s,float *c) { *s=sinf(x);*c=cosf(x); }
 #define CURRENT_SENSE_PHASE_POLARITY (-1.0f)
 #define DIR_CW 1
 #define DIR_CCW -1

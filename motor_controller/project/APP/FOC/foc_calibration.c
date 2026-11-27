@@ -753,7 +753,9 @@ static float cal_hfi_probe_metric(cal_ctx_t *ctx, float angle_base)
   while (elapsed < total_ms)
   {
     float t_s = (float)elapsed * 0.001f;
-    float carrier = sinf(omega * t_s);
+    float carrier, carrier_cos;
+    /* Reuse FOC trig to avoid pulling a second math implementation into Flash. */
+    foc_sincos_shared(angle_normalize(omega * t_s), &carrier, &carrier_cos);
     float angle_el = angle_normalize(angle_base + omega * t_s);
 
     foc_voltage(ctx->m, 0.0f, ctx->cfg.hfi_voltage_v * carrier, angle_el);

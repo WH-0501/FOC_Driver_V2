@@ -4,6 +4,7 @@
 #include "datatypes.h"
 #include "motor_config.h"
 #include "FOC/foc_calibration.h"
+#include "FOC/identification/foc_identification.h"
 
 /** 从存储加载配置并初始化电机控制器（配置写入 motor_get_handler()->config）。 */
 error_t mc_init(void);

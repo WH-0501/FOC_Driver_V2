@@ -178,27 +178,6 @@ error_t mc_enable(void)
   return (m->fsm == STATE_RUNNING) ? ERR_NONE : ERR_STATE;
 }
 
-static fsm_state_t mc_cal_type_to_fsm_entry(mc_calibration_type_t type)
-{
-  switch (type)
-  {
-    case MC_CAL_ENCODER:
-      return STATE_ENCODER_CALIBRATION;
-    case MC_CAL_RSLS:
-      return STATE_RSLS_CALIBRATION;
-    case MC_CAL_FLUX:
-      return STATE_FLUX_CALIBRATION;
-    case MC_CAL_ELECTRICAL_ALIGN:
-      return STATE_ELECTRICAL_ALIGNMENT;
-    case MC_CAL_ANTICOGGING:
-      return STATE_ANTICOGGING;
-    case MC_CAL_SEQUENCE:
-      return STATE_ENCODER_CALIBRATION;
-    default:
-      return STATE_MAX;
-  }
-}
-
 static mc_calibration_type_t mc_fsm_state_to_cal_type(fsm_state_t state)
 {
   switch (state)
@@ -221,7 +200,6 @@ static mc_calibration_type_t mc_fsm_state_to_cal_type(fsm_state_t state)
 error_t mc_start_calibration(mc_calibration_type_t type)
 {
   motor_handle_t *m = motor_get_handler();
-  fsm_state_t entry;
 
   if (motor_fault_is_latched(m) || (m->fsm == STATE_FAULT))
   {
@@ -233,19 +211,20 @@ error_t mc_start_calibration(mc_calibration_type_t type)
     return ERR_STATE;
   }
 
-  entry = mc_cal_type_to_fsm_entry(type);
-  if (entry >= STATE_MAX)
-  {
-    return ERR_CAL_TYPE;
-  }
-
-  foc_fsm_request_calibration(m, entry);
-  return foc_fsm_is_calibrating(m->fsm) ? ERR_NONE : ERR_STATE;
+  if (mc_kth71_cal_active()) return ERR_CALIBRATING;
+  if (type == MC_CAL_RSLS || type == MC_CAL_FLUX)
+    return foc_ident_start(m, type == MC_CAL_RSLS ? IDENT_RSLS : IDENT_FLUX, NULL);
+  if (type == MC_CAL_SEQUENCE || type == MC_CAL_ENCODER || type == MC_CAL_ANTICOGGING)
+    return ERR_NOT_IMPL;
+  if (type == MC_CAL_ELECTRICAL_ALIGN) return mc_align_electrical(CAL_ELEC_ALIGN_METHOD_DEFAULT);
+  return ERR_CAL_TYPE;
 }
 
 void mc_stop_calibration(void)
 {
   motor_handle_t *m = motor_get_handler();
+  foc_ident_stop(m);
+  if (foc_fsm_is_calibrating(m->fsm)) motor_disarm(m);
 
   if (!foc_fsm_is_calibrating(m->fsm))
   {
@@ -284,7 +263,7 @@ error_t mc_disable(void)
   if (foc_fsm_is_calibrating(m->fsm))
   {
     mc_stop_calibration();
-    return ERR_CALIBRATING;
+    return ERR_NONE;
   }
 
   if ((m->fsm != STATE_FAULT) || !motor_fault_is_latched(m))
@@ -381,7 +360,7 @@ error_t mc_set_joint_origin(void)
 {
   motor_handle_t *m = motor_get_handler();
 
-  if (mc_is_enabled())
+  if (m->fsm != STATE_IDLE || motor_is_armed(m))
   {
     return ERR_STATE;
   }
@@ -476,6 +455,7 @@ void mc_kth71_cal_service(void)
 error_t mc_kth71_cal_start(void)
 {
   motor_handle_t *m = motor_get_handler();
+  if (foc_fsm_is_calibrating(m->fsm)) return ERR_CALIBRATING;
 
   if (m == NULL)
   {

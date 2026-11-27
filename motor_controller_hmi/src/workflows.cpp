@@ -1,4 +1,5 @@
 #include "window.h"
+#include "identification_dialog.h"
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSaveFile>
@@ -184,6 +185,24 @@ void Window::runWizardStep() {
             else
                 stepDetail_->setText("对齐未报告完成标志，不能进入下一步");
         });
+        return;
+    }
+    if (wizardStep_ >= 3 && wizardStep_ <= 5) {
+        if (experimentTimer_.isActive() || testsRunning_ || session.upgrading()) {
+            stepDetail_->setText("请先停止其他实验、测试或升级任务"); return;
+        }
+        const int step = wizardStep_;
+        bool applied = false;
+        IdentificationDialog dialog(session, connection_.version, node(), connection_.backend == "Demo", this,
+                                    step <= 4 ? 1 : 2);
+        connect(&dialog, &IdentificationDialog::parametersApplied, &dialog, [&](QJsonObject result) {
+            applied = (result["valid_mask"].toInt() & (step <= 4 ? 1 : 2)) != 0;
+        });
+        dialog.exec();
+        if (applied) {
+            if (step == 3) ++wizardStep_; // One successful Rs/Ld/Lq run covers both electrical steps.
+            advance();
+        } else stepDetail_->setText("辨识结果尚未成功应用，当前步骤未完成。");
         return;
     }
     if (connection_.backend == "Demo") {

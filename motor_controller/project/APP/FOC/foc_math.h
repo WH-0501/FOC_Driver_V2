@@ -36,6 +36,10 @@
 #define TWO_DIV_3 (0.6666666666666666f)
 #define THREE_DIV_2 (1.5f)
 
+/* Shared size-optimized entry for calibration/identification; normal control
+ * retains the inline implementation below. */
+void foc_sincos_shared(float theta, float *s, float *c);
+
 APP_STATIC_INLINE float foc_fabs(float angle)
 {
   return (angle >= 0.0000001f) ? angle : -angle;

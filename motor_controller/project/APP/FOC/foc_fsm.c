@@ -29,12 +29,14 @@ static void foc_fsm_on_enter(motor_handle_t *m, fsm_state_t state)
     case STATE_IDLE:
       motor_disarm(m);
       break;
-    case STATE_ENCODER_CALIBRATION:
     case STATE_RSLS_CALIBRATION:
     case STATE_FLUX_CALIBRATION:
+      /* Explicit identification owns PWM and the return to IDLE. */
+      break;
+    case STATE_ENCODER_CALIBRATION:
     case STATE_ANTICOGGING:
-      /* TODO: 运行时标定模块；占位直接跳过 */
-      foc_fsm_next_state(m, (fsm_state_t)(state + 1));
+      /* Unsupported calibration must never chain into rotation. */
+      foc_fsm_next_state(m, STATE_IDLE);
       break;
     case STATE_ELECTRICAL_ALIGNMENT:
       if (rt->electrical_align_done || !m->config.auto_align_electrical)

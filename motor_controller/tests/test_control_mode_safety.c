@@ -11,6 +11,8 @@
 #define FOC_SWEEP_ENABLED 0
 #include "sweep/foc_sweep.h"
 
+static bool foc_ident_active(const motor_handle_t *m) { (void)m; return false; }
+static void foc_ident_run_isr(motor_handle_t *m) { (void)m; assert(0); }
 static motor_handle_t motor;
 static motor_runtime_t runtime;
 static unsigned armed,disarms,clears,sensed,executed;
@@ -69,7 +71,7 @@ static void check_sense_fields(void) {
 }
 void foc_current(motor_handle_t *m,motor_runtime_t *rt,float q) { ++current_calls;applied_iq=q;executed=m->ctrl_mode; test_ticks += 820u; rt->foc_cur_loop_us=4u;
 }
-static error_t foc_pid_calc(pid_state_t *pid,const pid_param_t *param,float target,float feedback,float *out) {
+error_t foc_pid_calc(pid_state_t *pid,const pid_param_t *param,float target,float feedback,float *out) {
   (void)param; assert(sensed_outer);
   if (pid==&motor.position_pid) ++position_calls;
   else { assert(pid==&motor.velocity_pid); ++speed_calls; }

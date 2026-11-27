@@ -1,4 +1,5 @@
 #include "protocol.h"
+#include "identification.h"
 #include <QtEndian>
 #include <cmath>
 #include <limits>
@@ -333,14 +334,14 @@ bool modeAcceptsTarget(Version v, int mode, int channel) {
 }
 bool requiresDisabled(int c) {
     return (c >= 0x41 && c <= 0x46) || c == 0x4c || c == 0x4d || c == 0x4e || c == 0x50 || c == 0x54 ||
-           c == 0xab || c == 0xac || c == 0xb1;
+           c == 0xab || c == 0xac || c == 0xb1 || c == identApply;
 }
 int responseCommand(int c) {
     return c >= 0x42 && c <= 0x46 ? c + 5 : c;
 }
 bool hasResult(int c) {
     return c == 0x39 || c == 0x40 || requiresDisabled(c) || c == 0x4f || c == 0xb8 || c == 0xad ||
-           c == 0xaf || c == 0xb0 || (c>=0xbc && c<=0xbe);
+           c == 0xaf || c == 0xb0 || (c>=0xbc && c<=0xbe) || (c>=identControl && c<=identApply);
 }
 static QString sweepRejectionMessage(unsigned reason, float value) {
     const QString v = std::isfinite(value) ? QString::number(value, 'g', 7) : QString("非有限值");
@@ -372,6 +373,7 @@ static QString sweepRejectionMessage(unsigned reason, float value) {
 QJsonObject response(quint8 c, const QByteArray &p, Version) {
     QJsonObject o;
     o["command"] = c;
+    if(c>=identControl && c<=identApply) return identificationResponse(p);
     if (c >= 0x42 && c <= 0x46 && p.size() >= (c == 0x45 ? 4 : 6))
         c = quint8(responseCommand(c));
     o["hex"] = QString::fromLatin1(p.toHex(' '));

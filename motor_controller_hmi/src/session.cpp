@@ -1,4 +1,5 @@
 #include "session.h"
+#include "identification.h"
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QMutexLocker>
@@ -123,11 +124,12 @@ quint64 Session::command(quint32 n, int c, const QByteArray &p, int expectedMode
     Request request{n, c, p, t, expectedMode};
     request.enteredNs = enteredNs;
     request.enqueuedNs = monotonicNs();
-    bool disabling = c == 0x39 || (c == 0x40 && p == QByteArray(1, 0));
+    bool disabling = c == 0x39 || (c == 0x40 && p == QByteArray(1, 0)) ||
+                     (c == identControl && p == QByteArray::fromHex("0100"));
     if (disabling) {
         // A user stop must not sit behind an unanswered enable or motion command.
         for (auto it = queue_.begin(); it != queue_.end();) {
-            if (it->node == n && (it->cmd == 0x40 || it->cmd == 0x41 || (it->cmd >= 1 && it->cmd <= 0x30))) {
+            if (it->node == n && (it->cmd == 0x40 || it->cmd == 0x41 || it->cmd == identControl || (it->cmd >= 1 && it->cmd <= 0x30))) {
                 auto cancelled = it->token;
                 QMetaObject::invokeMethod(
                     this,
@@ -353,7 +355,8 @@ void Session::run() {
                     QMutexLocker l(&mutex_);
                     if (!queue_.empty()) {
                         auto &first = queue_.front();
-                        bool disabling = first.cmd == 0x40 && first.payload == QByteArray(1, 0);
+                        bool disabling = (first.cmd == 0x40 && first.payload == QByteArray(1, 0)) ||
+                            (first.cmd == identControl && first.payload == QByteArray::fromHex("0100"));
                         bool conflict = false;
                         for (auto &p : pending)
                             if (p.r.node == first.node &&
@@ -367,9 +370,10 @@ void Session::run() {
                     }
                 }
                 if (have) {
-                    if (r.cmd == 0x39 || (r.cmd == 0x40 && r.payload == QByteArray(1, 0))) {
+                    if (r.cmd == 0x39 || (r.cmd == 0x40 && r.payload == QByteArray(1, 0)) ||
+                        (r.cmd == identControl && r.payload == QByteArray::fromHex("0100"))) {
                         for (auto it = pending.begin(); it != pending.end();) {
-                            if (it->r.node == r.node && (it->r.cmd == 0x40 || it->r.cmd == 0x41)) {
+                            if (it->r.node == r.node && (it->r.cmd == 0x40 || it->r.cmd == 0x41 || it->r.cmd == identControl)) {
                                 emit commandFailed(it->r.token,
                                                    "已取消：失能/复位请求优先于尚未确认的使能/模式操作");
                                 it = pending.erase(it);
@@ -383,7 +387,18 @@ void Session::run() {
                     bool enabling = r.cmd == 0x40 && !r.payload.isEmpty() && r.payload[0] != 0;
                     bool motion = r.cmd >= 1 && r.cmd <= 0x30;
                     bool limits = r.cmd == 0xb6;
-                    if (r.cmd == 0x40 && (r.payload.size() != 1 || quint8(r.payload[0]) > 1))
+                    const bool ident = r.cmd >= identControl && r.cmd <= identApply;
+                    const bool identStart = r.cmd == identControl && r.payload.size() >= 2 && r.payload[1] != 0;
+                    if (ident && (config_.version != Version::V2 || r.node == 0 || r.node >= 0x7ff))
+                        rejection = "参数辨识仅支持 V2 节点单播";
+                    else if (ident && (r.payload.isEmpty() || r.payload[0] != 1 ||
+                             (r.cmd == identControl && (r.payload.size() < 2 || quint8(r.payload[1]) > 3 ||
+                              (identStart && r.payload.size() < 16)))))
+                        rejection = "参数辨识命令格式无效";
+                    else if ((identStart || r.cmd == identApply || r.cmd == 0x4d) &&
+                             (!fresh || s->enabled || s->error))
+                        rejection = "辨识启动、应用和保存要求新鲜遥测确认失能且无故障";
+                    else if (r.cmd == 0x40 && (r.payload.size() != 1 || quint8(r.payload[0]) > 1))
                         rejection = "使能/失能参数必须为单字节 00 或 01";
                     else if (r.node == 0 && (enabling || requiresDisabled(r.cmd) || motion || limits))
                         rejection = "高风险命令仅允许单播已确认节点";

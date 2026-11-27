@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "identification.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -47,6 +48,48 @@ class DemoBackend final : public CanBackend {
     double fraAt=0,fraPeak=0, fraLow=20, fraHigh=2000, fraFeedback=0;
     quint32 fraCursor=0;
     std::vector<double> fraHz;
+    int identStage=0, identMode=0, identMask=0;
+    qint64 identAt=0, identElapsed=0;
+    bool identRsApplied=false;
+    void advanceIdentification() {
+        if(!identificationActive(identStage))return;
+        identElapsed=timer.elapsed()-identAt;
+        qint64 t=identElapsed;
+        if(identMode==2)identStage=t<1200?5:t<2200?6:7;
+        else identStage=t<600?1:t<1200?2:t<1800?3:t<2400?4:
+                        identMode==1?7:t<3600?5:t<4600?6:7;
+        if(identStage==7)identMask=identMode==3?3:identMode==1?1:2;
+    }
+    QByteArray identificationReply(int cmd,const QByteArray &p) {
+        advanceIdentification();
+        int error=0;
+        if(p.isEmpty()||p[0]!=1)error=2;
+        else if(cmd==identControl) {
+            if(p.size()<2||quint8(p[1])>3)error=2;
+            else if(p[1]==0){if(identificationActive(identStage)){identStage=9;identMask=0;}enabled=false;}
+            else if(p.size()<16)error=2;
+            else {
+                IdentificationConfig c{u16(p,2)/1000.,u16(p,4)/1000.,u16(p,6)/1000.,double(u16(p,8)),
+                                       u16(p,10)/100.,u16(p,12)/1000.,u16(p,14)/100.};
+                if(!validateIdentification(c).isEmpty())error=2;
+                else if(enabled||identificationActive(identStage)||fraState==1)error=3;
+                else if(!aligned)error=12;
+                else if(p[1]==2&&!identRsApplied)error=2;
+                else {identMode=quint8(p[1]);identStage=identMode==2?5:1;identMask=0;identAt=timer.elapsed();identElapsed=0;}
+            }
+        }else if(cmd==identApply) {
+            if(enabled||identStage!=7||!identMask)error=3;
+            else if(identMask&1)identRsApplied=true;
+        }
+        QByteArray out(28,0);out[0]=1;out[1]=char(error);out[2]=char(identStage);out[4]=char(identMask);
+        qToBigEndian<quint32>(quint32(identElapsed),out.data()+8);
+        const float values[]={1.5f,.0012f,.0018f,.015f};
+        for(int i=0;i<4;++i)if(identMask&(i==3?2:1)) {
+            quint32 b;std::memcpy(&b,&values[i],4);qToBigEndian<quint32>(b,out.data()+12+4*i);
+        }
+        return out;
+    }
+
 
 
   public:
@@ -67,8 +110,13 @@ class DemoBackend final : public CanBackend {
         auto p = f.bytes.mid(2);
         QByteArray result;
         bool reply = true;
-        int err = requiresDisabled(cmd) && enabled ? 3 : 0;
-        if (err)
+        advanceIdentification();
+        int err = requiresDisabled(cmd) && (enabled || identificationActive(identStage)) ? 3 : 0;
+        if(cmd>=identControl && cmd<=identApply) {
+            if(version!=Version::V2 || !f.node)return;
+            result=identificationReply(cmd,p);
+        }
+        else if (err)
             result = QByteArray(1, char(err));
         else if(cmd>=0xbc && cmd<=0xbe){
             auto putFloat=[](QByteArray &b,int off,double x){float f=float(x);quint32 u;memcpy(&u,&f,4);qToBigEndian<quint32>(u,b.data()+off);};
@@ -106,8 +154,12 @@ class DemoBackend final : public CanBackend {
             }
         }
         else if (cmd == 0x40) {
-            enabled = !p.isEmpty() && p[0];
-            result = QByteArray(1, 0);
+            if(!p.isEmpty()&&p[0]&&identificationActive(identStage))result=QByteArray(1,23);
+            else {
+                enabled = !p.isEmpty() && p[0];
+                if(!enabled&&identificationActive(identStage)){identStage=9;identMask=0;}
+                result = QByteArray(1, 0);
+            }
         } else if (cmd == 0xb8 && p.size() >= 4 && quint8(p[0]) == 1) {
             int mask = quint8(p[1]), rate = u16(p, 2);
             int loops = (mask & 1) + ((mask >> 1) & 1) + ((mask >> 2) & 1);
@@ -124,6 +176,7 @@ class DemoBackend final : public CanBackend {
             mode = quint8(p[0]);
             result = QByteArray(1, 0);
         } else if (cmd == 0x39) {
+            if(identificationActive(identStage)){identStage=9;identMask=0;}
             enabled = false;
             for (double &t : targets)
                 t = 0;
