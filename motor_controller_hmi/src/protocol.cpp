@@ -418,7 +418,8 @@ QJsonObject response(quint8 c, const QByteArray &p, Version) {
         }
         if(c!=0xbe && p.size()>=58 && quint8(p[56])==0xae) {
             o["chirp_timing_revision"]=p.size()>=62?quint8(p[57]):-1;
-            if(p.size()>=62) {if(p[57]==1){o["host_h1"]=true;o["host_stepped"]=true;o["chirp_timing_required"]=true;}o["chirp_period_ms"]=u16(p,58);o["chirp_settle_periods"]=quint8(p[60]);o["chirp_measure_periods"]=quint8(p[61]);}
+            o["sweep_exact_range"]=p.size()>=62&&p[57]==2;
+            if(p.size()>=62) {if(p[57]==1||p[57]==2){o["host_h1"]=true;o["host_stepped"]=true;o["chirp_timing_required"]=true;}o["chirp_period_ms"]=u16(p,58);o["chirp_settle_periods"]=quint8(p[60]);o["chirp_measure_periods"]=quint8(p[61]);}
         }
         if(c!=0xbe && p.size()>=43 && quint8(p[40])==0xa9 && p[41]==1)
         {

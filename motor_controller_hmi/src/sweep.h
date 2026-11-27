@@ -14,15 +14,17 @@ struct SweepPoint {
   QString status;
 };
 SweepPoint measureSweep(double hz, const std::vector<SweepSample> &samples);
-// Relative to the mean of the first two valid, flat low-frequency points.
+// Current-loop low-frequency plateau: contiguous valid coherent points.
+// Local retests never claim an absolute bandwidth.
 // Never bridge rejected points or extrapolate an unmeasured crossing.
 struct SweepBandwidthResult {
   bool found=false, baselineValid=false;
-  double hz=0, lowHz=0, highHz=0, baselineDb=0;
+  double hz=0, lowHz=0, highHz=0, baselineDb=0, baselineLowHz=0, baselineHighHz=0;
+  unsigned baselineCount=0;
   QString message;
 };
-SweepBandwidthResult sweepBandwidthResult(const std::vector<SweepPoint> &points);
-QString sweepBandwidth(const std::vector<SweepPoint> &points);
+SweepBandwidthResult sweepBandwidthResult(const std::vector<SweepPoint> &points, bool localRetest=false);
+QString sweepBandwidth(const std::vector<SweepPoint> &points, bool localRetest=false);
 // Closed-loop 0 dB downward crossing, >=100 Hz; diagnostic, not open-loop crossover.
 // A later adjacent valid bracket can yield a candidate after a gap, but cannot
 // confirm that it is the first crossing. No interpolation bridges invalid data.

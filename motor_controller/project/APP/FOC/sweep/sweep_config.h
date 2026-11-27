@@ -1,9 +1,9 @@
 #ifndef FOC_SWEEP_CONFIG_H
 #define FOC_SWEEP_CONFIG_H
 
-/* Device-owned Chirp timing, advertised via AE/1 before acquisition.
- * Default: 1 s x (1 settling + 3 measurement periods) = 4 s. */
-#define SWEEP_CHIRP_PERIOD_MS             4000u ///< 单周期时长 1 s，由 AE/1 上报
+/* Device-owned Chirp timing, advertised via AE/2 before acquisition.
+ * Current configuration: 4 s x (1 settling + 3 measurement periods) = 4 s. */
+#define SWEEP_CHIRP_PERIOD_MS             1000u ///< 单周期时长 1 s，由 AE/2 上报
 #define SWEEP_CHIRP_SETTLE_PERIODS        1u ///< 舍弃的稳定周期数
 #define SWEEP_CHIRP_MEASURE_PERIODS       3u ///< 参与 H1 的测量周期数
 #define SWEEP_CHIRP_TOTAL_PERIODS \
@@ -19,13 +19,11 @@
 #define SWEEP_STEPPED_MEASURE_CYCLES \
     (SWEEP_STEPPED_BLOCKS * SWEEP_STEPPED_CYCLES_PER_BLOCK) ///< stepped 扫频 采样周期 16 个周期
 
-/* Admission limits and low-frequency baseline. These describe the existing
+/* Admission limits; the requested frequency range is used without anchors. These describe the existing
  * wire/host contract, not substitutes for motor current/motion protections. */
 #define SWEEP_MAX_POINTS                 16u ///< 扫频点数最大值 16
 #define SWEEP_MIN_POINTS                 3u ///< 扫频点数最小值 3
 #define SWEEP_MIN_HZ                     20u ///< 扫频频率最小值 20Hz
-#define SWEEP_BASELINE_HIGH_HZ           40u ///< 扫频基线最高频率 40Hz
-#define SWEEP_BASELINE_POINTS            2u ///< 扫频基线点数 2
 #define SWEEP_MAX_HZ                     2000u ///< 扫频频率最大值 2000Hz
 #define SWEEP_MIN_SAMPLE_HZ              10000u
 #define SWEEP_MAX_SAMPLE_HZ              40000u ///< 扫频采样率最大值 40000Hz
@@ -33,7 +31,7 @@
 #define SWEEP_MIN_PEAK_A                 0.005f ///< 扫频峰值最小值 0.005A
 #define SWEEP_MAX_PEAK_A                 0.5f ///< 扫频峰值最大值 0.5A
 
-/* AE/1 status tail reports Chirp timing. Compatible host required; the
+/* AE/2 status tail reports Chirp timing. Compatible host required; the
  * stepped window is still fixed. Raw sample frames and protection are unchanged.
  * Whole-second periods preserve the existing integer-Hz analysis grid.
  * Keep the entire capture within the host's existing 1,200,000-sample bound. */

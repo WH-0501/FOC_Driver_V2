@@ -31,7 +31,7 @@ WelchMatch match(const SweepPoint &p,const std::vector<SweepPoint> &ref) {
 }
 } // namespace
 WelchAnalysis analyzeWelch(const SweepCapture &c,unsigned length,const std::vector<SweepPoint> &raw,const std::vector<SweepPoint> &stepped){
-  WelchAnalysis out;out.segmentLength=length;out.sampleHz=c.fs;
+  WelchAnalysis out;out.localRetest=c.localRetest;out.segmentLength=length;out.sampleHz=c.fs;
   auto fail=[&](QString s){out.error=s;return out;};
   if(c.method!=3||!c.completed||!c.recording.complete(c.expected))return fail("Welch：要求完整、零缺样且零拒收的 Chirp 录波；不插补。");
   if(!c.timing.valid(c.fs)||c.expected!=c.timing.totalSamples(c.fs))return fail("Welch：录波长度与设备时序不一致。");
@@ -78,9 +78,9 @@ WelchAnalysis analyzeWelch(const SweepCapture &c,unsigned length,const std::vect
 QString welchAnalysisSummary(const WelchAnalysis &a){
   if(!a.ok())return a.error;
   const auto valid=std::count_if(a.points.begin(),a.points.end(),[](const auto &p){return p.valid;});
-  return QString("Welch/CSD 对照：未滤波的设备定义测量段；周期 Hann 窗 %1 点（%2 ms），50% 重叠，每段去均值；%3 段算术平均，FFT 栅格 %4 Hz，ENBW %5 Hz。尾部 %6 点不构成完整窗，未参与此对照（非丢样）。\n有效 %7/%8 个原生频点；γ² ≥0.9，无效点保留并断线。重叠段数不等于独立平均次数；能量等效段数也不是自由度。\nWelch 诊断：%9；基准为前两条原生谱线 %10/%11 Hz，仅作对照，不替代原始 H1。窗长影响泄漏和分辨率，不保证比周期 H1 更准确。")
+  return QString("Welch/CSD 对照：未滤波的设备定义测量段；周期 Hann 窗 %1 点（%2 ms），50% 重叠，每段去均值；%3 段算术平均，FFT 栅格 %4 Hz，ENBW %5 Hz。尾部 %6 点不构成完整窗，未参与此对照（非丢样）。\n有效 %7/%8 个原生频点；γ² ≥0.9，无效点保留并断线。重叠段数不等于独立平均次数；能量等效段数也不是自由度。\nWelch 诊断：%9；基准按有效低频平台判断，仅作对照，不替代原始 H1。窗长影响泄漏和分辨率，不保证比周期 H1 更准确。")
     .arg(a.segmentLength).arg(1000*a.segmentLength/a.sampleHz,0,'g',6).arg(a.segments).arg(a.binHz,0,'g',6).arg(a.enbwHz,0,'g',6).arg(a.tailSamples)
-    .arg(valid).arg(a.points.size()).arg(sweepBandwidth(a.points)).arg(a.points[0].hz,0,'g',6).arg(a.points[1].hz,0,'g',6);
+    .arg(valid).arg(a.points.size()).arg(sweepBandwidth(a.points,a.localRetest));
 }
 QByteArray welchAnalysisCsv(const WelchAnalysis &a){
   QByteArray out="frequency_hz,welch_gain_db,welch_phase_deg,coherence,valid,input_psd_A2_per_Hz,output_psd_A2_per_Hz,csd_real_A2_per_Hz,csd_imag_A2_per_Hz,energy_equivalent_segments,segments,nperseg,bin_hz,enbw_hz,raw_gain_db,raw_phase_deg,welch_minus_raw_db,welch_minus_raw_deg,raw_interpolated,stepped_gain_db,stepped_phase_deg,welch_minus_stepped_db,welch_minus_stepped_deg,stepped_interpolated\n";

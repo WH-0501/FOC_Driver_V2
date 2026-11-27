@@ -76,12 +76,13 @@ class DemoBackend final : public CanBackend {
             if(cmd==0xbc){
                 if(p.size()<11 || p[0]!=1)error=2;
                 else if(p[1]==0){fraState=3;enabled=false;targets[2]=0;}
+                else if(p[1]==3&&(p.size()<19||p.mid(13,6)!=QByteArray::fromHex("ae0203e80103")))error=2;
                 else if(!enabled||mode!=6||std::abs(targets[2])>.001)error=1;
                 else{
                     fraMethod=quint8(p[1]);fraRun=u16(p,2);fraN=quint8(p[8]);fraPeak=u16(p,9)/1000.;fraHz.clear();
                     double lo=u16(p,4),hi=u16(p,6),last=0;
-                    if(fraN<3||(lo>40&&fraN<4)||fraN>16||lo<20||hi<=lo||hi>2000||fraPeak<=0||fraPeak>.5)error=2;
-                    else {for(int i=0;i<fraN;++i){double f=lo>40?(i<2?(i==0?20.:40.):lo*std::pow(hi/lo,double(i-2)/(fraN-3))):lo*std::pow(hi/lo,double(i)/(fraN-1));f=fraMethod==1?std::max(last+20,20*std::round(f/20)):fraMethod==3?std::max(last+1,std::round(f)):20000/std::ceil(20000/f);fraHz.push_back(f);last=f;}fraState=1;fraAt=timer.nsecsElapsed()/1e9;fraCursor=0;fraFeedback=0;fraLow=lo>40?20:lo;fraHigh=hi;}
+                    if(fraN<3||fraN>16||lo<20||hi<=lo||hi>2000||fraPeak<=0||fraPeak>.5)error=2;
+                    else {for(int i=0;i<fraN;++i){double f=lo*std::pow(hi/lo,double(i)/(fraN-1));f=fraMethod==1?std::max(last+20,20*std::round(f/20)):fraMethod==3?std::max(last+1,std::round(f)):20000/std::ceil(20000/f);fraHz.push_back(f);last=f;}fraState=1;fraAt=timer.nsecsElapsed()/1e9;fraCursor=0;fraFeedback=0;fraLow=lo;fraHigh=hi;}
                 }
             }
             double duration=fraMethod==1?.2:4.;
@@ -100,7 +101,7 @@ class DemoBackend final : public CanBackend {
                 result[40]=char(0xa9);result[41]=1;result[42]=fraMethod==3?1:0;
                 result[43]=char(0xaa);qToBigEndian(fraCursor,result.data()+48);
                 result[52]=char(0xac);result[53]=1;result[54]=5;result[55]=4;
-                result[56]=char(0xae);result[57]=1;qToBigEndian<quint16>(1000,result.data()+58);result[60]=1;result[61]=3;
+                result[56]=char(0xae);result[57]=2;qToBigEndian<quint16>(1000,result.data()+58);result[60]=1;result[61]=3;
                 if(fraMethod==3)qToBigEndian(fraCursor,result.data()+12);
             }
         }

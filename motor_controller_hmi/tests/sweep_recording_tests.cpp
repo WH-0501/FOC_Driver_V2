@@ -1,4 +1,5 @@
 #include "sweep_recording.h"
+#include "chirp_analysis.h"
 #include "protocol.h"
 #include <QtTest>
 #include <QtEndian>
@@ -17,6 +18,40 @@ static QByteArray packet(quint32 first, unsigned n=6,quint16 run=42) {
 class RecordingTests:public QObject {
  Q_OBJECT
 private slots:
+ void historicalRecordingsPreserveH1() {
+  auto dir=qEnvironmentVariable("MOTORTUNE_RANGE_RECORDINGS");if(dir.isEmpty())QSKIP("Optional historical capture directory");
+  for(int run=1;run<=3;++run){
+    QFile f(dir+QString("/test1126-0.2A-%1.csv.samples.csv").arg(run));QVERIFY(f.open(QIODevice::ReadOnly));
+    auto meta=f.readLine().mid(18);SweepCapture c;QString error;QVERIFY2(readSweepCapture(f,meta,c,error),qPrintable(error));
+    QVERIFY(c.completed&&c.recording.complete(80000));
+    auto a=analyzeChirp(c,{});QVERIFY2(a.ok(),qPrintable(a.error));QCOMPARE(a.raw.size(),c.points.size());
+    double delta=0;for(size_t i=0;i<a.raw.size();++i){delta=std::max(delta,std::abs(a.raw[i].gainDb-c.points[i].gainDb));QVERIFY(std::abs(a.raw[i].phaseDeg-c.points[i].phaseDeg)<1e-7);QVERIFY(std::abs(a.raw[i].inputFit-c.points[i].inputFit)<1e-8);QCOMPARE(a.raw[i].valid,c.points[i].valid);}
+    QVERIFY(delta<1e-7);auto bw=sweepBandwidthResult(a.raw);QVERIFY(bw.baselineValid&&bw.found);
+    QVERIFY(!sweepBandwidthResult(a.raw,true).found);
+    qInfo().noquote()<<QString("capture %1: max raw gain delta %2 dB; %3").arg(run).arg(delta,0,'g',6).arg(bw.message);
+  }
+ }
+
+ void requestedRangeAndScope() {
+  auto chirp=chirpFrequencyGrid(600,1500,16);QCOMPARE(chirp.size(),16u);
+  QCOMPARE(chirp.front().hz,600.);QCOMPARE(chirp.back().hz,1500.);
+  auto stepped=steppedFrequencyGrid(600,1500,16,20000);QCOMPARE(stepped.size(),16u);
+  QVERIFY(std::abs(stepped.front().hz-20000./33)<1e-9);
+  QVERIFY(std::abs(stepped.back().hz-20000./13)<1e-9);
+  for(size_t i=1;i<stepped.size();++i)QVERIFY(stepped[i].hz>stepped[i-1].hz);
+  QCOMPARE(chirpFrequencyGrid(600,1500,3).size(),3u);
+  for(bool local:{false,true}) {
+    SweepCapture c;c.method=3;c.localRetest=local;c.fs=20000;c.recording.reset(1,4);c.points=chirp;
+    QByteArray bytes;QBuffer out(&bytes);out.open(QIODevice::WriteOnly);QVERIFY(writeSweepCapture(out,c));out.close();
+    QBuffer in(&bytes);in.open(QIODevice::ReadOnly);auto meta=in.readLine().mid(18);auto start=in.pos();SweepCapture restored;QString error;
+    QVERIFY2(readSweepCapture(in,meta,restored,error),qPrintable(error));QCOMPARE(restored.localRetest,local);
+    auto m=QJsonDocument::fromJson(meta).object();QCOMPARE(m["format"].toInt(),3);
+    m["measurement_scope"]="bad";in.seek(start);QVERIFY(!readSweepCapture(in,QJsonDocument(m).toJson(),restored,error));
+    m.remove("measurement_scope");in.seek(start);QVERIFY(!readSweepCapture(in,QJsonDocument(m).toJson(),restored,error));
+    m["format"]=2;in.seek(start);QVERIFY(readSweepCapture(in,QJsonDocument(m).toJson(),restored,error));QVERIFY(!restored.localRetest);
+  }
+ }
+
  void transportIntegrity() {
   SweepRecording r;r.reset(1,42);
   QVERIFY(!r.append(2,packet(0)));QVERIFY(!r.append(1,packet(0,6,41)));

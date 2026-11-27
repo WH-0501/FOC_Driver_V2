@@ -110,12 +110,8 @@ QString feedbackMean16Description(double fs) {
 std::vector<SweepPoint> chirpFrequencyGrid(double low,double high,unsigned count) {
   std::vector<SweepPoint> out;
   if(!std::isfinite(low)||!std::isfinite(high)||low<20||high>2000||high<=low||count<3||count>16)return out;
-  unsigned anchors=low>40?2:0;
-  if(count<anchors+2)return out;
-  double step=std::pow(high/low,1./(count-anchors-1)),next=low,previous=0;
-  for(unsigned i=0;i<count;++i){double f;
-    if(i<anchors)f=i?40:20;
-    else {f=i==count-1?high:next;next*=step;}
+  double step=std::pow(high/low,1./(count-1)),next=low,previous=0;
+  for(unsigned i=0;i<count;++i){double f=i==count-1?high:next;next*=step;
     f=std::max(std::round(f),previous+1);
     if(f>high)return {};
     SweepPoint p;p.hz=f;p.status="待完整录波后计算";out.push_back(p);previous=f;
@@ -221,7 +217,7 @@ ChirpAnalysis analyzeChirp(const SweepCapture &capture,const ChirpAnalysisOption
 QString chirpAnalysisSummary(const SweepCapture &c,const ChirpAnalysisOptions &o,const ChirpAnalysis &a){
   if(!a.ok())return a.error;
   QString s=QString("run %1 · %2/%3 点 · 丢弃 0–%7 s，分析 %7–%8 s 的 %9 个完整周期（单周期 %10 s）\n原始 H1：%4\n输入周期最大差 %5 A；反馈非周期残差 RMS %6 A（包含噪声与非平稳变化，不等同于纯噪声）")
-    .arg(c.recording.run).arg(c.recording.samples.size()).arg(c.expected).arg(sweepBandwidth(a.raw)).arg(a.inputRepeatMax,0,'g',5).arg(a.outputResidualRms,0,'g',5).arg(a.settleSeconds).arg(c.expected/c.fs).arg(a.cycles.size()).arg(a.periodSeconds);
+    .arg(c.recording.run).arg(c.recording.samples.size()).arg(c.expected).arg(sweepBandwidth(a.raw,c.localRetest)).arg(a.inputRepeatMax,0,'g',5).arg(a.outputResidualRms,0,'g',5).arg(a.settleSeconds).arg(c.expected/c.fs).arg(a.cycles.size()).arg(a.periodSeconds);
   if(a.inputRepeatMax>1e-6)s+="\n注意：给定各周期不完全重复，周期一致性需结合输入变化判断。";
   if(o.filter==ChirpFilter::FeedbackMean16)s+="\n"+feedbackMean16Description(c.fs)+"\n16 点均值仅对照；最终带宽仍采用原始 H1。";
   else if(o.filter==ChirpFilter::FeedbackLpf)s+="\n"+feedbackLpfDescription(c.fs,o.cutoffHz)+QString("\n反馈 RMS %1 → %2 A").arg(a.outputRms,0,'g',6).arg(a.filteredOutputRms,0,'g',6);

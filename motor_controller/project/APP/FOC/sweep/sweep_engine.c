@@ -24,10 +24,8 @@ int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *c)
       c->sample_hz != (float)(unsigned)c->sample_hz ||
       c->low_hz < SWEEP_MIN_HZ || c->high_hz <= c->low_hz ||
       c->high_hz > SWEEP_MAX_HZ || c->high_hz > c->sample_hz * (1.0f / SWEEP_MIN_SAMPLES_PER_CYCLE) ||
-      c->peak < SWEEP_MIN_PEAK_A || c->peak > SWEEP_MAX_PEAK_A ||
-      (c->low_hz > SWEEP_BASELINE_HIGH_HZ && c->count < SWEEP_BASELINE_POINTS + 2u)) return 2;
+      c->peak < SWEEP_MIN_PEAK_A || c->peak > SWEEP_MAX_PEAK_A) return 2;
   if (c->method == SWEEP_STEPPED) {
-    unsigned anchor=c->low_hz>SWEEP_BASELINE_HIGH_HZ?SWEEP_BASELINE_POINTS:0u;
     unsigned first=(unsigned)(c->sample_hz/c->low_hz+0.5f);
     unsigned last=(unsigned)(c->sample_hz/c->high_hz+0.5f);
     for(i=0;i<c->count;++i) {
@@ -35,11 +33,9 @@ int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *c)
       if(p<SWEEP_MIN_SAMPLES_PER_CYCLE || (float)p<c->sample_hz/SWEEP_MAX_HZ ||
          p>(unsigned)(c->sample_hz/SWEEP_MIN_HZ+0.5f) ||
          (i && p>=c->periods[i-1])) return 2;
-      if(i<anchor) {
-        if(p!=(unsigned)(c->sample_hz/(i?SWEEP_BASELINE_HIGH_HZ:SWEEP_MIN_HZ)+0.5f)) return 2;
-      } else if(p>first || p<last) return 2;
+      if(p>first || p<last) return 2;
     }
-    if(c->periods[anchor]!=first || c->periods[c->count-1]!=last) return 2;
+    if(c->periods[0]!=first || c->periods[c->count-1]!=last) return 2;
   }
 
   memset(e,0,sizeof(*e));
@@ -56,7 +52,7 @@ int sweep_engine_prepare(sweep_engine_t *e, const sweep_config_t *c)
     e->chirp.ramp_gain=4294967296.0f/(float)e->length;
     return 0;
   }
-  maximum=sweep_chirp_prepare(&e->chirp,c->low_hz>SWEEP_BASELINE_HIGH_HZ?SWEEP_MIN_HZ:c->low_hz,
+  maximum=sweep_chirp_prepare(&e->chirp,c->low_hz,
                               c->high_hz,c->sample_hz,e->length);
   e->scale=c->peak/(maximum*SWEEP_CHIRP_PEAK_HEADROOM);
   return 0;

@@ -19,7 +19,9 @@ private slots:
   auto o=response(0xbd,p,Version::V2);ChirpTiming t;
   QVERIFY(readChirpTiming(o,20000,t));QCOMPARE(t.periodSamples(20000),80000u);QCOMPARE(t.totalSamples(20000),560000u);
   QVERIFY(!readChirpTiming(response(0xbd,p.left(56),Version::V2),20000,t));
-  p[57]=2;QVERIFY(!readChirpTiming(response(0xbd,p,Version::V2),20000,t));p[57]=1;
+  QVERIFY(!o["sweep_exact_range"].toBool());
+  p[57]=2;o=response(0xbd,p,Version::V2);QVERIFY(o["sweep_exact_range"].toBool());QVERIFY(readChirpTiming(o,20000,t));
+  p[57]=3;QVERIFY(!readChirpTiming(response(0xbd,p,Version::V2),20000,t));p[57]=1;
   p[61]=1;QVERIFY(!readChirpTiming(response(0xbd,p,Version::V2),20000,t));p[61]=6;
   p[60]=0;QVERIFY(!readChirpTiming(response(0xbd,p,Version::V2),20000,t));p[60]=1;
   p[40]=16;p[41]=char(0xa8);p[42]=1; // aborted motion retains timing at a distinct offset

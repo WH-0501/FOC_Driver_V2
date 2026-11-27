@@ -23,7 +23,7 @@ QString ChirpTiming::description() const {
 bool readChirpTiming(const QJsonObject &o,double fs,ChirpTiming &out) {
   ChirpTiming t;
   if(o.contains("chirp_timing_revision")) {
-    if(o["chirp_timing_revision"].toInt()!=1)return false;
+    if(o["chirp_timing_revision"].toInt()!=1&&o["chirp_timing_revision"].toInt()!=2)return false;
     t.periodMs=unsigned(o["chirp_period_ms"].toInt());
     t.settlePeriods=unsigned(o["chirp_settle_periods"].toInt());
     t.measurePeriods=unsigned(o["chirp_measure_periods"].toInt());
@@ -79,9 +79,7 @@ std::vector<SweepPoint> steppedFrequencyGrid(double low,double high,unsigned cou
   auto add=[&](double f){auto p=std::llround(fs/f);double hz=fs/p;
     if(p<10||hz>2000||(!out.empty()&&hz<=out.back().hz))return false;
     SweepPoint point;point.hz=hz;point.status="等待完整逐频录波";out.push_back(point);return true;};
-  unsigned anchors=low>40?2:0;
-  if(anchors){if(count<4||!add(20)||!add(40))return {};}
-  unsigned tones=count-anchors;
+  unsigned tones=count;
   auto first=std::llround(fs/low),last=std::llround(fs/high),previous=first+1;
   if(first-last+1<tones)return {};
   for(unsigned i=0;i<tones;++i) {
@@ -130,9 +128,10 @@ bool writeSweepCapture(QIODevice &file,const SweepCapture &c) {
   QJsonArray points;
   for(const auto &p:c.points)points.append(QJsonObject{{"hz",p.hz},{"input",p.input},{"output",p.output},
     {"gain",p.gainDb},{"phase",p.phaseDeg},{"coherence",p.inputFit},{"blocks",p.count},{"valid",p.valid},{"status",p.status}});
-  QJsonObject meta{{"format",c.method==3?2:1},{"method",c.method},{"sample_hz",c.fs},{"expected",double(c.expected)},
+  QJsonObject meta{{"format",3},{"method",c.method},{"sample_hz",c.fs},{"expected",double(c.expected)},
     {"run",int(c.recording.run)},{"node",double(c.recording.node)},{"complete_run",c.completed},
     {"missing",double(c.recording.missing)},{"rejected",double(c.recording.rejected)},{"points",points},{"diagnostic",c.diagnostic}};
+  meta["measurement_scope"]=c.localRetest?"local":"full";
   if(c.method==3) {
     if(!c.timing.valid(c.fs))return false;
     meta["chirp_timing_revision"]=1;meta["chirp_period_ms"]=int(c.timing.periodMs);
@@ -150,13 +149,16 @@ bool readSweepCapture(QIODevice &file,const QByteArray &metadata,SweepCapture &o
   SweepCapture c;
   auto m=QJsonDocument::fromJson(metadata).object();
   c.method=m["method"].toInt();c.fs=m["sample_hz"].toDouble();
+  if(m.contains("measurement_scope")&&m["measurement_scope"]!="full"&&m["measurement_scope"]!="local") {error="测量用途元数据无效";return false;}
+  if(m["format"].toInt()==3&&!m.contains("measurement_scope")) {error="缺少测量用途元数据";return false;}
+  c.localRetest=m["measurement_scope"]=="local";
   double expected=m["expected"].toDouble(-1);
-  if((m["format"].toInt()!=1&&m["format"].toInt()!=2) || c.method<1 || c.method>3 || !std::isfinite(c.fs) ||
+  if((m["format"].toInt()<1||m["format"].toInt()>3) || c.method<1 || c.method>3 || !std::isfinite(c.fs) ||
      c.fs<10000 || c.fs>40000 || expected<0 || expected>1200000 || expected!=std::floor(expected) ||
      file.readLine().trimmed()!="sample_index,time_s,input_A,feedback_A") {
     error="录波元数据/表头无效";return false;
   }
-  if(c.method==3&&m["format"].toInt()==2&&(!m.contains("chirp_timing_revision")||!readChirpTiming(m,c.fs,c.timing))) {
+  if(c.method==3&&m["format"].toInt()>=2&&(!m.contains("chirp_timing_revision")||!readChirpTiming(m,c.fs,c.timing))) {
     error="Chirp 时序元数据缺失或无效";return false;
   }
   if(c.method==3&&m["format"].toInt()==1&&m.contains("chirp_timing_revision")) {error="时序扩展要求录波格式 2";return false;}

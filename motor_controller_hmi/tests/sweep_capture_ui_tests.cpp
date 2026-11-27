@@ -76,7 +76,7 @@ public:
     if(cmd==0xbc||cmd==0xbd){
       int error=0;
       if(cmd==0xbc&&p.size()>1&&p[1]) {
-        if(p.size()<19||p.mid(13,6)!=QByteArray::fromHex("ae010fa00106"))error=2;
+        if(p.size()<19||p.mid(13,6)!=QByteArray::fromHex("ae020fa00106"))error=2;
         else {run=u16(p,2);state=1;cursor=0;}
       }
       if(cmd==0xbc&&p.size()>1&&!p[1]){state=3;enabled=false;}
@@ -86,7 +86,7 @@ public:
       qToBigEndian<quint32>(20000,out.data()+8);qToBigEndian(cursor,out.data()+12);
       out[40]=char(0xa9);out[41]=1;out[42]=state?1:0;out[43]=char(0xaa);qToBigEndian(cursor,out.data()+48);
       out[52]=char(0xac);out[53]=1;out[54]=7;out[55]=7;
-      out.replace(56,6,QByteArray::fromHex("ae010fa00106"));queue(cmd,out);
+      out.replace(56,6,QByteArray::fromHex("ae020fa00106"));queue(cmd,out);
     }else if(cmd==0x39||cmd==0x40){enabled=false;state=3;queue(cmd,QByteArray(1,0));}
   }
   std::vector<Frame> receive() override {
@@ -110,17 +110,23 @@ private slots:
    QFile f(qEnvironmentVariable("MOTORTUNE_SWEEP_STYLE"));
    if(f.open(QIODevice::ReadOnly))qApp->setStyleSheet(QString::fromUtf8(f.readAll()));
  }
+ void deviceTimingLongCapture_data() {QTest::addColumn<bool>("local");QTest::newRow("full")<<false;QTest::newRow("local")<<true;}
  void deviceTimingLongCapture() {
+   QFETCH(bool,local);
    Session session(nullptr,[](const Connection &){return std::make_unique<TimedCaptureBackend>();});
    session.open({});QTRY_VERIFY(session.telemetryFresh(1));QWidget parent;
    bool complete=false,timing=false;int rows=0,blocks=0;QTimer poll;QElapsedTimer deadline;deadline.start();
    QTimer::singleShot(20,&parent,[&]{auto d=parent.findChild<QDialog*>("sweepDialog");QVERIFY(d);
+     d->findChild<QComboBox*>("sweepPurpose")->setCurrentIndex(local?1:0);
      d->findChild<QSpinBox*>("sweepCount")->setValue(8);d->findChild<QCheckBox*>("sweepSafe")->setChecked(true);
      d->findChild<QPushButton*>("startSweep")->click();
      connect(&poll,&QTimer::timeout,d,[&,d]{
        if(!d->findChild<QPushButton*>("startSweep")->isEnabled()&&deadline.elapsed()<25000)return;
        auto table=d->findChild<QTableWidget*>();rows=table->rowCount();if(rows)blocks=int(table->item(0,6)->text().toDouble());
        for(auto label:d->findChildren<QLabel*>()){complete|=label->text().contains("560000 / 560000")&&label->text().contains("测量完成");timing|=label->text().contains("6 个测量周期");}
+       bool localText=false;for(auto label:d->findChildren<QLabel*>())localText|=label->text().contains("局部复测：仅显示原始 H1");QCOMPARE(localText,local);
+       auto purpose=d->findChild<QComboBox*>("sweepPurpose");QVERIFY(purpose->isEnabled());purpose->setCurrentIndex(local?0:1);
+       localText=false;for(auto label:d->findChildren<QLabel*>())localText|=label->text().contains("局部复测：仅显示原始 H1");QCOMPARE(localText,!local);
        poll.stop();d->reject();
      });poll.start(100);
    });

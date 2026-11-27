@@ -45,7 +45,8 @@ class OperationUiTests : public QObject {
         QCOMPARE(w.session.txCount.load(),after);
     }
     void deviceChirpCompletesInDemo() {
-        for(int method:{3}) {
+        for(bool local:{false,true}) {
+            const int method=3;
             Window w(false,false,true);w.startDemo();
             QTRY_VERIFY(w.session.telemetryFresh(1));
             w.session.command(1,0x41,QByteArray(1,6));QTRY_COMPARE(w.session.latest(1)->mode,6);
@@ -54,15 +55,16 @@ class OperationUiTests : public QObject {
             QTimer::singleShot(50,&w,[&]{
                 auto d=w.findChild<QDialog*>("sweepDialog");if(!d){QApplication::closeAllWindows();return;}
                 d->findChild<QComboBox*>("sweepMethod")->setCurrentIndex(0);
-                if(method>=2){d->findChild<QDoubleSpinBox*>("sweepStartHz")->setValue(300);d->findChild<QDoubleSpinBox*>("sweepEndHz")->setValue(1200);}
+                d->findChild<QComboBox*>("sweepPurpose")->setCurrentIndex(local?1:0);
+                if(local){d->findChild<QDoubleSpinBox*>("sweepStartHz")->setValue(300);d->findChild<QDoubleSpinBox*>("sweepEndHz")->setValue(1200);}
                 d->findChild<QCheckBox*>("sweepSafe")->setChecked(true);
                 d->findChild<QPushButton*>("startSweep")->click();
                 QTimer::singleShot(method==1?1500:5000,d,[&,d]{
                     auto t=d->findChild<QTableWidget*>();rows=t->rowCount();
                     for(auto label:d->findChildren<QLabel*>())if(label->text().contains("带宽 ≈"))bandwidth=true;
                     if(method==3 && rows>0) {
-                        QCOMPARE(t->item(0,0)->text().toDouble(),20.0);
-                        QCOMPARE(t->item(1,0)->text().toDouble(),40.0);
+                        QCOMPARE(t->item(0,0)->text().toDouble(),local?300.:20.);
+                        QVERIFY(t->item(1,0)->text().toDouble()>t->item(0,0)->text().toDouble());
                         QCOMPARE(t->item(0,6)->text().toDouble(),3.0);
                         QVERIFY(t->item(0,8)->text().contains("原始 H1"));
                     }
@@ -72,7 +74,7 @@ class OperationUiTests : public QObject {
                 });
             });
             showSweepDialog(w.session,Version::V2,1,&w);
-            QCOMPARE(rows,16);QVERIFY(bandwidth);QTRY_VERIFY(!w.session.latest(1)->enabled);
+            QCOMPARE(rows,16);QCOMPARE(bandwidth,!local);QTRY_VERIFY(!w.session.latest(1)->enabled);
         }
     }
     void pausedDebugSurvivesOverwriteAndZoom() {

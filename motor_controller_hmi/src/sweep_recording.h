@@ -43,6 +43,7 @@ struct SweepCapture {
   QString diagnostic;
   std::vector<SweepPoint> points;
   ChirpTiming timing;
+  bool localRetest=false; // host-only measurement intent, persisted in recording metadata
 };
 bool readSweepCapture(QIODevice &, const QByteArray &metadata, SweepCapture &, QString &error);
 bool writeSweepCapture(QIODevice &, const SweepCapture &);

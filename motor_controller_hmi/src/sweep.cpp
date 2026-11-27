@@ -172,40 +172,50 @@ QString sweepAbortMessage(const QJsonObject &o) {
   return QString("设备中止：%1 · flags=0x%2 · 中止前已执行 %3 个采样周期")
       .arg(detail).arg(flags,0,16).arg(o["samples"].toDouble(),0,'f',0);
 }
-SweepBandwidthResult sweepBandwidthResult(const std::vector<SweepPoint> &p) {
+SweepBandwidthResult sweepBandwidthResult(const std::vector<SweepPoint> &p,bool localRetest) {
   SweepBandwidthResult result;
   auto reject=[&](QString message){result.message=message;return result;};
-  if (p.size() < 3 || !p[0].valid || !p[1].valid)
-    return reject("未测得带宽：需要至少 3 个频点及有效低频基准");
-  if (std::abs(p[0].gainDb - p[1].gainDb) > .5)
-    return reject("未测得带宽：低频基准不平坦，请降低起始频率");
-  for (size_t i = 1; i < p.size(); ++i)
-    if (!(p[i].hz > p[i - 1].hz))
-      return reject("未测得带宽：频点必须递增");
-  result.baselineValid=true;
-  result.baselineDb=(p[0].gainDb+p[1].gainDb)/2;
-  double base = (p[0].gainDb + p[1].gainDb) / 2, threshold = base - 3;
-  for (size_t i = 2; i < p.size(); ++i) {
-    if (!p[i - 1].valid || !p[i].valid)
-      return reject("未测得带宽：存在无效频点，需补测后确定首次交点");
-    if (p[i - 1].gainDb > threshold && p[i].gainDb <= threshold) {
-      double alpha =
-          (threshold - p[i - 1].gainDb) / (p[i].gainDb - p[i - 1].gainDb);
-      double bw = std::exp(std::log(p[i - 1].hz) +
-                           alpha * std::log(p[i].hz / p[i - 1].hz));
-      result.found=true;result.hz=bw;result.lowHz=p[i-1].hz;result.highHz=p[i].hz;
-      result.message=QString("−3 dB 带宽 ≈ %1 Hz · 交点区间 [%2, %3] Hz · 低频基准 %4 "
-                     "dB（前两点均值）")
-          .arg(bw, 0, 'g', 6)
-          .arg(p[i - 1].hz, 0, 'g', 5)
-          .arg(p[i].hz, 0, 'g', 5)
-          .arg(base, 0, 'f', 2);
+  if(localRetest)return reject("局部复测：仅显示原始 H1，未建立本次低频基准，不判定绝对带宽");
+  if(p.size()<4)return reject("未测得带宽：至少需要 3 个低频平台点及后续响应点");
+  for(size_t i=0;i<p.size();++i)
+    if(!std::isfinite(p[i].hz)||p[i].hz<=0||(i&&p[i].hz<=p[i-1].hz))
+      return reject("未测得带宽：频点必须为有限递增正数");
+  // Unit-gain current tracking only. These are baseline qualification limits,
+  // not filters or relaxed H1 validity gates; never skip an invalid first point.
+  constexpr double flatDb=.5, phaseLimitDeg=15., unityToleranceDb=1.;
+  constexpr double maxBaselineRatio=3., minBaselineRatio=1.5, maxAdjacentRatio=2.;
+  auto valid=[](const SweepPoint &v){return v.valid&&std::isfinite(v.gainDb)&&std::isfinite(v.phaseDeg)&&std::isfinite(v.inputFit)&&v.inputFit>=.9;};
+  std::vector<double> gains;double lo=0,hi=0;
+  for(size_t i=0;i<p.size()&&p[i].hz<=p[0].hz*maxBaselineRatio;++i){
+    const auto &v=p[i];
+    if(!valid(v)||std::abs(std::remainder(v.phaseDeg,360.))>phaseLimitDeg||
+       std::abs(v.gainDb)>unityToleranceDb||(i&&v.hz/p[i-1].hz>maxAdjacentRatio))break;
+    double a=i?std::min(lo,v.gainDb):v.gainDb,b=i?std::max(hi,v.gainDb):v.gainDb;
+    if(b-a>flatDb)break;
+    gains.push_back(v.gainDb);lo=a;hi=b;
+  }
+  if(gains.size()<3||p[gains.size()-1].hz/p[0].hz<minBaselineRatio)
+    return reject("未测得带宽：低频平台不足（需连续有效 ≥3 点、跨度 ≥1.5 倍、波动 ≤0.5 dB、相位 ≤15°、增益接近 0 dB）；请降低起点或改用局部复测");
+  result.baselineCount=unsigned(gains.size());result.baselineLowHz=p[0].hz;result.baselineHighHz=p[gains.size()-1].hz;
+  std::sort(gains.begin(),gains.end());size_t mid=gains.size()/2;
+  result.baselineDb=gains.size()%2?gains[mid]:(gains[mid-1]+gains[mid])/2;
+  result.baselineValid=true;double threshold=result.baselineDb-3;
+  QString base=QString("低频平台 [%1, %2] Hz / %3 点，中位数 %4 dB")
+    .arg(result.baselineLowHz,0,'g',5).arg(result.baselineHighHz,0,'g',5).arg(result.baselineCount).arg(result.baselineDb,0,'f',2);
+  for(size_t i=result.baselineCount;i<p.size();++i){
+    if(!valid(p[i-1])||!valid(p[i]))return reject("未测得带宽：存在无效频点，需补测后确定首次交点 · "+base);
+    if(p[i].hz/p[i-1].hz>maxAdjacentRatio)return reject("未测得带宽：频点间隔过大，需补测，不能跨未测区确认首次交点 · "+base);
+    if(p[i-1].gainDb>threshold&&p[i].gainDb<=threshold){
+      double alpha=(threshold-p[i-1].gainDb)/(p[i].gainDb-p[i-1].gainDb);
+      result.hz=std::exp(std::log(p[i-1].hz)+alpha*std::log(p[i].hz/p[i-1].hz));
+      result.found=true;result.lowHz=p[i-1].hz;result.highHz=p[i].hz;
+      result.message=QString("−3 dB 带宽 ≈ %1 Hz · 交点区间 [%2, %3] Hz · ").arg(result.hz,0,'g',6).arg(result.lowHz,0,'g',5).arg(result.highHz,0,'g',5)+base;
       return result;
     }
   }
-  return reject("未测得带宽：当前频段未出现相对低频基准的 −3 dB 交点");
+  return reject("未测得带宽：当前频段未出现相对低频平台的 −3 dB 交点 · "+base);
 }
-QString sweepBandwidth(const std::vector<SweepPoint> &points) {return sweepBandwidthResult(points).message;}
+QString sweepBandwidth(const std::vector<SweepPoint> &points,bool localRetest) {return sweepBandwidthResult(points,localRetest).message;}
 SweepCrossingResult sweepClosedLoopCrossingResult(const std::vector<SweepPoint> &p) {
   SweepCrossingResult result;
   result.message="fc：无有效 ≥100 Hz 闭环 0 dB 向下交点";

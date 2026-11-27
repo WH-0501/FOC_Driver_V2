@@ -4,7 +4,7 @@
 #include "sweep_config.h"
 #include "sweep_chirp.h"
 enum { SWEEP_IDLE, SWEEP_RUNNING, SWEEP_DONE, SWEEP_ABORTED };
-/* Mode 2 requires an explicit AD/1 integer-period plan; mode 1 is retired. */
+/* Mode 2 requires an explicit AD/2 integer-period plan; mode 1 is retired. */
 enum { SWEEP_STEPPED = 2, SWEEP_CHIRP = 3 };
 enum { SWEEP_STOP=1u, SWEEP_LIMIT=2u, SWEEP_TIMING=4u, SWEEP_COMMAND=8u,
        SWEEP_MOTION=16u, SWEEP_NONFINITE=32u, SWEEP_RECORD_GAP=64u };
@@ -18,7 +18,7 @@ typedef struct {
   uint16_t periods[SWEEP_MAX_POINTS]; /* mode 2 only: actual Hz = fs / period */
 } sweep_config_t;
 /* Only excitation state. No device spectral estimator or sample history.
- * Device timing comes from sweep_config.h and is reported via AE/1.
+ * Device timing comes from sweep_config.h and is reported via AE/2.
  * The host discards settling periods and analyzes all measurement periods. */
 typedef struct {
   uint32_t samples;

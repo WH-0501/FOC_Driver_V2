@@ -11,6 +11,28 @@ using namespace mt;
 class SweepTests : public QObject {
   Q_OBJECT
 private slots:
+  void qualifiedBaselineAndLocalScope() {
+    std::vector<SweepPoint> p;
+    for(auto [f,g]:{std::pair{20.,-.1},std::pair{30.,.1},std::pair{40.,0.},std::pair{80.,-1.},std::pair{160.,-2.},std::pair{320.,-4.}}) {
+      SweepPoint v;v.hz=f;v.gainDb=g;v.phaseDeg=f<=40?-2:-30;v.inputFit=.99;v.valid=true;p.push_back(v);
+    }
+    const auto original=p;auto b=sweepBandwidthResult(p);
+    QVERIFY(b.found);QCOMPARE(b.baselineCount,3u);QCOMPARE(b.baselineDb,0.);
+    QVERIFY(std::abs(b.hz-std::sqrt(160.*320.))<1e-9);
+    QVERIFY(!sweepBandwidthResult(p,true).found);QVERIFY(!sweepBandwidthResult(p,true).baselineValid);
+    for(size_t i=0;i<p.size();++i)QCOMPARE(p[i].gainDb,original[i].gainDb);
+    p[3].valid=false;QVERIFY(!sweepBandwidthResult(p).found);p=original;
+    p[3].inputFit=.8999;QVERIFY(!sweepBandwidthResult(p).found);p=original;
+    p[0].valid=false;QVERIFY(!sweepBandwidthResult(p).baselineValid);p=original;
+    p[2].phaseDeg=-16;QVERIFY(!sweepBandwidthResult(p).baselineValid);p=original;
+    p[2].gainDb=.6;QVERIFY(!sweepBandwidthResult(p).baselineValid);p=original;
+    for(auto &v:p)v.gainDb-=3;QVERIFY(!sweepBandwidthResult(p).baselineValid);p=original;
+    p[3].hz=100;QVERIFY(!sweepBandwidthResult(p).found);p=original;
+    // Qualification is based on response, not literal 20/40 Hz anchors.
+    for(auto &v:p)v.hz/=20;QVERIFY(sweepBandwidthResult(p).found);
+    QCOMPARE(sweepBandwidthResult(p).baselineLowHz,1.);
+  }
+
   void closedLoopCrossingInterpolation() {
     auto make=[](std::initializer_list<std::pair<double,double>> rows){
       std::vector<SweepPoint> p;for(auto [f,g]:rows){SweepPoint v;v.hz=f;v.gainDb=g;v.valid=true;p.push_back(v);}return p;
@@ -51,7 +73,7 @@ private slots:
   }
   void fcDoesNotChangeRawH1OrBandwidth() {
     std::vector<SweepPoint> p;
-    for(auto [f,g]:{std::pair{20.,0.},std::pair{40.,0.},std::pair{93.,1.},std::pair{126.,-1.},std::pair{800.,-2.},std::pair{1600.,-4.}}){SweepPoint v;v.hz=f;v.gainDb=g;v.valid=true;p.push_back(v);}
+    for(auto [f,g]:{std::pair{20.,0.},std::pair{30.,0.},std::pair{40.,0.},std::pair{60.,.1},std::pair{90.,1.},std::pair{126.,-1.},std::pair{200.,-1.},std::pair{400.,-1.},std::pair{800.,-2.},std::pair{1600.,-4.}}){SweepPoint v;v.hz=f;v.gainDb=g;v.valid=true;v.inputFit=1;p.push_back(v);}
     const auto original=p;const auto before=sweepBandwidthResult(p);
     const auto fc=sweepClosedLoopCrossingResult(p);QVERIFY(fc.found&&fc.firstConfirmed);
     const auto after=sweepBandwidthResult(p);
@@ -160,7 +182,7 @@ private slots:
 
   void knownLowPass() {
     std::vector<SweepPoint> points;
-    for (double hz : {.5, 1., 5., 10., 20., 40.}) {
+    for (double hz : {.5, .75, 1., 2., 4., 8., 10., 20., 40.}) {
       std::vector<SweepSample> data;
       double gain = 1 / std::sqrt(1 + hz * hz / 100),
              phase = -std::atan(hz / 10);
@@ -182,7 +204,7 @@ private slots:
   }
   void noCrossingAndNoInput() {
     std::vector<SweepPoint> points;
-    for (double hz : {1., 2., 4.}) {
+    for (double hz : {1., 1.5, 2., 4.}) {
       std::vector<SweepSample> data;
       for (int i = 0; i < 500; ++i) {
         double t = i / (hz * 100);

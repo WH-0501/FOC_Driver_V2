@@ -18,6 +18,7 @@ struct WelchReferenceComparison {
 };
 struct WelchAnalysis {
   QString error;
+  bool localRetest=false;
   unsigned segmentLength=0, segments=0, usedSamples=0, tailSamples=0;
   double sampleHz=0, binHz=0, enbwHz=0;
   std::vector<SweepPoint> points; // All native FFT bins in the measured range, including invalid ones.
